@@ -1,14 +1,13 @@
 ﻿<?xml version="1.0" encoding="utf-8" ?>
-<!-- Optional: Comment moved here or removed -->
 <!-- Views/AddTaskPopupPage.xaml -->
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:models="clr-namespace:Tickly.Models"
              xmlns:converters="clr-namespace:Tickly.Converters"
              x:Class="Tickly.Views.AddTaskPopupPage"
-             BackgroundColor="#222222"
+             BackgroundColor="Black"
              Title="Add New Task">
-    <!-- Comment moved: Dark grey, not full black for popup contrast -->
+    <!-- Comment moved: Changed to pitch black -->
 
     <ContentPage.Resources>
         <ResourceDictionary>
@@ -20,8 +19,23 @@
         <VerticalStackLayout Padding="20" Spacing="15">
 
             <Label Text="Task Title" TextColor="WhiteSmoke"/>
-            <Frame Padding="10,5" CornerRadius="5" BackgroundColor="#333333" BorderColor="Gray">
-                <Entry x:Name="TitleEntry" Placeholder="Enter task title" TextColor="White" PlaceholderColor="Gray"/>
+
+            <!-- Comments moved before the Frame -->
+            <!-- Changed Frame BackgroundColor -->
+            <!-- Changed Frame BorderColor -->
+            <!-- Ensure no shadow -->
+            <Frame Padding="10,5"
+                   CornerRadius="5"
+                   BackgroundColor="Transparent"
+                   BorderColor="Transparent"
+                   HasShadow="False">
+                <!-- Comment moved inside Frame, after Entry -->
+                <!-- Also ensure Entry background is transparent -->
+                <Entry x:Name="TitleEntry"
+                       Placeholder="Enter task title"
+                       TextColor="White"
+                       PlaceholderColor="Gray"
+                       BackgroundColor="Transparent"/>
             </Frame>
 
             <Label Text="Priority" TextColor="WhiteSmoke"/>
@@ -78,18 +92,26 @@
                 <StackLayout Orientation="Horizontal" Spacing="5" Margin="0,5,0,0"
                              IsVisible="{Binding IsWeeklySelected}">
                     <Label Text="On:" VerticalOptions="Center" TextColor="LightGray"/>
-                    <Picker x:Name="DayOfWeekPicker" TextColor="WhiteSmoke" BackgroundColor="#333333"
+                    <!-- Comment moved outside the Picker tag -->
+                    <!-- Consider adding a subtle background to Picker for contrast -->
+                    <!-- Slightly off-black -->
+                    <Picker x:Name="DayOfWeekPicker"
+                             TextColor="WhiteSmoke"
+                             BackgroundColor="#1E1E1E"
                              ItemsSource="{Binding DaysOfWeek}"
                              SelectedItem="{Binding SelectedDayOfWeek}"
                              WidthRequest="150"/>
+                    <!-- Comment moved outside the Picker tag -->
+                    <!-- End of Picker attributes, comment is NOT inside -->
                 </StackLayout>
 
             </VerticalStackLayout>
 
-
             <!-- Buttons -->
+            <!-- Comment moved before the layout -->
+            <!-- Darker Gray -->
             <HorizontalStackLayout Spacing="10" HorizontalOptions="End" Margin="0,20,0,0">
-                <Button Text="Cancel" Clicked="OnCancelClicked" BackgroundColor="Gray"/>
+                <Button Text="Cancel" Clicked="OnCancelClicked" BackgroundColor="#444444"/>
                 <Button Text="Confirm" Clicked="OnConfirmClicked" BackgroundColor="{StaticResource Primary}"/>
             </HorizontalStackLayout>
 
