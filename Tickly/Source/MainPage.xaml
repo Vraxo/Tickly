@@ -36,29 +36,10 @@
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
-
-                        <!-- Priority Circle -->
-                        <Frame Grid.Column="0"
-                               HeightRequest="12"
-                               WidthRequest="12"
-                               CornerRadius="6"
-                               BackgroundColor="{Binding Priority, Converter={StaticResource PriorityColorConverter}}"
-                               VerticalOptions="Center"
-                               HorizontalOptions="Center"
-                               BorderColor="Transparent"
-                               Padding="0"/>
-
-                        <!-- Task Text -->
+                        <Frame Grid.Column="0" HeightRequest="12" WidthRequest="12" CornerRadius="6" BackgroundColor="{Binding Priority, Converter={StaticResource PriorityColorConverter}}" VerticalOptions="Center" HorizontalOptions="Center" BorderColor="Transparent" Padding="0"/>
                         <VerticalStackLayout Grid.Column="1" Spacing="2">
-                            <Label Text="{Binding Title}"
-                                   TextColor="White"
-                                   FontSize="16"
-                                   FontAttributes="Bold"
-                                   VerticalOptions="Center" />
-                            <Label Text="{Binding ., Converter={StaticResource TaskTimeConverter}}"
-                                   TextColor="Gray"
-                                   FontSize="12"
-                                   VerticalOptions="Center" />
+                            <Label Text="{Binding Title}" TextColor="White" FontSize="16" FontAttributes="Bold" VerticalOptions="Center" />
+                            <Label Text="{Binding ., Converter={StaticResource TaskTimeConverter}}" TextColor="Gray" FontSize="12" VerticalOptions="Center" />
                         </VerticalStackLayout>
                     </Grid>
                 </DataTemplate>
@@ -89,11 +70,9 @@
                 Command="{Binding NavigateToAddPageCommand}"
                 SemanticProperties.Hint="Add a new task">
 
-            <!-- REMOVED the explicit VisualStateManager block from here -->
-            <!-- Visual states will now be controlled by the Style -->
+            <!-- NO VisualStateManager block here - It MUST be in the Style -->
 
         </Button>
 
     </Grid>
-
 </ContentPage>

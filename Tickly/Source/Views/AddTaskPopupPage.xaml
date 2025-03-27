@@ -7,11 +7,12 @@
              x:Class="Tickly.Views.AddTaskPopupPage"
              BackgroundColor="Black"
              Title="Add New Task">
-    <!-- Comment moved: Changed to pitch black -->
 
     <ContentPage.Resources>
         <ResourceDictionary>
             <converters:InverseBooleanConverter x:Key="InverseBooleanConverter" />
+            <!-- Define Primary color if not already merged from App.xaml -->
+            <!-- <Color x:Key="Primary">#512BD4</Color> -->
         </ResourceDictionary>
     </ContentPage.Resources>
 
@@ -19,18 +20,11 @@
         <VerticalStackLayout Padding="20" Spacing="15">
 
             <Label Text="Task Title" TextColor="WhiteSmoke"/>
-
-            <!-- Comments moved before the Frame -->
-            <!-- Changed Frame BackgroundColor -->
-            <!-- Changed Frame BorderColor -->
-            <!-- Ensure no shadow -->
             <Frame Padding="10,5"
                    CornerRadius="5"
                    BackgroundColor="Transparent"
                    BorderColor="Transparent"
                    HasShadow="False">
-                <!-- Comment moved inside Frame, after Entry -->
-                <!-- Also ensure Entry background is transparent -->
                 <Entry x:Name="TitleEntry"
                        Placeholder="Enter task title"
                        TextColor="White"
@@ -50,7 +44,6 @@
                 </BindableLayout.ItemTemplate>
             </HorizontalStackLayout>
 
-
             <Label Text="Time / Repetition" TextColor="WhiteSmoke"/>
             <VerticalStackLayout Spacing="5">
                 <RadioButton GroupName="TimeTypeGroup" Content="None (Any time)" TextColor="WhiteSmoke"
@@ -61,12 +54,12 @@
                               IsChecked="{Binding IsTimeTypeRepeating}"/>
             </VerticalStackLayout>
 
-            <!-- Specific Date Picker (Visible only when Specific Date is checked) -->
+            <!-- Specific Date Picker -->
             <DatePicker x:Name="DueDatePicker" Date="{Binding DueDate}" TextColor="WhiteSmoke"
                         IsVisible="{Binding IsTimeTypeSpecificDate}"
                         Margin="20,0,0,0"/>
 
-            <!-- Repetition Options (Visible only when Repeating is checked) -->
+            <!-- Repetition Options -->
             <VerticalStackLayout Spacing="10" Margin="20,5,0,0"
                                  IsVisible="{Binding IsTimeTypeRepeating}">
                 <Label Text="Repeat:" TextColor="LightGray"/>
@@ -87,32 +80,79 @@
                     <DatePicker x:Name="RepeatStartDatePicker" Date="{Binding DueDate}" TextColor="WhiteSmoke" />
                 </StackLayout>
 
-
-                <!-- Day of Week Picker (Visible only when Weekly is selected) -->
+                <!-- Day of Week Picker -->
                 <StackLayout Orientation="Horizontal" Spacing="5" Margin="0,5,0,0"
                              IsVisible="{Binding IsWeeklySelected}">
                     <Label Text="On:" VerticalOptions="Center" TextColor="LightGray"/>
-                    <!-- Comment moved outside the Picker tag -->
-                    <!-- Consider adding a subtle background to Picker for contrast -->
-                    <!-- Slightly off-black -->
                     <Picker x:Name="DayOfWeekPicker"
                              TextColor="WhiteSmoke"
                              BackgroundColor="#1E1E1E"
                              ItemsSource="{Binding DaysOfWeek}"
                              SelectedItem="{Binding SelectedDayOfWeek}"
                              WidthRequest="150"/>
-                    <!-- Comment moved outside the Picker tag -->
-                    <!-- End of Picker attributes, comment is NOT inside -->
                 </StackLayout>
-
             </VerticalStackLayout>
 
             <!-- Buttons -->
-            <!-- Comment moved before the layout -->
-            <!-- Darker Gray -->
             <HorizontalStackLayout Spacing="10" HorizontalOptions="End" Margin="0,20,0,0">
-                <Button Text="Cancel" Clicked="OnCancelClicked" BackgroundColor="#444444"/>
-                <Button Text="Confirm" Clicked="OnConfirmClicked" BackgroundColor="{StaticResource Primary}"/>
+                <!-- Cancel Button with VSM -->
+                <Button Text="Cancel" Clicked="OnCancelClicked" BackgroundColor="#444444">
+                    <VisualStateManager.VisualStateGroups>
+                        <VisualStateGroup x:Name="CommonStates">
+                            <VisualState x:Name="Normal">
+                                <VisualState.Setters>
+                                    <Setter Property="Scale" Value="1.0" />
+                                    <Setter Property="BackgroundColor" Value="#444444" />
+                                </VisualState.Setters>
+                            </VisualState>
+                            <VisualState x:Name="Pressed">
+                                <VisualState.Setters>
+                                    <Setter Property="Scale" Value="0.95" />
+                                    <Setter Property="BackgroundColor" Value="#333333" />
+                                    <!-- Slightly darker gray -->
+                                </VisualState.Setters>
+                            </VisualState>
+                            <VisualState x:Name="Disabled">
+                                <VisualState.Setters>
+                                    <Setter Property="BackgroundColor" Value="#666666" />
+                                    <Setter Property="Scale" Value="1.0" />
+                                </VisualState.Setters>
+                            </VisualState>
+                        </VisualStateGroup>
+                    </VisualStateManager.VisualStateGroups>
+                </Button>
+
+                <!-- Confirm Button with VSM -->
+                <Button Text="Confirm" Clicked="OnConfirmClicked" BackgroundColor="{StaticResource Primary}">
+                    <VisualStateManager.VisualStateGroups>
+                        <VisualStateGroup x:Name="CommonStates">
+                            <VisualState x:Name="Normal">
+                                <VisualState.Setters>
+                                    <Setter Property="Scale" Value="1.0" />
+                                    <!-- Use hardcoded Primary color for VSM stability -->
+                                    <Setter Property="BackgroundColor" Value="#512BD4" />
+                                    <!-- Adjust if your Primary is different -->
+                                </VisualState.Setters>
+                            </VisualState>
+                            <VisualState x:Name="Pressed">
+                                <VisualState.Setters>
+                                    <Setter Property="Scale" Value="0.95" />
+                                    <!-- Use slightly darker Primary for VSM stability -->
+                                    <Setter Property="BackgroundColor" Value="#3E1F9F" />
+                                    <!-- Adjust if your Primary is different -->
+                                </VisualState.Setters>
+                            </VisualState>
+                            <VisualState x:Name="Disabled">
+                                <VisualState.Setters>
+                                    <!-- Use a faded Primary color -->
+                                    <Setter Property="BackgroundColor" Value="#957FEF" />
+                                    <!-- Adjust if your Primary is different -->
+                                    <Setter Property="Scale" Value="1.0" />
+                                </VisualState.Setters>
+                            </VisualState>
+                        </VisualStateGroup>
+                    </VisualStateManager.VisualStateGroups>
+                </Button>
             </HorizontalStackLayout>
 
         </VerticalStackLayout>
