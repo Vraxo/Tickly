@@ -1,0 +1,99 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<!-- MainPage.xaml -->
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:Tickly.ViewModels"
+             xmlns:models="clr-namespace:Tickly.Models"
+             xmlns:converters="clr-namespace:Tickly.Converters"
+             x:Class="Tickly.MainPage"
+             BackgroundColor="Black"
+             Title="Tickly Tasks">
+
+    <ContentPage.BindingContext>
+        <vm:MainViewModel />
+    </ContentPage.BindingContext>
+
+    <ContentPage.Resources>
+        <ResourceDictionary>
+            <converters:PriorityToColorConverter x:Key="PriorityColorConverter" />
+            <converters:TaskTimeToStringConverter x:Key="TaskTimeConverter" />
+            <!-- Ensure Primary color is defined -->
+        </ResourceDictionary>
+    </ContentPage.Resources>
+
+    <Grid RowDefinitions="*" ColumnDefinitions="*">
+
+        <!-- Task List -->
+        <CollectionView ItemsSource="{Binding Tasks}"
+                        CanReorderItems="True"
+                        Margin="15,10"
+                        SelectionMode="None">
+
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="models:TaskItem">
+                    <Grid Padding="10, 8" ColumnSpacing="10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <!-- Priority Circle -->
+                        <Frame Grid.Column="0"
+                               HeightRequest="12"
+                               WidthRequest="12"
+                               CornerRadius="6"
+                               BackgroundColor="{Binding Priority, Converter={StaticResource PriorityColorConverter}}"
+                               VerticalOptions="Center"
+                               HorizontalOptions="Center"
+                               BorderColor="Transparent"
+                               Padding="0"/>
+
+                        <!-- Task Text -->
+                        <VerticalStackLayout Grid.Column="1" Spacing="2">
+                            <Label Text="{Binding Title}"
+                                   TextColor="White"
+                                   FontSize="16"
+                                   FontAttributes="Bold"
+                                   VerticalOptions="Center" />
+                            <Label Text="{Binding ., Converter={StaticResource TaskTimeConverter}}"
+                                   TextColor="Gray"
+                                   FontSize="12"
+                                   VerticalOptions="Center" />
+                        </VerticalStackLayout>
+                    </Grid>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+
+            <CollectionView.EmptyView>
+                <StackLayout VerticalOptions="Center" HorizontalOptions="Center" Padding="20">
+                    <Label Text="No tasks yet!" TextColor="Gray" HorizontalTextAlignment="Center"/>
+                    <Label Text="Click the '+' button to add one." TextColor="Gray" HorizontalTextAlignment="Center"/>
+                </StackLayout>
+            </CollectionView.EmptyView>
+
+        </CollectionView>
+
+        <!-- Add Button -->
+        <Button Grid.Row="0" Grid.Column="0"
+                Text="+"
+                FontSize="24"
+                FontAttributes="Bold"
+                TextColor="Black"
+                BackgroundColor="{StaticResource Primary}"
+                CornerRadius="28"
+                HeightRequest="56"
+                WidthRequest="56"
+                HorizontalOptions="End"
+                VerticalOptions="End"
+                Margin="20"
+                Command="{Binding NavigateToAddPageCommand}"
+                SemanticProperties.Hint="Add a new task">
+
+            <!-- REMOVED the explicit VisualStateManager block from here -->
+            <!-- Visual states will now be controlled by the Style -->
+
+        </Button>
+
+    </Grid>
+
+</ContentPage>
