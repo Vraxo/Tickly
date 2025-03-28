@@ -9,107 +9,124 @@
              BackgroundColor="Black"
              Title="Tickly Tasks">
 
+    <!-- Set the BindingContext to the MainViewModel -->
     <ContentPage.BindingContext>
         <vm:MainViewModel />
     </ContentPage.BindingContext>
 
+    <!-- Define page-level resources like converters -->
     <ContentPage.Resources>
         <ResourceDictionary>
             <converters:PriorityToColorConverter x:Key="PriorityColorConverter" />
             <converters:TaskTimeToStringConverter x:Key="TaskTimeConverter" />
-            <!-- Style for completed repeating tasks -->
-            <Style x:Key="CompletedTaskLabelStyle" TargetType="Label">
-                <Setter Property="TextColor" Value="Gray" />
-                <Setter Property="TextDecorations" Value="Strikethrough" />
-            </Style>
-            <!-- Optional: Style CheckBox -->
-            <Style TargetType="CheckBox">
-                <Setter Property="Color" Value="{StaticResource Primary}"/>
-                <Setter Property="VerticalOptions" Value="Center"/>
-            </Style>
+            <!-- Ensure Primary color is defined globally in App.xaml or here -->
+            <!-- <Color x:Key="Primary">#512BD4</Color> -->
         </ResourceDictionary>
     </ContentPage.Resources>
 
+    <!-- Main layout grid -->
     <Grid RowDefinitions="*" ColumnDefinitions="*">
 
+        <!-- Task List using CollectionView -->
         <CollectionView ItemsSource="{Binding Tasks}"
                         CanReorderItems="True"
-                        Margin="15,10,15,0"
+                        Margin="15,10"
                         SelectionMode="None">
-            <!-- Adjust margin if needed (Comment Correctly Moved) -->
+            <!-- Comment moved outside: Enables drag-and-drop reordering -->
+            <!-- Comment moved outside: We handle taps manually -->
 
             <CollectionView.ItemTemplate>
+                <!-- Define how each task item looks -->
                 <DataTemplate x:DataType="models:TaskItem">
-                    <!-- Grid for tappable area (Edit) & Root for Triggers -->
-                    <Grid Padding="5, 8">
-                        <!-- Reduced Padding slightly (Comment Correctly Moved) -->
+                    <!-- Wrap the item content in a Grid to attach the gesture recognizer -->
+                    <Grid Padding="10, 8">
                         <Grid.GestureRecognizers>
+                            <!-- Tap gesture to navigate to the edit page -->
                             <TapGestureRecognizer
                                 Command="{Binding Source={RelativeSource AncestorType={x:Type vm:MainViewModel}}, Path=NavigateToEditPageCommand}"
                                 CommandParameter="{Binding .}" />
+                            <!-- CommandParameter sends the current TaskItem -->
                         </Grid.GestureRecognizers>
 
-                        <!-- Grid for Item Content Layout -->
+                        <!-- Original Item Layout (now inside the tappable Grid) -->
                         <Grid ColumnSpacing="10">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
-                                <!-- Priority -->
+                                <!-- For priority indicator -->
                                 <ColumnDefinition Width="*" />
-                                <!-- Text -->
-                                <ColumnDefinition Width="Auto" />
-                                <!-- CheckBox -->
+                                <!-- For text content -->
                             </Grid.ColumnDefinitions>
 
-                            <!-- Priority Indicator -->
-                            <Frame Grid.Column="0" HeightRequest="12" WidthRequest="12" CornerRadius="6"
+                            <!-- Priority Indicator (Colored Circle) -->
+                            <Frame Grid.Column="0"
+                                   HeightRequest="12"
+                                   WidthRequest="12"
+                                   CornerRadius="6"
                                    BackgroundColor="{Binding Priority, Converter={StaticResource PriorityColorConverter}}"
-                                   VerticalOptions="Center" HorizontalOptions="Center" BorderColor="Transparent"
-                                   Padding="0" Margin="0,0,5,0"/>
+                                   VerticalOptions="Center"
+                                   HorizontalOptions="Center"
+                                   BorderColor="Transparent"
+                                   Padding="0"
+                                   Margin="0,5,0,0"/>
+                            <!-- Self-closing tag added above -->
+                            <!-- Comment moved outside: Added slight top margin for better alignment -->
 
                             <!-- Task Title and Time -->
                             <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
-                                <Label x:Name="TitleLabel" Text="{Binding Title}" TextColor="White" FontSize="16" FontAttributes="Bold" VerticalOptions="Center" />
-                                <Label x:Name="DateLabel" Text="{Binding ., Converter={StaticResource TaskTimeConverter}}" TextColor="Gray" FontSize="12" VerticalOptions="Center" />
+                                <Label Text="{Binding Title}"
+                                       TextColor="White"
+                                       FontSize="16"
+                                       FontAttributes="Bold"
+                                       VerticalOptions="Center" />
+                                <!-- Self-closing tag added above -->
+                                <Label Text="{Binding ., Converter={StaticResource TaskTimeConverter}}"
+                                       TextColor="Gray"
+                                       FontSize="12"
+                                       VerticalOptions="Center" />
+                                <!-- Self-closing tag added above -->
                             </VerticalStackLayout>
-
-                            <!-- CheckBox for Completion - Uses CheckedChanged Event -->
-                            <CheckBox Grid.Column="2"
-                                      IsChecked="{Binding IsCompleted, Mode=OneWay}"
-                                      CheckedChanged="CheckBox_CheckedChanged"
-                                      HorizontalOptions="End" />
-                            <!-- OneWay binding, command handles logic (Comment Moved) -->
-                            <!-- Event handler in code-behind (Comment Moved) -->
-
                         </Grid>
-
-                        <!-- Triggers moved to the root Grid -->
-                        <Grid.Triggers>
-                            <!-- Data Triggers for Completed Repeating Tasks -->
-                            <DataTrigger TargetType="Label" Binding="{Binding IsCompleted}" Value="True">
-                                <!-- Styling applied regardless of type; ViewModel handles actual logic -->
-                                <Setter TargetName="TitleLabel" Property="Style" Value="{StaticResource CompletedTaskLabelStyle}" />
-                                <Setter TargetName="DateLabel" Property="Style" Value="{StaticResource CompletedTaskLabelStyle}" />
-                            </DataTrigger>
-                        </Grid.Triggers>
                     </Grid>
                 </DataTemplate>
             </CollectionView.ItemTemplate>
 
+            <!-- View to display when the task list is empty -->
             <CollectionView.EmptyView>
                 <StackLayout VerticalOptions="Center" HorizontalOptions="Center" Padding="20" Spacing="5">
-                    <Label Text="No tasks yet!" TextColor="Gray" FontSize="16" HorizontalTextAlignment="Center"/>
-                    <Label Text="Click the '+' button to add one." TextColor="Gray" FontSize="14" HorizontalTextAlignment="Center"/>
+                    <Label Text="No tasks yet!"
+                           TextColor="Gray"
+                           FontSize="16"
+                           HorizontalTextAlignment="Center"/>
+                    <!-- Self-closing tag added above -->
+                    <Label Text="Click the '+' button to add one."
+                           TextColor="Gray"
+                           FontSize="14"
+                           HorizontalTextAlignment="Center"/>
+                    <!-- Self-closing tag added above -->
                 </StackLayout>
             </CollectionView.EmptyView>
 
         </CollectionView>
 
-        <!-- Add Button -->
-        <Button Grid.Row="0" Grid.Column="0" Text="+" FontSize="24" FontAttributes="Bold" TextColor="Black"
-                BackgroundColor="{StaticResource Primary}" CornerRadius="28" HeightRequest="56" WidthRequest="56"
-                HorizontalOptions="End" VerticalOptions="End" Margin="20"
+        <!-- Add Task Button (Floating Action Button style) -->
+        <Button Grid.Row="0" Grid.Column="0"
+                Text="+"
+                FontSize="24"
+                FontAttributes="Bold"
+                TextColor="Black"
+                BackgroundColor="{StaticResource Primary}"
+                CornerRadius="28"
+                HeightRequest="56"
+                WidthRequest="56"
+                HorizontalOptions="End"
+                VerticalOptions="End"
+                Margin="20"
                 Command="{Binding NavigateToAddPageCommand}"
                 SemanticProperties.Hint="Add a new task"/>
+        <!-- Self-closing tag added above -->
+        <!-- Comment moved outside: Position bottom-right -->
+        <!-- Comment moved outside: Padding from edges -->
+        <!-- Comment moved outside: No VisualStateManager needed here if defined in Styles.xaml -->
 
     </Grid>
 </ContentPage>

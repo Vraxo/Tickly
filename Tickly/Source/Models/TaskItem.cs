@@ -1,7 +1,7 @@
 ﻿// Models/TaskItem.cs
 using CommunityToolkit.Mvvm.ComponentModel;
 using System;
-using Tickly.Models; // Needed for enums
+using Tickly.Models; // Make sure TaskTimeType enum namespace is included if needed
 
 namespace Tickly.Models;
 
@@ -16,11 +16,12 @@ public partial class TaskItem : ObservableObject
     [ObservableProperty]
     private TaskPriority _priority;
 
+    // --- THIS IS THE PROPERTY TO CHECK ---
     [ObservableProperty]
-    private TaskTimeType _timeType;
+    private TaskTimeType _timeType; // Ensure [ObservableProperty] is present!
 
     [ObservableProperty]
-    private DateTime? _dueDate; // For SpecificDate and the *current* due date of Repeating tasks
+    private DateTime? _dueDate;
 
     [ObservableProperty]
     private TaskRepetitionType? _repetitionType;
@@ -31,39 +32,38 @@ public partial class TaskItem : ObservableObject
     [ObservableProperty]
     private int _order;
 
-    // --- NEW PROPERTY ---
-    // Tracks if a repeating task has been marked complete for its *current* DueDate cycle.
-    // Gets reset when the DueDate passes.
-    [ObservableProperty]
-    private bool _isCompleted; // Defaults to false
-
     // Parameterless constructor for JSON deserialization
     public TaskItem()
     {
         Id = Guid.NewGuid();
         Title = string.Empty;
-        // Defaults for other properties (TimeType=None, IsCompleted=false) are usually fine
+        // IMPORTANT: What is the default TimeType here?
+        // Enums default to 0 if not explicitly set, which is TaskTimeType.None.
+        // This is usually fine for deserialization as the JSON value should override it.
+        // _timeType = TaskTimeType.None; // Explicitly setting it doesn't hurt
     }
 
     // Full constructor
     public TaskItem(
         string title,
         TaskPriority priority,
-        TaskTimeType timeType,
+        TaskTimeType timeType, // Ensure this parameter exists and is used
         DateTime? dueDate,
         TaskRepetitionType? repetitionType,
         DayOfWeek? repetitionDayOfWeek,
-        int order = 0,
-        bool isCompleted = false) // Add optional IsCompleted
+        int order = 0)
     {
         Id = Guid.NewGuid();
         Title = title;
         Priority = priority;
-        TimeType = timeType;
+        TimeType = timeType; // Ensure it's assigned here
         DueDate = dueDate;
         RepetitionType = repetitionType;
         RepetitionDayOfWeek = repetitionDayOfWeek;
         Order = order;
-        IsCompleted = isCompleted; // Initialize IsCompleted
     }
+
+    // --- Generated Property (by ObservableProperty) ---
+    // public TaskTimeType TimeType { get => _timeType; set => SetProperty(ref _timeType, value); }
+    // You don't write this, but verify the [ObservableProperty] is on the _timeType field.
 }
