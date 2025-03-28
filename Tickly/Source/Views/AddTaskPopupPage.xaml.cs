@@ -109,14 +109,13 @@ public partial class AddTaskPopupPageViewModel : ObservableObject
     // Subscribes to PropertyChanged events for selectable options
     private void SetupOptionChangeHandlers()
     {
-        // Could add Priority changes here later if needed
-        // foreach (var option in PriorityOptions) { option.PropertyChanged += HandleOptionPropertyChanged; }
-
         // React when a RepetitionType option's IsSelected changes
         foreach (var option in RepetitionTypeOptions)
         {
             option.PropertyChanged += HandleOptionPropertyChanged;
         }
+        // Could add Priority changes here later if needed
+        // foreach (var option in PriorityOptions) { option.PropertyChanged += HandleOptionPropertyChanged; }
     }
 
     // Handles changes in IsSelected for RepetitionType options
@@ -125,12 +124,10 @@ public partial class AddTaskPopupPageViewModel : ObservableObject
         // Check if the 'IsSelected' property changed for a RepetitionType option
         if (sender is SelectableOption<TaskRepetitionType> && args.PropertyName == nameof(SelectableOption<TaskRepetitionType>.IsSelected))
         {
-            // If an option became selected, recalculate if the Weekly picker should be shown
-            var changedOption = (SelectableOption<TaskRepetitionType>)sender;
-            if (changedOption.IsSelected)
-            {
-                RecalculateWeeklyVisibility();
-            }
+            // --- FIX ---
+            // Remove the check for 'IsSelected == true'. Recalculate whenever *any* repetition option's
+            // selection state changes, as this affects which one is currently selected overall.
+            RecalculateWeeklyVisibility();
         }
     }
 
@@ -145,6 +142,7 @@ public partial class AddTaskPopupPageViewModel : ObservableObject
                 args.PropertyName == nameof(IsTimeTypeNone))
             {
                 // ...recalculate if the Weekly picker should be visible
+                // (Also handles hiding it if user switches away from Repeating)
                 RecalculateWeeklyVisibility();
             }
         };
@@ -155,7 +153,7 @@ public partial class AddTaskPopupPageViewModel : ObservableObject
     {
         // Show the DayOfWeek picker only if 'Repeating' is selected AND the selected repetition type is 'Weekly'
         IsWeeklySelected = IsTimeTypeRepeating && (RepetitionTypeOptions.FirstOrDefault(o => o.IsSelected)?.Value == TaskRepetitionType.Weekly);
-        // Debug.WriteLine($"RecalculateWeeklyVisibility: IsTimeTypeRepeating={IsTimeTypeRepeating}, IsWeeklySelected={IsWeeklySelected}");
+        Debug.WriteLine($"RecalculateWeeklyVisibility: IsTimeTypeRepeating={IsTimeTypeRepeating}, IsWeeklySelected={IsWeeklySelected}");
     }
 
     // --- Edit Mode Initialization ---
