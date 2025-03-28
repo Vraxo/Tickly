@@ -1,0 +1,1612 @@
+// File: MainPage.xaml
+<?xml version="1.0" encoding="utf-8" ?>
+<!-- MainPage.xaml -->
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:Tickly.ViewModels"
+             xmlns:models="clr-namespace:Tickly.Models"
+             xmlns:converters="clr-namespace:Tickly.Converters"
+             x:Class="Tickly.MainPage"
+             BackgroundColor="Black"
+             Title="Tickly Tasks">
+
+    <ContentPage.BindingContext>
+        <vm:MainViewModel />
+    </ContentPage.BindingContext>
+
+    <ContentPage.Resources>
+        <ResourceDictionary>
+            <!-- Converters -->
+            <converters:PriorityToColorConverter x:Key="PriorityColorConverter" />
+            <converters:TaskTimeToStringConverter x:Key="TaskTimeConverter" />
+            <converters:InverseBooleanConverter x:Key="InverseBooleanConverter" />
+
+            <!-- Styles -->
+            <Style TargetType="Frame" x:Key="PriorityIndicatorFrameStyle">
+                <Setter Property="HeightRequest" Value="12"/>
+                <Setter Property="WidthRequest" Value="12"/>
+                <Setter Property="CornerRadius" Value="6"/>
+                <Setter Property="BackgroundColor" Value="{Binding Priority, Converter={StaticResource PriorityColorConverter}}"/>
+                <Setter Property="VerticalOptions" Value="Center"/>
+                <Setter Property="HorizontalOptions" Value="Center"/>
+                <Setter Property="BorderColor" Value="Transparent"/>
+                <Setter Property="Padding" Value="0"/>
+                <Setter Property="Margin" Value="0,5,0,0"/>
+            </Style>
+            <Style TargetType="Label" x:Key="TaskTitleLabelStyle">
+                <Setter Property="TextColor" Value="{AppThemeBinding Light=Black, Dark=White}"/>
+                <Setter Property="FontSize" Value="16"/>
+                <Setter Property="FontAttributes" Value="Bold"/>
+                <Setter Property="VerticalOptions" Value="Center"/>
+            </Style>
+            <Style TargetType="Label" x:Key="TaskTimeLabelStyle">
+                <Setter Property="TextColor" Value="Gray"/>
+                <Setter Property="FontSize" Value="12"/>
+                <Setter Property="VerticalOptions" Value="Center"/>
+            </Style>
+            <Style TargetType="StackLayout" x:Key="EmptyViewLayoutStyle">
+                <Setter Property="VerticalOptions" Value="Center"/>
+                <Setter Property="HorizontalOptions" Value="Center"/>
+                <Setter Property="Padding" Value="20"/>
+                <Setter Property="Spacing" Value="5"/>
+            </Style>
+            <Style TargetType="Label" x:Key="EmptyViewLabelStyle">
+                <Setter Property="TextColor" Value="Gray"/>
+                <Setter Property="HorizontalTextAlignment" Value="Center"/>
+            </Style>
+            <Style TargetType="Button" x:Key="AddButtonStyle">
+                <Setter Property="Text" Value="+"/>
+                <Setter Property="FontSize" Value="24"/>
+                <Setter Property="FontAttributes" Value="Bold"/>
+                <Setter Property="TextColor" Value="{AppThemeBinding Light=White, Dark=Black}"/>
+                <Setter Property="BackgroundColor" Value="{StaticResource Primary}"/>
+                <Setter Property="CornerRadius" Value="28"/>
+                <Setter Property="HeightRequest" Value="56"/>
+                <Setter Property="WidthRequest" Value="56"/>
+                <Setter Property="HorizontalOptions" Value="End"/>
+                <Setter Property="VerticalOptions" Value="End"/>
+                <Setter Property="Margin" Value="20"/>
+                <Setter Property="SemanticProperties.Hint" Value="Add a new task"/>
+            </Style>
+
+        </ResourceDictionary>
+    </ContentPage.Resources>
+
+    <Grid RowDefinitions="*" ColumnDefinitions="*">
+
+        <!-- Task List -->
+        <CollectionView ItemsSource="{Binding Tasks}"
+                        CanReorderItems="True"
+                        Margin="15,10"
+                        SelectionMode="None">
+
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="models:TaskItem">
+                    <!-- Outer container for Opacity binding -->
+                    <Grid Padding="10, 8"
+                          Opacity="{Binding IsFadingOut, Converter={StaticResource InverseBooleanConverter}}">
+
+                        <!-- Inner Grid for Item Layout -->
+                        <Grid ColumnSpacing="10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <!-- Priority Indicator -->
+                                <ColumnDefinition Width="*" />
+                                <!-- Text Content -->
+                                <ColumnDefinition Width="Auto" />
+                                <!-- Check Circle Area -->
+                            </Grid.ColumnDefinitions>
+
+                            <!-- Priority Indicator -->
+                            <Frame Grid.Column="0" Style="{StaticResource PriorityIndicatorFrameStyle}"/>
+
+                            <!-- Task Title and Time (Tappable for Editing) -->
+                            <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
+                                <VerticalStackLayout.GestureRecognizers>
+                                    <TapGestureRecognizer
+                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:MainViewModel}}, Path=NavigateToEditPageCommand}"
+                                        CommandParameter="{Binding .}" />
+                                </VerticalStackLayout.GestureRecognizers>
+                                <Label Text="{Binding Title}" Style="{StaticResource TaskTitleLabelStyle}" />
+                                <Label Text="{Binding ., Converter={StaticResource TaskTimeConverter}}" Style="{StaticResource TaskTimeLabelStyle}" />
+                            </VerticalStackLayout>
+
+                            <!-- Check Circle Area (Wrapper Grid) -->
+                            <!-- *** MODIFICATION START: Wrap Border in a Grid for Hit Testing *** -->
+                            <Grid Grid.Column="2"
+                                  VerticalOptions="Center"
+                                  HorizontalOptions="Center"
+                                  Margin="5,0,0,0"  
+                                  Padding="5">
+                                <!-- Add Padding to increase tap area size -->
+                                <!-- Set BackgroundColor="Transparent" if needed, but Grid is usually transparent -->
+
+                                <Grid.GestureRecognizers>
+                                    <!-- Tap gesture for MARKING DONE (Attached to Wrapper Grid) -->
+                                    <TapGestureRecognizer
+                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:MainViewModel}}, Path=MarkTaskDoneCommand}"
+                                        CommandParameter="{Binding .}"/>
+                                </Grid.GestureRecognizers>
+
+                                <!-- The Visual Check Circle (Border) -->
+                                <Border Stroke="{AppThemeBinding Light=Gray, Dark=LightGray}"
+                                        StrokeThickness="2"
+                                        HeightRequest="24"
+                                        WidthRequest="24"
+                                        VerticalOptions="Center"
+                                        HorizontalOptions="Center">
+                                    <!-- Gesture Recognizer REMOVED from Border -->
+                                    <Border.StrokeShape>
+                                        <Ellipse/>
+                                    </Border.StrokeShape>
+                                </Border>
+                                <!-- *** MODIFICATION END *** -->
+
+                            </Grid>
+
+                        </Grid>
+                    </Grid>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+
+            <CollectionView.EmptyView>
+                <StackLayout Style="{StaticResource EmptyViewLayoutStyle}">
+                    <Label Text="No tasks yet!" Style="{StaticResource EmptyViewLabelStyle}" FontSize="16"/>
+                    <Label Text="Click the '+' button to add one." Style="{StaticResource EmptyViewLabelStyle}" FontSize="14"/>
+                </StackLayout>
+            </CollectionView.EmptyView>
+
+        </CollectionView>
+
+        <!-- Add Button -->
+        <Button Grid.Row="0" Grid.Column="0" Style="{StaticResource AddButtonStyle}"
+                Command="{Binding NavigateToAddPageCommand}"/>
+
+    </Grid>
+
+</ContentPage>
+
+--------------------------------------------------------------------------------
+
+// File: MainPage.xaml.cs
+// MainPage.xaml.cs
+namespace Tickly;
+
+// Make sure your namespace matches your project structure
+public partial class MainPage : ContentPage
+{
+    public MainPage()
+    {
+        InitializeComponent();
+        // The UI elements and interactions are defined in MainPage.xaml
+        // and handled by the MainViewModel via data binding.
+        // This code-behind file typically stays minimal when using MVVM.
+    }
+}
+
+--------------------------------------------------------------------------------
+
+// File: Converters\Converters.cs
+// Converters/Converters.cs
+using System;
+using System.Globalization;
+using System.Diagnostics;
+using Microsoft.Maui.Controls;
+using Microsoft.Maui.Graphics;
+using Tickly.Models;
+using Tickly.Services; // For AppSettings
+
+namespace Tickly.Converters;
+
+/// <summary>
+/// Converts TaskPriority enum to a specific Color.
+/// </summary>
+public class PriorityToColorConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        if (value is TaskPriority priority)
+        {
+            return priority switch
+            {
+                TaskPriority.High => Colors.Red,
+                TaskPriority.Medium => Colors.Orange,
+                TaskPriority.Low => Colors.LimeGreen, // Using LimeGreen for better visibility on black
+                _ => Colors.Gray,
+            };
+        }
+        return Colors.Gray; // Default color if conversion fails
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        // Not needed for this application
+        throw new NotImplementedException();
+    }
+}
+
+/// <summary>
+/// Converts a TaskItem object into a display string describing its time/repetition,
+/// respecting the selected calendar system setting and showing "Today"/"Tomorrow".
+/// For repeating tasks, it shows the next due date.
+/// </summary>
+public class TaskTimeToStringConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        // Ensure the input value is a TaskItem
+        if (value is not TaskItem task)
+        {
+            return string.Empty; // Return empty if not a TaskItem
+        }
+
+        // Get the currently selected calendar system
+        CalendarSystemType calendarSystem = AppSettings.SelectedCalendarSystem;
+        CultureInfo formatCulture = calendarSystem == CalendarSystemType.Persian
+                                    ? new CultureInfo("fa-IR") // Use Persian culture for Persian calendar
+                                    : CultureInfo.InvariantCulture; // Use Invariant for consistent Gregorian formatting
+
+        // Optional Debugging
+        // Debug.WriteLine($"TaskTimeToStringConverter: Task='{task.Title}', Read Setting='{calendarSystem}', Culture='{formatCulture.Name}'");
+
+        try
+        {
+            // Generate the display string based on the task's TimeType
+            switch (task.TimeType)
+            {
+                case TaskTimeType.SpecificDate:
+                    if (task.DueDate == null) return "No date";
+                    // Use full format for specific, non-repeating dates
+                    return FormatDate(task.DueDate.Value, calendarSystem, formatCulture, "ddd, dd MMM yyyy");
+
+                case TaskTimeType.Repeating:
+                    // Build the repetition description part
+                    string repetition = task.RepetitionType switch
+                    {
+                        TaskRepetitionType.Daily => "Daily",
+                        TaskRepetitionType.AlternateDay => "Every other day",
+                        TaskRepetitionType.Weekly => $"Weekly on {GetDayName(task.RepetitionDayOfWeek, formatCulture)}",
+                        _ => "Repeating" // Default fallback
+                    };
+                    // *** MODIFIED: Show NEXT DUE DATE instead of "(from...)" ***
+                    string nextDueDateString = task.DueDate.HasValue
+                                        // Use FormatDate helper (handles Today/Tomorrow etc.)
+                                        // Use a shorter, user-friendly format like "ddd, dd MMM"
+                                        ? FormatDate(task.DueDate.Value, calendarSystem, formatCulture, "ddd, dd MMM")
+                                        : "Unknown"; // Should always have a date if repeating
+                    // Construct the final string, e.g., "Daily, due Today" or "Weekly on Sunday, due Sun, 30 Mar"
+                    return $"{repetition}, due {nextDueDateString}";
+
+                case TaskTimeType.None: // Explicitly handle None case
+                default: // Catches None or any unexpected values
+                    return "Any time";
+            }
+        }
+        catch (Exception ex)
+        {
+            // Log errors during conversion
+            Debug.WriteLine($"Error in TaskTimeToStringConverter for task '{task.Title}': {ex.Message}");
+            return "Date Error"; // Display an error indicator in the UI
+        }
+    }
+
+    /// <summary>
+    /// Helper method to format a DateTime object into a string.
+    /// Checks for "Today" and "Tomorrow" before applying calendar-specific formatting.
+    /// </summary>
+    private string FormatDate(DateTime date, CalendarSystemType system, CultureInfo formatCulture, string gregorianFormat)
+    {
+        // Get today's date (ignoring time component)
+        DateTime today = DateTime.Today;
+        DateTime tomorrow = today.AddDays(1);
+
+        // *** Check for Today and Tomorrow FIRST ***
+        if (date.Date == today)
+        {
+            // Debug.WriteLine($"FormatDate: Date {date:O} is Today.");
+            return "Today"; // Return "Today" string
+        }
+        else if (date.Date == tomorrow)
+        {
+            // Debug.WriteLine($"FormatDate: Date {date:O} is Tomorrow.");
+            return "Tomorrow"; // Return "Tomorrow" string
+        }
+
+        // --- If not Today or Tomorrow, proceed with formatting ---
+        // Debug.WriteLine($"FormatDate: Date {date:O} is not Today/Tomorrow. Proceeding...");
+
+        if (system == CalendarSystemType.Persian)
+        {
+            try
+            {
+                PersianCalendar pc = new PersianCalendar();
+                int year = pc.GetYear(date);
+                int month = pc.GetMonth(date);
+                int day = pc.GetDayOfMonth(date);
+                // Get day/month names using the specific Persian culture (fa-IR)
+                string dayName = formatCulture.DateTimeFormat.GetAbbreviatedDayName(pc.GetDayOfWeek(date));
+                string monthName = formatCulture.DateTimeFormat.GetAbbreviatedMonthName(month);
+
+                // Handle specific format requests manually for Persian
+                if (gregorianFormat == "ddd, dd MMM yyyy") // Long format
+                {
+                    return $"{dayName}، {day:00} {monthName} {year}";
+                }
+                if (gregorianFormat == "dd MMM") // Short month format
+                {
+                    return $"{day:00} {monthName}";
+                }
+                if (gregorianFormat == "ddd, dd MMM") // Medium format (used for repeating tasks)
+                {
+                    return $"{dayName}، {day:00} {monthName}";
+                }
+
+                // Fallback if the requested format isn't explicitly handled above
+                Debug.WriteLine($"FormatDate (Persian): Fallback formatting for requested format '{gregorianFormat}'.");
+                return date.ToString(formatCulture);
+            }
+            catch (ArgumentOutOfRangeException argEx)
+            {
+                Debug.WriteLine($"Persian calendar range error for date {date:O}: {argEx.Message}");
+                return date.ToString("yyyy-MM-dd"); // Fallback on error
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Unexpected Persian date formatting error: {ex.Message}");
+                return date.ToString("yyyy-MM-dd"); // Fallback on error
+            }
+        }
+        else // Gregorian system requested
+        {
+            // Use standard .NET formatting with the specified Gregorian format and culture (InvariantCulture)
+            return date.ToString(gregorianFormat, formatCulture);
+        }
+    }
+
+    /// <summary>
+    /// Helper method to get the full day name based on DayOfWeek and CultureInfo.
+    /// </summary>
+    private string GetDayName(DayOfWeek? dayOfWeek, CultureInfo formatCulture)
+    {
+        if (dayOfWeek == null) return string.Empty;
+        try
+        {
+            // Retrieve the day name using the specified culture's formatting info
+            return formatCulture.DateTimeFormat.GetDayName(dayOfWeek.Value);
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Error getting day name for {dayOfWeek.Value} with culture {formatCulture.Name}: {ex.Message}");
+            return dayOfWeek.Value.ToString(); // Fallback to enum name on error
+        }
+    }
+
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        // Not needed for this application
+        throw new NotImplementedException();
+    }
+}
+
+/// <summary>
+/// Simple converter to invert a boolean value. Useful for visibility bindings.
+/// </summary>
+public class InverseBooleanConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) => value is bool b ? !b : false;
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => value is bool b ? !b : false;
+}
+
+--------------------------------------------------------------------------------
+
+// File: Messages\CalendarSettingsChangedMessage.cs
+// Messages/CalendarSettingChangedMessage.cs
+using CommunityToolkit.Mvvm.Messaging.Messages;
+
+namespace Tickly.Messages;
+
+/// <summary>
+/// A simple message indicating that the calendar system setting has changed.
+/// </summary>
+public class CalendarSettingChangedMessage : ValueChangedMessage<bool> // Value isn't strictly needed, but fits pattern
+{
+    // We don't really need to pass a value, but ValueChangedMessage requires one.
+    // We can just pass true to indicate a change occurred.
+    public CalendarSettingChangedMessage() : base(true)
+    {
+    }
+}
+
+--------------------------------------------------------------------------------
+
+// File: Messages\TaskMessages.cs
+// Messages/TaskMessages.cs (Or add to existing Messages file)
+using CommunityToolkit.Mvvm.Messaging.Messages;
+using Tickly.Models;
+using System; // Needed for Guid
+
+namespace Tickly.Messages;
+
+// Existing AddTaskMessage
+public class AddTaskMessage : ValueChangedMessage<TaskItem>
+{
+    public AddTaskMessage(TaskItem value) : base(value) { }
+}
+
+// New UpdateTaskMessage
+public class UpdateTaskMessage : ValueChangedMessage<TaskItem>
+{
+    public UpdateTaskMessage(TaskItem value) : base(value) { }
+}
+
+// New DeleteTaskMessage (Sending Guid is sufficient)
+public class DeleteTaskMessage : ValueChangedMessage<Guid>
+{
+    public DeleteTaskMessage(Guid taskId) : base(taskId) { }
+}
+
+--------------------------------------------------------------------------------
+
+// File: Models\Enums.cs
+namespace Tickly.Models;
+
+public enum TaskPriority
+{
+    High,   // Red
+    Medium, // Orange
+    Low     // Green
+}
+
+public enum TaskTimeType
+{
+    None,         // One-time, any time
+    SpecificDate, // Specific date
+    Repeating     // Daily, Alternate, Weekly
+}
+
+public enum TaskRepetitionType
+{
+    Daily,
+    AlternateDay, // Every other day from the start date
+    Weekly
+}
+
+--------------------------------------------------------------------------------
+
+// File: Models\Settings.cs
+// Models/Settings.cs (New File or add to existing Models)
+namespace Tickly.Models;
+
+public enum CalendarSystemType
+{
+    Gregorian,
+    Persian
+}
+
+--------------------------------------------------------------------------------
+
+// File: Models\TaskItem.cs
+// Models/TaskItem.cs
+using CommunityToolkit.Mvvm.ComponentModel;
+using System;
+using Tickly.Models; // Make sure enum namespace is referenced if separate
+
+namespace Tickly.Models;
+
+public partial class TaskItem : ObservableObject
+{
+    [ObservableProperty]
+    private Guid _id;
+
+    [ObservableProperty]
+    private string _title;
+
+    [ObservableProperty]
+    private TaskPriority _priority;
+
+    [ObservableProperty]
+    private TaskTimeType _timeType;
+
+    [ObservableProperty]
+    private DateTime? _dueDate; // Base/current due date or start date for repeating
+
+    [ObservableProperty]
+    private TaskRepetitionType? _repetitionType;
+
+    [ObservableProperty]
+    private DayOfWeek? _repetitionDayOfWeek;
+
+    [ObservableProperty]
+    private int _order;
+
+    // --- NEW Property for Animation ---
+    [ObservableProperty]
+    private bool _isFadingOut; // Flag to trigger fade-out animation before removal
+
+    // Parameterless constructor for JSON deserialization
+    public TaskItem()
+    {
+        Id = Guid.NewGuid();
+        Title = string.Empty;
+        // Default TimeType is TaskTimeType.None (0)
+        IsFadingOut = false; // Default state
+    }
+
+    // Full constructor
+    public TaskItem(
+        string title,
+        TaskPriority priority,
+        TaskTimeType timeType,
+        DateTime? dueDate,
+        TaskRepetitionType? repetitionType,
+        DayOfWeek? repetitionDayOfWeek,
+        int order = 0)
+    {
+        Id = Guid.NewGuid();
+        Title = title;
+        Priority = priority;
+        TimeType = timeType;
+        DueDate = dueDate;
+        RepetitionType = repetitionType;
+        RepetitionDayOfWeek = repetitionDayOfWeek;
+        Order = order;
+        IsFadingOut = false; // Default state
+    }
+}
+
+--------------------------------------------------------------------------------
+
+// File: Services\AppSettings.cs
+// Services/AppSettings.cs
+using Microsoft.Maui.Storage; // Required for Preferences
+using System.Diagnostics;
+using Tickly.Models;
+
+namespace Tickly.Services
+{
+    public static class AppSettings
+    {
+        // Key for storing the setting
+        public const string CalendarSystemKey = "CalendarSystemPreference";
+
+        // Backing field - Now initialized by static constructor
+        private static CalendarSystemType _selectedCalendarSystem;
+
+        // --- Static Constructor ---
+        // This runs automatically the first time the AppSettings class is accessed.
+        static AppSettings()
+        {
+            // Load from Preferences, default to Gregorian (0) if not found
+            int storedValue = Preferences.Get(CalendarSystemKey, (int)CalendarSystemType.Gregorian);
+            _selectedCalendarSystem = (CalendarSystemType)storedValue; // Set the backing field directly
+            Debug.WriteLine($"AppSettings (Static Constructor): Initialized CalendarSystem to {_selectedCalendarSystem} from Preferences.");
+        }
+        // --- End Static Constructor ---
+
+        // Public property to access the setting
+        public static CalendarSystemType SelectedCalendarSystem
+        {
+            get => _selectedCalendarSystem;
+            set
+            {
+                if (_selectedCalendarSystem != value)
+                {
+                    _selectedCalendarSystem = value; // Update backing field
+                    // Preferences are saved by SettingsViewModel when user makes changes
+                    Debug.WriteLine($"AppSettings: CalendarSystem changed to {value} (will be saved by SettingsViewModel).");
+                    // Optionally raise an event if needed for non-UI immediate updates
+                    // SettingsChanged?.Invoke(null, EventArgs.Empty);
+                }
+            }
+        }
+
+        // Optional: Event for real-time updates elsewhere if needed
+        // public static event EventHandler SettingsChanged;
+    }
+}
+
+--------------------------------------------------------------------------------
+
+// File: Utils\DateUtils.cs
+// Utils/DateUtils.cs
+using System;
+
+namespace Tickly.Utils;
+
+public static class DateUtils
+{
+    /// <summary>
+    /// Calculates the next occurrence of a specific DayOfWeek,
+    /// starting from (and including) the given base date.
+    /// </summary>
+    /// <param name="baseDate">The date to start searching from.</param>
+    /// <param name="targetDay">The desired DayOfWeek.</param>
+    /// <returns>The DateTime of the next occurrence.</returns>
+    public static DateTime GetNextWeekday(DateTime baseDate, DayOfWeek targetDay)
+    {
+        // Start checking from the base date itself
+        DateTime nextDate = baseDate.Date; // Ensure we work with Date part only
+        while (nextDate.DayOfWeek != targetDay)
+        {
+            nextDate = nextDate.AddDays(1);
+        }
+        return nextDate;
+    }
+
+    /// <summary>
+    /// Calculates the next due date for a repeating task based on its
+    /// current due date and repetition settings.
+    /// </summary>
+    public static DateTime? CalculateNextDueDate(Models.TaskItem task)
+    {
+        DateTime baseDate = task.DueDate ?? DateTime.Today; // Base calculation on current due date or today
+
+        switch (task.RepetitionType)
+        {
+            case Models.TaskRepetitionType.Daily:
+                return baseDate.AddDays(1).Date; // Ensure time is stripped
+
+            case Models.TaskRepetitionType.AlternateDay:
+                return baseDate.AddDays(2).Date; // Ensure time is stripped
+
+            case Models.TaskRepetitionType.Weekly:
+                if (task.RepetitionDayOfWeek.HasValue)
+                {
+                    // Find the next occurrence strictly *after* the current base date
+                    DateTime nextDate = baseDate.AddDays(1);
+                    return GetNextWeekday(nextDate, task.RepetitionDayOfWeek.Value);
+                }
+                else
+                {
+                    // Fallback: if no specific day, just add 7 days (unlikely with UI)
+                    return baseDate.AddDays(7).Date;
+                }
+
+            default:
+                return null; // Unknown repetition type
+        }
+    }
+}
+
+--------------------------------------------------------------------------------
+
+// File: ViewModels\MainViewModel.cs
+// ViewModels/MainViewModel.cs
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using CommunityToolkit.Mvvm.Messaging;
+using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.Collections.Specialized;
+using System.Diagnostics;
+using System.IO;
+using System.Linq;
+using System.Text.Json;
+using System.Threading.Tasks;
+using Microsoft.Maui.ApplicationModel; // Needed for MainThread
+using Tickly.Messages;
+using Tickly.Models;
+using Tickly.Views;
+using Tickly.Utils; // Needed for DateUtils
+
+namespace Tickly.ViewModels;
+
+public partial class MainViewModel : ObservableObject
+{
+    [ObservableProperty]
+    private ObservableCollection<TaskItem> _tasks;
+
+    private readonly string _filePath;
+    private bool _isSaving = false;
+    private readonly object _saveLock = new object(); // Used for coordinating SaveTasks/LoadTasks
+
+    public MainViewModel()
+    {
+        _filePath = Path.Combine(FileSystem.AppDataDirectory, "tasks.json");
+        _tasks = new ObservableCollection<TaskItem>();
+        _tasks.CollectionChanged += Tasks_CollectionChanged;
+
+        // Load initial data
+        LoadTasksCommand.Execute(null);
+
+        // Register message listeners for CRUD operations and settings changes
+        WeakReferenceMessenger.Default.Register<AddTaskMessage>(this, (r, m) => HandleAddTask(m.Value));
+        WeakReferenceMessenger.Default.Register<UpdateTaskMessage>(this, (r, m) => HandleUpdateTask(m.Value));
+        WeakReferenceMessenger.Default.Register<DeleteTaskMessage>(this, (r, m) => HandleDeleteTask(m.Value));
+        WeakReferenceMessenger.Default.Register<CalendarSettingChangedMessage>(this, (r, m) => HandleCalendarSettingChanged());
+    }
+
+    // --- Commands ---
+
+    /// <summary>
+    /// Navigates to the Add Task page.
+    /// </summary>
+    [RelayCommand]
+    private async Task NavigateToAddPage()
+    {
+        await Shell.Current.GoToAsync(nameof(AddTaskPopupPage), true); // Modal navigation
+    }
+
+    /// <summary>
+    /// Navigates to the Edit Task page, passing the selected task.
+    /// </summary>
+    [RelayCommand]
+    private async Task NavigateToEditPage(TaskItem? taskToEdit) // Allow nullable TaskItem
+    {
+        if (taskToEdit == null)
+        {
+            Debug.WriteLine("NavigateToEditPage: taskToEdit is null.");
+            return;
+        }
+        Debug.WriteLine($"Navigating to edit task: {taskToEdit.Title} ({taskToEdit.Id})");
+        var navigationParameter = new Dictionary<string, object> { { "TaskToEdit", taskToEdit } };
+        await Shell.Current.GoToAsync(nameof(AddTaskPopupPage), true, navigationParameter);
+    }
+
+    /// <summary>
+    /// Loads tasks from the JSON file into the ObservableCollection.
+    /// </summary>
+    [RelayCommand]
+    private async Task LoadTasks()
+    {
+        // Prevent loading during save
+        lock (_saveLock) { if (_isSaving) { Debug.WriteLine("LoadTasks skipped, save in progress."); return; } }
+
+        Debug.WriteLine($"LoadTasks: Attempting to load tasks from: {_filePath}");
+
+        Tasks.CollectionChanged -= Tasks_CollectionChanged; // Unsubscribe during bulk load
+        try
+        {
+            if (!File.Exists(_filePath))
+            {
+                Debug.WriteLine("LoadTasks: Task file not found. Clearing tasks.");
+                if (Tasks.Any()) MainThread.BeginInvokeOnMainThread(Tasks.Clear); // Clear on UI thread
+                return;
+            }
+
+            string json = await File.ReadAllTextAsync(_filePath);
+            if (string.IsNullOrWhiteSpace(json))
+            {
+                Debug.WriteLine("LoadTasks: Task file is empty. Clearing tasks.");
+                if (Tasks.Any()) MainThread.BeginInvokeOnMainThread(Tasks.Clear); // Clear on UI thread
+                return;
+            }
+
+            var loadedTasks = JsonSerializer.Deserialize<List<TaskItem>>(json);
+            var tasksToAdd = loadedTasks?.OrderBy(t => t.Order).ToList() ?? new List<TaskItem>();
+
+            // Update the UI collection on the main thread
+            MainThread.BeginInvokeOnMainThread(() =>
+            {
+                Tasks.Clear(); // Clear existing items
+                foreach (var task in tasksToAdd)
+                {
+                    task.IsFadingOut = false; // Reset animation state on load
+                    // Debug.WriteLine($"LoadTasks: Loading Task='{task.Title}', TimeType='{task.TimeType}'"); // Optional detailed log
+                    Tasks.Add(task);
+                }
+                Debug.WriteLine($"LoadTasks: Successfully loaded and added {Tasks.Count} tasks.");
+                // Optionally notify if bindings depend on the 'Tasks' property itself changing (though Clear/Add usually suffices)
+                // OnPropertyChanged(nameof(Tasks));
+            });
+        }
+        catch (JsonException jsonEx)
+        {
+            Debug.WriteLine($"LoadTasks: Error deserializing tasks JSON: {jsonEx.Message}");
+            MainThread.BeginInvokeOnMainThread(Tasks.Clear); // Clear on error (UI thread)
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"LoadTasks: Error loading tasks: {ex.GetType().Name} - {ex.Message}");
+            MainThread.BeginInvokeOnMainThread(Tasks.Clear); // Clear on error (UI thread)
+        }
+        finally
+        {
+            // Always re-subscribe
+            Tasks.CollectionChanged += Tasks_CollectionChanged;
+            Debug.WriteLine("LoadTasks finished.");
+        }
+    }
+
+    /// <summary>
+    /// Handles the action when a task's check circle is tapped.
+    /// Removes one-time tasks or updates repeating tasks.
+    /// </summary>
+    [RelayCommand]
+    private async Task MarkTaskDone(TaskItem? task)
+    {
+        if (task == null || task.IsFadingOut) // Prevent action if null or already animating out
+        {
+            Debug.WriteLine($"MarkTaskDone: Skipped - Task is null or already fading out (Task: {task?.Title}).");
+            return;
+        }
+
+        Debug.WriteLine($"MarkTaskDone: Processing task '{task.Title}', TimeType: {task.TimeType}");
+
+        // --- Logic for One-Time / Specific Date Tasks ---
+        if (task.TimeType == TaskTimeType.None || task.TimeType == TaskTimeType.SpecificDate)
+        {
+            Debug.WriteLine($"MarkTaskDone: Task '{task.Title}' is one-time/specific. Fading out.");
+            task.IsFadingOut = true; // Trigger fade-out animation via binding
+
+            await Task.Delay(350); // Wait for animation (adjust duration as needed)
+
+            // Ensure removal happens on the UI thread
+            MainThread.BeginInvokeOnMainThread(() =>
+            {
+                bool removed = Tasks.Remove(task); // Remove from the collection
+                if (removed)
+                {
+                    Debug.WriteLine($"MarkTaskDone: Removed task '{task.Title}'. Triggering save.");
+                    _ = TriggerSave(); // Trigger save asynchronously
+                }
+                else
+                {
+                    // Should not happen if task was valid, but reset state if removal fails
+                    Debug.WriteLine($"MarkTaskDone: Failed to remove task '{task.Title}' after fade.");
+                    task.IsFadingOut = false;
+                }
+            });
+        }
+        // --- Logic for Repeating Tasks ---
+        else if (task.TimeType == TaskTimeType.Repeating)
+        {
+            Debug.WriteLine($"MarkTaskDone: Task '{task.Title}' is repeating.");
+            // Calculate the next due date using the utility function
+            DateTime? nextDueDate = DateUtils.CalculateNextDueDate(task);
+
+            if (nextDueDate.HasValue)
+            {
+                Debug.WriteLine($"MarkTaskDone: Next due date calculated: {nextDueDate.Value:d}");
+                task.DueDate = nextDueDate; // Update the task's due date property
+
+                // Move task to the end of the list on the UI thread
+                MainThread.BeginInvokeOnMainThread(() =>
+                {
+                    // Check if remove succeeds before adding back to prevent issues
+                    if (Tasks.Remove(task))
+                    {
+                        Tasks.Add(task); // Add to the end
+                        Debug.WriteLine($"MarkTaskDone: Moved task '{task.Title}' to end.");
+                        _ = TriggerSave(); // Trigger save asynchronously
+                    }
+                    else
+                    {
+                        Debug.WriteLine($"MarkTaskDone: Failed to remove repeating task '{task.Title}' before moving.");
+                        // If removal fails, we might need error handling or state reset
+                    }
+                });
+            }
+            else
+            {
+                // Log if next date calculation fails (e.g., invalid repetition type)
+                Debug.WriteLine($"MarkTaskDone: Could not calculate next due date for '{task.Title}'. Not moving or saving.");
+            }
+        }
+    }
+
+    // --- Message Handlers ---
+
+    /// <summary>
+    /// Handles the message when the calendar setting is changed in SettingsViewModel.
+    /// Triggers a reload of tasks to update date formatting via converters.
+    /// </summary>
+    private void HandleCalendarSettingChanged()
+    {
+        Debug.WriteLine("MainViewModel: Received CalendarSettingChangedMessage. Triggering LoadTasksCommand.");
+        // Force reload of tasks to apply new date formatting
+        if (LoadTasksCommand.CanExecute(null))
+        {
+            LoadTasksCommand.Execute(null);
+        }
+        else
+        {
+            Debug.WriteLine("MainViewModel: LoadTasksCommand cannot execute (possibly still running).");
+            // Consider queuing or alternative refresh mechanism if needed
+        }
+    }
+
+    /// <summary>
+    /// Adds a new task received via message to the collection and triggers save.
+    /// </summary>
+    private async void HandleAddTask(TaskItem? newTask) // Allow nullable
+    {
+        if (newTask == null) { Debug.WriteLine("Received AddTaskMessage with null task."); return; }
+        Debug.WriteLine($"Received AddTaskMessage for: {newTask.Title}, TimeType: {newTask.TimeType}");
+        newTask.Order = Tasks.Count; // Assign order based on current count
+        Tasks.Add(newTask); // Add to collection (triggers CollectionChanged -> Add)
+        await TriggerSave(); // Save the new state
+    }
+
+    /// <summary>
+    /// Replaces an existing task with updated data received via message and triggers save.
+    /// Uses item replacement to ensure immediate UI update for converter-based bindings.
+    /// </summary>
+    private async void HandleUpdateTask(TaskItem? updatedTask) // Allow nullable
+    {
+        if (updatedTask == null) { Debug.WriteLine("Received UpdateTaskMessage with null task."); return; }
+
+        // Find the index of the task to update
+        int index = -1;
+        for (int i = 0; i < Tasks.Count; i++) { if (Tasks[i].Id == updatedTask.Id) { index = i; break; } }
+
+        if (index != -1)
+        {
+            Debug.WriteLine($"HandleUpdateTask: Found task '{updatedTask.Title}' at index {index}. Replacing item.");
+            updatedTask.Order = index; // Ensure Order property matches its position
+            Tasks[index] = updatedTask; // Replace item (triggers CollectionChanged -> Replace)
+            await TriggerSave(); // Save the updated state
+        }
+        else { Debug.WriteLine($"HandleUpdateTask: Update failed: Task with ID {updatedTask.Id} not found."); }
+    }
+
+    /// <summary>
+    /// Removes a task identified by ID received via message and triggers save.
+    /// </summary>
+    private async void HandleDeleteTask(Guid taskId)
+    {
+        var taskToRemove = Tasks.FirstOrDefault(t => t.Id == taskId);
+        if (taskToRemove != null)
+        {
+            Debug.WriteLine($"Received DeleteTaskMessage for: {taskToRemove.Title} ({taskId})");
+            Tasks.Remove(taskToRemove); // Remove from collection (triggers CollectionChanged -> Remove)
+            await TriggerSave(); // Save the new state
+        }
+        else { Debug.WriteLine($"Delete failed: Task with ID {taskId} not found."); }
+    }
+
+    // --- Saving Logic ---
+
+    /// <summary>
+    /// Handles changes to the Tasks collection, specifically saving after Move operations.
+    /// </summary>
+    private async void Tasks_CollectionChanged(object sender, NotifyCollectionChangedEventArgs e)
+    {
+        // Only explicitly trigger save on Move, as other actions (Add, Replace, Remove)
+        // trigger saves via their respective message handlers.
+        if (e.Action == NotifyCollectionChangedAction.Move)
+        {
+            Debug.WriteLine($"CollectionChanged: Action=Move. Triggering save.");
+            await TriggerSave();
+        }
+        else { Debug.WriteLine($"CollectionChanged: Action={e.Action}"); }
+    }
+
+    /// <summary>
+    /// Serializes the current task list (after updating order) and writes it to the JSON file.
+    /// Manages the _isSaving flag internally.
+    /// </summary>
+    private async Task SaveTasks()
+    {
+        bool acquiredLock = false;
+        try
+        {
+            // Acquire lock and set saving flag
+            lock (_saveLock)
+            {
+                if (_isSaving) { Debug.WriteLine("SaveTasks: Save already in progress. Exiting."); return; }
+                _isSaving = true;
+                acquiredLock = true;
+            }
+
+            List<TaskItem> tasksToSave;
+            // Lock collection only while reading/setting order
+            lock (Tasks)
+            {
+                // Ensure Order property is correct based on current position
+                for (int i = 0; i < Tasks.Count; i++) { if (Tasks[i].Order != i) { Tasks[i].Order = i; } }
+                // Create a snapshot for saving
+                tasksToSave = new List<TaskItem>(Tasks);
+            }
+
+            Debug.WriteLine($"SaveTasks: Attempting to save {tasksToSave.Count} tasks...");
+
+            // Serialize the snapshot
+            string json = JsonSerializer.Serialize(tasksToSave, new JsonSerializerOptions { WriteIndented = true });
+            // Write to file
+            await File.WriteAllTextAsync(_filePath, json);
+            Debug.WriteLine($"SaveTasks: Tasks saved successfully to {_filePath}");
+
+#if WINDOWS && DEBUG
+            // Optional: Open containing folder logic
+#endif
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"SaveTasks: Error saving tasks: {ex.Message}");
+            // Consider notifying user of save failure
+        }
+        finally
+        {
+            // Ensure save flag is reset *only if lock was acquired by this call*
+            if (acquiredLock)
+            {
+                lock (_saveLock) { _isSaving = false; }
+                Debug.WriteLine("SaveTasks finished, _isSaving reset.");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Initiates a debounced save operation if one isn't already running.
+    /// </summary>
+    private async Task TriggerSave()
+    {
+        // Check if a save is already in progress or pending without acquiring the main save lock yet
+        lock (_saveLock) { if (_isSaving) { Debug.WriteLine("TriggerSave: Skipped, save already in progress/pending."); return; } }
+
+        Debug.WriteLine("TriggerSave: Initiating save cycle...");
+        await Task.Delay(300); // Debounce delay
+        // SaveTasks handles setting/resetting _isSaving flag internally now
+        await SaveTasks();
+    }
+
+} // End of MainViewModel class
+
+--------------------------------------------------------------------------------
+
+// File: ViewModels\SettingsViewModel.cs
+// ViewModels/SettingsViewModel.cs
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Messaging;
+using Microsoft.Maui.Storage;
+using System.ComponentModel;
+using System.Diagnostics;
+using Tickly.Messages;
+using Tickly.Models;
+using Tickly.Services;
+using System.Collections.Generic; // For EqualityComparer
+
+namespace Tickly.ViewModels
+{
+    public partial class SettingsViewModel : ObservableObject
+    {
+        [ObservableProperty]
+        private bool _isGregorianSelected;
+
+        [ObservableProperty]
+        private bool _isPersianSelected;
+
+        public SettingsViewModel()
+        {
+            LoadSettings(); // Now just syncs ViewModel bools with AppSettings
+            this.PropertyChanged += SettingsViewModel_PropertyChanged;
+        }
+
+        // --- MODIFIED LoadSettings ---
+        private void LoadSettings()
+        {
+            // Read the *already initialized* value from the static AppSettings
+            var currentSystem = AppSettings.SelectedCalendarSystem;
+            Debug.WriteLine($"SettingsViewModel: Loading initial state from AppSettings. CurrentSystem='{currentSystem}'");
+
+            // Update the boolean properties for RadioButton binding based on the static value
+            // Use UpdateProperty helper to set initial values without triggering save/notify logic unnecessarily
+            UpdateProperty(ref _isGregorianSelected, currentSystem == CalendarSystemType.Gregorian, nameof(IsGregorianSelected));
+            UpdateProperty(ref _isPersianSelected, currentSystem == CalendarSystemType.Persian, nameof(IsPersianSelected));
+        }
+        // --- End MODIFIED LoadSettings ---
+
+        // PropertyChanged handler remains the same (updates AppSettings, saves Prefs, sends message)
+        private void SettingsViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            CalendarSystemType newSystem;
+
+            if (e.PropertyName == nameof(IsGregorianSelected) && IsGregorianSelected)
+            {
+                newSystem = CalendarSystemType.Gregorian;
+                if (IsPersianSelected) UpdateProperty(ref _isPersianSelected, false, nameof(IsPersianSelected));
+            }
+            else if (e.PropertyName == nameof(IsPersianSelected) && IsPersianSelected)
+            {
+                newSystem = CalendarSystemType.Persian;
+                if (IsGregorianSelected) UpdateProperty(ref _isGregorianSelected, false, nameof(IsGregorianSelected));
+            }
+            else { return; }
+
+            if (AppSettings.SelectedCalendarSystem != newSystem)
+            {
+                Debug.WriteLine($"SettingsViewModel: PropertyChanged detected user change to {newSystem}. Saving and notifying.");
+                // Update static setting FIRST
+                AppSettings.SelectedCalendarSystem = newSystem;
+                // Save to Preferences
+                Preferences.Set(AppSettings.CalendarSystemKey, (int)newSystem);
+                // Send notification message
+                WeakReferenceMessenger.Default.Send(new CalendarSettingChangedMessage());
+                Debug.WriteLine("SettingsViewModel: Sent CalendarSettingChangedMessage.");
+            }
+        }
+
+        // Helper to update backing field and raise PropertyChanged if value changed
+        protected bool UpdateProperty<T>(ref T field, T value, string propertyName)
+        {
+            if (EqualityComparer<T>.Default.Equals(field, value)) return false;
+            field = value;
+            OnPropertyChanged(propertyName);
+            return true;
+        }
+    }
+}
+
+--------------------------------------------------------------------------------
+
+// File: Views\AddTaskPopupPage.xaml
+<?xml version="1.0" encoding="utf-8" ?>
+<!-- Views/AddTaskPopupPage.xaml -->
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:models="clr-namespace:Tickly.Models"
+             xmlns:converters="clr-namespace:Tickly.Converters"
+             xmlns:vm="clr-namespace:Tickly.Views"
+             x:Class="Tickly.Views.AddTaskPopupPage"
+             x:DataType="vm:AddTaskPopupPageViewModel"
+             BackgroundColor="Black"
+             Title="{Binding PageTitle}">
+    <!-- Dynamic Page Title (Add New Task / Edit Task) -->
+    <!-- Set DataType for compile-time checking and intellisense -->
+
+    <ContentPage.Resources>
+        <ResourceDictionary>
+            <converters:InverseBooleanConverter x:Key="InverseBooleanConverter" />
+            <!-- Styles -->
+            <Style TargetType="Entry" x:Key="MinimalEntry">
+                <Setter Property="TextColor" Value="White" />
+                <Setter Property="PlaceholderColor" Value="Gray" />
+                <Setter Property="BackgroundColor" Value="Transparent" />
+                <Setter Property="Margin" Value="0,0,0,5" />
+            </Style>
+            <!-- Ensure Primary color is defined globally -->
+            <!-- <Color x:Key="Primary">#512BD4</Color> -->
+        </ResourceDictionary>
+    </ContentPage.Resources>
+
+    <ScrollView>
+        <VerticalStackLayout Padding="20" Spacing="15">
+
+            <!-- Task Title Input -->
+            <Label Text="Task Title" TextColor="WhiteSmoke"/>
+            <Entry x:Name="TitleEntry"
+                   Placeholder="Enter task title"
+                   Text="{Binding Title}"
+                   Style="{StaticResource MinimalEntry}" />
+
+            <!-- Priority Selection -->
+            <Label Text="Priority" TextColor="WhiteSmoke"/>
+            <HorizontalStackLayout Spacing="10" BindableLayout.ItemsSource="{Binding PriorityOptions}">
+                <BindableLayout.ItemTemplate>
+                    <DataTemplate x:DataType="vm:SelectableOption(models:TaskPriority)">
+                        <RadioButton GroupName="PriorityGroup"
+                                     IsChecked="{Binding IsSelected}"
+                                     Content="{Binding Name}"
+                                     TextColor="WhiteSmoke" />
+                    </DataTemplate>
+                </BindableLayout.ItemTemplate>
+            </HorizontalStackLayout>
+
+            <!-- Time / Repetition Type Selection -->
+            <Label Text="Time / Repetition" TextColor="WhiteSmoke"/>
+            <VerticalStackLayout Spacing="5">
+                <RadioButton GroupName="TimeTypeGroup" Content="None (Any time)" TextColor="WhiteSmoke"
+                             IsChecked="{Binding IsTimeTypeNone}" />
+                <RadioButton GroupName="TimeTypeGroup" Content="Specific Date" TextColor="WhiteSmoke"
+                             IsChecked="{Binding IsTimeTypeSpecificDate}" />
+                <RadioButton GroupName="TimeTypeGroup" Content="Repeating" TextColor="WhiteSmoke"
+                              IsChecked="{Binding IsTimeTypeRepeating}" />
+            </VerticalStackLayout>
+
+            <!-- Specific Date Picker (Visible only when SpecificDate is selected) -->
+            <DatePicker x:Name="DueDatePicker"
+                        Date="{Binding DueDate}"
+                        TextColor="WhiteSmoke"
+                        BackgroundColor="#1E1E1E"
+                        IsVisible="{Binding IsTimeTypeSpecificDate}"
+                        Margin="20,0,0,0" />
+
+            <!-- Repetition Options Section (Visible only when Repeating is selected) -->
+            <VerticalStackLayout Spacing="10" Margin="20,5,0,0"
+                                 IsVisible="{Binding IsTimeTypeRepeating}">
+
+                <Label Text="Repeat:" TextColor="LightGray"/>
+                <HorizontalStackLayout Spacing="10" BindableLayout.ItemsSource="{Binding RepetitionTypeOptions}">
+                    <BindableLayout.ItemTemplate>
+                        <DataTemplate x:DataType="vm:SelectableOption(models:TaskRepetitionType)">
+                            <RadioButton GroupName="RepetitionTypeGroup"
+                                         IsChecked="{Binding IsSelected}"
+                                         Content="{Binding Name}"
+                                         TextColor="WhiteSmoke" />
+                        </DataTemplate>
+                    </BindableLayout.ItemTemplate>
+                </HorizontalStackLayout>
+
+                <!-- *** Start Date for Repetition Picker REMOVED *** -->
+                <!-- <StackLayout Orientation="Horizontal" Spacing="5" Margin="0,5,0,0"> -->
+                <!--     <Label Text="Starting:" VerticalOptions="Center" TextColor="LightGray"/> -->
+                <!--     <DatePicker x:Name="RepeatStartDatePicker" -->
+                <!--                 Date="{Binding DueDate}" -->
+                <!--                 TextColor="WhiteSmoke" -->
+                <!--                 BackgroundColor="#1E1E1E" /> -->
+                <!-- </StackLayout> -->
+
+                <!-- Day of Week Picker (Visible only for Weekly repetition) -->
+                <StackLayout Orientation="Horizontal" Spacing="5" Margin="0,5,0,0"
+                             IsVisible="{Binding IsWeeklySelected}">
+                    <Label Text="On:" VerticalOptions="Center" TextColor="LightGray"/>
+                    <Picker x:Name="DayOfWeekPicker"
+                            Title="Select Day"
+                            TextColor="WhiteSmoke"
+                            BackgroundColor="#1E1E1E"
+                            ItemsSource="{Binding DisplayDaysOfWeek}"
+                            SelectedItem="{Binding SelectedDisplayDayOfWeek}"
+                            WidthRequest="150" />
+                </StackLayout>
+            </VerticalStackLayout>
+
+            <!-- Action Buttons -->
+            <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="10" Margin="0,20,0,0">
+                <Button Grid.Column="0" Text="Delete" Clicked="OnDeleteClicked" BackgroundColor="DarkRed" TextColor="White" IsVisible="{Binding IsEditMode}" HorizontalOptions="Start" />
+                <Button Grid.Column="2" Text="Cancel" Clicked="OnCancelClicked" BackgroundColor="#444444" TextColor="WhiteSmoke" HorizontalOptions="End" />
+                <Button Grid.Column="3" Text="{Binding ConfirmButtonText}" Clicked="OnConfirmClicked" BackgroundColor="{StaticResource Primary}" TextColor="Black" HorizontalOptions="End" />
+            </Grid>
+
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>
+
+--------------------------------------------------------------------------------
+
+// File: Views\AddTaskPopupPage.xaml.cs
+// Views/AddTaskPopupPage.xaml.cs
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Messaging;
+using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.Linq;
+using Microsoft.Maui.Controls;
+using Tickly.Messages; // Ensure UpdateTaskMessage is included
+using Tickly.Models;
+using System.Diagnostics; // For Debug.WriteLine
+
+namespace Tickly.Views
+{
+    // Helper class for binding collections to RadioButtons
+    public partial class SelectableOption<T> : ObservableObject
+    {
+        [ObservableProperty]
+        private bool _isSelected;
+        public string Name { get; }
+        public T Value { get; }
+
+        public SelectableOption(string name, T value, bool isSelected = false)
+        {
+            Name = name;
+            Value = value;
+            IsSelected = isSelected;
+        }
+    }
+
+    // ViewModel for the Add/Edit Task Page
+    public partial class AddTaskPopupPageViewModel : ObservableObject
+    {
+        // Properties bound to UI controls
+        [ObservableProperty] private DateTime _dueDate = DateTime.Today;
+        [ObservableProperty] private bool _isTimeTypeNone = true; // Default selection
+        [ObservableProperty] private bool _isTimeTypeSpecificDate;
+        [ObservableProperty] private bool _isTimeTypeRepeating;
+        [ObservableProperty] private ObservableCollection<SelectableOption<TaskPriority>> _priorityOptions;
+        [ObservableProperty] private ObservableCollection<SelectableOption<TaskRepetitionType>> _repetitionTypeOptions;
+        [ObservableProperty] private bool _isWeeklySelected; // Controls visibility of DayOfWeek picker
+        [ObservableProperty] private List<DayOfWeek> _daysOfWeek = Enum.GetValues(typeof(DayOfWeek)).Cast<DayOfWeek>().ToList();
+        [ObservableProperty] private DayOfWeek _selectedDayOfWeek = DateTime.Today.DayOfWeek; // Default selected day
+
+        public AddTaskPopupPageViewModel()
+        {
+            // Initialize Priority options (without color names)
+            PriorityOptions = new ObservableCollection<SelectableOption<TaskPriority>>
+            {
+                new SelectableOption<TaskPriority>("High", TaskPriority.High),
+                new SelectableOption<TaskPriority>("Medium", TaskPriority.Medium, true), // Default selected
+                new SelectableOption<TaskPriority>("Low", TaskPriority.Low)
+            };
+
+            // Initialize Repetition options
+            RepetitionTypeOptions = new ObservableCollection<SelectableOption<TaskRepetitionType>>
+            {
+                new SelectableOption<TaskRepetitionType>("Daily", TaskRepetitionType.Daily, true), // Default selected
+                new SelectableOption<TaskRepetitionType>("Alternate Day", TaskRepetitionType.AlternateDay),
+                new SelectableOption<TaskRepetitionType>("Weekly", TaskRepetitionType.Weekly)
+            };
+
+            // Handle changes in RepetitionType selection to show/hide DayOfWeek picker
+            foreach (var option in RepetitionTypeOptions)
+            {
+                option.PropertyChanged += (sender, args) =>
+                {
+                    if (args.PropertyName == nameof(SelectableOption<TaskRepetitionType>.IsSelected))
+                    {
+                        var changedOption = sender as SelectableOption<TaskRepetitionType>;
+                        // If this option became selected, update IsWeeklySelected based on its value
+                        if (changedOption != null && changedOption.IsSelected)
+                        {
+                            IsWeeklySelected = (changedOption.Value == TaskRepetitionType.Weekly);
+                        }
+                        // Handle case where Weekly might be deselected (though RadioButton group should prevent direct deselection)
+                        // Check if the currently selected option *is not* Weekly
+                        else if (changedOption != null && !changedOption.IsSelected && changedOption.Value == TaskRepetitionType.Weekly)
+                        {
+                            if (RepetitionTypeOptions.FirstOrDefault(o => o.IsSelected)?.Value != TaskRepetitionType.Weekly)
+                            {
+                                IsWeeklySelected = false;
+                            }
+                        }
+                    }
+                };
+            }
+            // Initial check for DayOfWeek picker visibility
+            IsWeeklySelected = RepetitionTypeOptions.FirstOrDefault(o => o.IsSelected)?.Value == TaskRepetitionType.Weekly;
+
+            // Handle changes in the main TimeType selection (None, Specific, Repeating)
+            this.PropertyChanged += (sender, args) =>
+            {
+                if (args.PropertyName == nameof(IsTimeTypeRepeating) || args.PropertyName == nameof(IsTimeTypeSpecificDate) || args.PropertyName == nameof(IsTimeTypeNone))
+                {
+                    // Ensure DayOfWeek picker visibility is correct based on whether Repeating is selected AND Weekly is chosen
+                    IsWeeklySelected = IsTimeTypeRepeating && (RepetitionTypeOptions.FirstOrDefault(o => o.IsSelected)?.Value == TaskRepetitionType.Weekly);
+                }
+            };
+        }
+
+        // Populates the ViewModel fields based on an existing TaskItem (for editing)
+        public void LoadFromTask(TaskItem task)
+        {
+            // Set Priority RadioButton
+            foreach (var option in PriorityOptions)
+                option.IsSelected = (option.Value == task.Priority);
+            // Ensure a default priority if somehow none matches
+            if (!PriorityOptions.Any(o => o.IsSelected))
+                PriorityOptions.FirstOrDefault(o => o.Value == TaskPriority.Medium)!.IsSelected = true;
+
+            // Set TimeType RadioButtons
+            IsTimeTypeNone = task.TimeType == TaskTimeType.None;
+            IsTimeTypeSpecificDate = task.TimeType == TaskTimeType.SpecificDate;
+            IsTimeTypeRepeating = task.TimeType == TaskTimeType.Repeating;
+
+            // Set DatePicker value (used for Specific Date or Repeating Start Date)
+            DueDate = task.DueDate ?? DateTime.Today; // Use today if null
+
+            // Set Repetition details if applicable
+            if (task.TimeType == TaskTimeType.Repeating)
+            {
+                // Set Repetition Type RadioButton
+                foreach (var option in RepetitionTypeOptions)
+                    option.IsSelected = (option.Value == task.RepetitionType);
+                // Ensure a default repetition type if none matches
+                if (!RepetitionTypeOptions.Any(o => o.IsSelected))
+                    RepetitionTypeOptions.FirstOrDefault(o => o.Value == TaskRepetitionType.Daily)!.IsSelected = true;
+
+                // Set DayOfWeek Picker selected item
+                SelectedDayOfWeek = task.RepetitionDayOfWeek ?? DateTime.Today.DayOfWeek;
+
+                // Update DayOfWeek picker visibility based on loaded type
+                IsWeeklySelected = RepetitionTypeOptions.FirstOrDefault(o => o.IsSelected)?.Value == TaskRepetitionType.Weekly;
+            }
+            else
+            {
+                // Reset repetition details if not a repeating task
+                RepetitionTypeOptions.FirstOrDefault(o => o.Value == TaskRepetitionType.Daily)!.IsSelected = true;
+                SelectedDayOfWeek = DateTime.Today.DayOfWeek;
+                IsWeeklySelected = false;
+            }
+
+            // Notify that DueDate might have changed to update bound DatePickers
+            OnPropertyChanged(nameof(DueDate));
+        }
+    }
+
+    // Code-behind for the Add/Edit Task Page
+    // QueryProperty links the "TaskToEdit" navigation parameter to the TaskToEdit property
+    [QueryProperty(nameof(TaskToEdit), "TaskToEdit")]
+    public partial class AddTaskPopupPage : ContentPage
+    {
+        private AddTaskPopupPageViewModel _viewModel;
+        private TaskItem? _editingTask = null; // Holds the original task if editing, null if adding
+
+        // This property receives the TaskItem object during navigation for editing
+        public TaskItem TaskToEdit
+        {
+            set
+            {
+                if (value != null) // If a TaskItem was passed
+                {
+                    _editingTask = value; // Store it
+                    Title = "Edit Task"; // Update page title
+                    PopulateFieldsFromTask(value); // Populate the UI controls
+                }
+                else // Navigated without a TaskItem (e.g., adding new, or error)
+                {
+                    _editingTask = null;
+                    Title = "Add New Task";
+                    // Optionally reset ViewModel fields here if needed
+                }
+            }
+        }
+
+        // Constructor
+        public AddTaskPopupPage()
+        {
+            InitializeComponent(); // Standard MAUI XAML initialization
+            _viewModel = new AddTaskPopupPageViewModel(); // Create the associated ViewModel
+            BindingContext = _viewModel; // Set the page's BindingContext to the ViewModel
+            Title = "Add New Task"; // Default title
+        }
+
+        // Populates the UI fields based on the TaskItem being edited
+        private void PopulateFieldsFromTask(TaskItem task)
+        {
+            if (task == null) return;
+            Debug.WriteLine($"Populating fields for Task ID: {task.Id}, Title: {task.Title}");
+
+            // Call the ViewModel's method to update its properties based on the task
+            _viewModel.LoadFromTask(task);
+
+            // Directly update UI elements that might not be fully driven by ViewModel bindings
+            // (In this setup, TitleEntry is the main one)
+            TitleEntry.Text = task.Title;
+            // DatePickers and Picker are bound to ViewModel properties, updated via LoadFromTask
+        }
+
+        // Handles the "Confirm" button click
+        private async void OnConfirmClicked(object sender, EventArgs e)
+        {
+            // --- 1. Validate Input ---
+            string title = TitleEntry.Text?.Trim();
+            if (string.IsNullOrWhiteSpace(title))
+            {
+                await DisplayAlert("Validation Error", "Task title cannot be empty.", "OK");
+                return;
+            }
+
+            // --- 2. Read Data from ViewModel ---
+            // Priority
+            var selectedPriorityOption = _viewModel.PriorityOptions.FirstOrDefault(p => p.IsSelected);
+            TaskPriority priority = selectedPriorityOption?.Value ?? TaskPriority.Medium;
+
+            // Time Type
+            TaskTimeType timeType = _viewModel.IsTimeTypeSpecificDate ? TaskTimeType.SpecificDate :
+                                    _viewModel.IsTimeTypeRepeating ? TaskTimeType.Repeating :
+                                    TaskTimeType.None;
+
+            // Due Date (Read from ViewModel property bound to both DatePickers)
+            DateTime? dueDate = null;
+            if (timeType == TaskTimeType.SpecificDate || timeType == TaskTimeType.Repeating)
+            {
+                dueDate = _viewModel.DueDate; // Get date from the ViewModel
+            }
+
+            // Repetition Details
+            TaskRepetitionType? repetitionType = null;
+            DayOfWeek? repetitionDayOfWeek = null;
+            if (timeType == TaskTimeType.Repeating)
+            {
+                var selectedRepetitionOption = _viewModel.RepetitionTypeOptions.FirstOrDefault(r => r.IsSelected);
+                repetitionType = selectedRepetitionOption?.Value ?? TaskRepetitionType.Daily;
+
+                if (repetitionType == TaskRepetitionType.Weekly)
+                {
+                    // Read selected day from Picker (bound to ViewModel, SelectedItem is fallback)
+                    repetitionDayOfWeek = (DayOfWeek?)DayOfWeekPicker.SelectedItem ?? _viewModel.SelectedDayOfWeek;
+                }
+            }
+
+            // --- 3. Determine Add or Update ---
+            if (_editingTask != null) // If _editingTask has a value, we are updating
+            {
+                // Create a TaskItem with updated values but the original ID and Order
+                var updatedTask = new TaskItem(
+                    title, priority, timeType, dueDate, repetitionType, repetitionDayOfWeek, _editingTask.Order // Keep original order
+                )
+                {
+                    Id = _editingTask.Id // *** CRUCIAL: Assign the original ID ***
+                };
+                Debug.WriteLine($"Sending UpdateTaskMessage for Task ID: {updatedTask.Id}");
+                // Send a message to the MainViewModel to update this task
+                WeakReferenceMessenger.Default.Send(new UpdateTaskMessage(updatedTask));
+            }
+            else // _editingTask is null, so we are adding a new task
+            {
+                // Create a new TaskItem (Order will be assigned by MainViewModel)
+                var newTask = new TaskItem(title, priority, timeType, dueDate, repetitionType, repetitionDayOfWeek);
+                Debug.WriteLine($"Sending AddTaskMessage for new task.");
+                // Send a message to the MainViewModel to add this task
+                WeakReferenceMessenger.Default.Send(new AddTaskMessage(newTask));
+            }
+
+            // --- 4. Close the Popup Page ---
+            await Shell.Current.Navigation.PopModalAsync();
+        }
+
+        // Handles the "Cancel" button click
+        private async void OnCancelClicked(object sender, EventArgs e)
+        {
+            // Simply close the popup page without saving/sending messages
+            await Shell.Current.Navigation.PopModalAsync();
+        }
+
+        // Optional: Called when navigating away from the page
+        protected override void OnNavigatedFrom(NavigatedFromEventArgs args)
+        {
+            base.OnNavigatedFrom(args);
+            // You could potentially reset _editingTask = null here if needed,
+            // but the QueryProperty setter handles the logic correctly on next navigation.
+        }
+    }
+}
+
+--------------------------------------------------------------------------------
+
+// File: Views\SettingsPage.xaml
+<?xml version="1.0" encoding="utf-8" ?>
+<!-- XML Declaration MUST be first -->
+<!-- Views/SettingsPage.xaml (New File) -->
+<!-- Comment moved after declaration -->
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:Tickly.ViewModels"
+             x:Class="Tickly.Views.SettingsPage"
+             Title="Settings"
+             BackgroundColor="Black">
+
+    <ContentPage.BindingContext>
+        <!-- Instantiate ViewModel directly or use DI if preferred -->
+        <vm:SettingsViewModel />
+    </ContentPage.BindingContext>
+
+    <ScrollView>
+        <VerticalStackLayout Padding="20" Spacing="15">
+
+            <Label Text="Calendar Settings"
+                   TextColor="WhiteSmoke"
+                   FontSize="Large"
+                   FontAttributes="Bold"
+                   Margin="0,0,0,10"/>
+
+            <Label Text="Choose the calendar system for displaying dates:"
+                   TextColor="LightGray"
+                   FontSize="Small"/>
+
+            <RadioButton GroupName="CalendarGroup"
+                         Content="Gregorian Calendar"
+                         TextColor="WhiteSmoke"
+                         IsChecked="{Binding IsGregorianSelected}" />
+
+            <RadioButton GroupName="CalendarGroup"
+                         Content="Persian (Shamsi) Calendar"
+                         TextColor="WhiteSmoke"
+                         IsChecked="{Binding IsPersianSelected}" />
+
+            <!-- Add more settings here later if needed -->
+
+        </VerticalStackLayout>
+    </ScrollView>
+
+</ContentPage>
+
+--------------------------------------------------------------------------------
+
+// File: Views\SettingsPage.xaml.cs
+// Views/SettingsPage.xaml.cs (New File)
+namespace Tickly.Views;
+
+public partial class SettingsPage : ContentPage
+{
+    public SettingsPage()
+    {
+        InitializeComponent();
+        // BindingContext is set in XAML or via DI
+    }
+}
+
+--------------------------------------------------------------------------------
+

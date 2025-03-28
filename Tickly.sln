@@ -1,9 +1,11 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
-VisualStudioVersion = 17.12.35527.113 d17.12
+VisualStudioVersion = 17.12.35527.113
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Tickly", "Tickly\Tickly.csproj", "{DC1F9AAA-9144-48AC-867F-D33D73A2793A}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PromptCompiler", "PromptCompiler\PromptCompiler.csproj", "{553F20A4-550D-47BD-8FF8-0EE870788782}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -15,6 +17,10 @@ Global
 		{DC1F9AAA-9144-48AC-867F-D33D73A2793A}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{DC1F9AAA-9144-48AC-867F-D33D73A2793A}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{DC1F9AAA-9144-48AC-867F-D33D73A2793A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{553F20A4-550D-47BD-8FF8-0EE870788782}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{553F20A4-550D-47BD-8FF8-0EE870788782}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{553F20A4-550D-47BD-8FF8-0EE870788782}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{553F20A4-550D-47BD-8FF8-0EE870788782}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
