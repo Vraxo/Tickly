@@ -95,64 +95,15 @@
 
             <!-- Buttons -->
             <HorizontalStackLayout Spacing="10" HorizontalOptions="End" Margin="0,20,0,0">
-                <!-- Cancel Button with VSM -->
-                <Button Text="Cancel" Clicked="OnCancelClicked" BackgroundColor="#444444">
-                    <VisualStateManager.VisualStateGroups>
-                        <VisualStateGroup x:Name="CommonStates">
-                            <VisualState x:Name="Normal">
-                                <VisualState.Setters>
-                                    <Setter Property="Scale" Value="1.0" />
-                                    <Setter Property="BackgroundColor" Value="#444444" />
-                                </VisualState.Setters>
-                            </VisualState>
-                            <VisualState x:Name="Pressed">
-                                <VisualState.Setters>
-                                    <Setter Property="Scale" Value="0.95" />
-                                    <Setter Property="BackgroundColor" Value="#333333" />
-                                    <!-- Slightly darker gray -->
-                                </VisualState.Setters>
-                            </VisualState>
-                            <VisualState x:Name="Disabled">
-                                <VisualState.Setters>
-                                    <Setter Property="BackgroundColor" Value="#666666" />
-                                    <Setter Property="Scale" Value="1.0" />
-                                </VisualState.Setters>
-                            </VisualState>
-                        </VisualStateGroup>
-                    </VisualStateManager.VisualStateGroups>
-                </Button>
+                <!-- Cancel Button - VSM removed, relies on implicit style -->
+                <Button Text="Cancel" Clicked="OnCancelClicked" BackgroundColor="#444444"/>
+                <!-- Explicit VSM block REMOVED from here -->
 
-                <!-- Confirm Button with VSM -->
-                <Button Text="Confirm" Clicked="OnConfirmClicked" BackgroundColor="{StaticResource Primary}">
-                    <VisualStateManager.VisualStateGroups>
-                        <VisualStateGroup x:Name="CommonStates">
-                            <VisualState x:Name="Normal">
-                                <VisualState.Setters>
-                                    <Setter Property="Scale" Value="1.0" />
-                                    <!-- Use hardcoded Primary color for VSM stability -->
-                                    <Setter Property="BackgroundColor" Value="#512BD4" />
-                                    <!-- Adjust if your Primary is different -->
-                                </VisualState.Setters>
-                            </VisualState>
-                            <VisualState x:Name="Pressed">
-                                <VisualState.Setters>
-                                    <Setter Property="Scale" Value="0.95" />
-                                    <!-- Use slightly darker Primary for VSM stability -->
-                                    <Setter Property="BackgroundColor" Value="#3E1F9F" />
-                                    <!-- Adjust if your Primary is different -->
-                                </VisualState.Setters>
-                            </VisualState>
-                            <VisualState x:Name="Disabled">
-                                <VisualState.Setters>
-                                    <!-- Use a faded Primary color -->
-                                    <Setter Property="BackgroundColor" Value="#957FEF" />
-                                    <!-- Adjust if your Primary is different -->
-                                    <Setter Property="Scale" Value="1.0" />
-                                </VisualState.Setters>
-                            </VisualState>
-                        </VisualStateGroup>
-                    </VisualStateManager.VisualStateGroups>
-                </Button>
+
+                <!-- Confirm Button - VSM removed, relies on implicit style -->
+                <Button Text="Confirm" Clicked="OnConfirmClicked" BackgroundColor="{StaticResource Primary}"/>
+                <!-- Explicit VSM block REMOVED from here -->
+
             </HorizontalStackLayout>
 
         </VerticalStackLayout>
