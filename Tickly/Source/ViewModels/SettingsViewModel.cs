@@ -1,12 +1,13 @@
 ﻿// ViewModels/SettingsViewModel.cs
 using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Messaging; // <-- Add this
+using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Maui.Storage;
 using System.ComponentModel;
-using System.Diagnostics; // <-- Add this if not present
-using Tickly.Messages; // <-- Add this
+using System.Diagnostics;
+using Tickly.Messages;
 using Tickly.Models;
 using Tickly.Services;
+using System.Collections.Generic; // For EqualityComparer
 
 namespace Tickly.ViewModels
 {
@@ -20,66 +21,55 @@ namespace Tickly.ViewModels
 
         public SettingsViewModel()
         {
-            LoadSettings();
+            LoadSettings(); // Now just syncs ViewModel bools with AppSettings
             this.PropertyChanged += SettingsViewModel_PropertyChanged;
         }
 
+        // --- MODIFIED LoadSettings ---
         private void LoadSettings()
         {
-            int storedValue = Preferences.Get(AppSettings.CalendarSystemKey, (int)CalendarSystemType.Gregorian);
-            var loadedSystem = (CalendarSystemType)storedValue;
-            Debug.WriteLine($"SettingsViewModel: Loading setting - StoredValue={storedValue}, LoadedSystem={loadedSystem}");
+            // Read the *already initialized* value from the static AppSettings
+            var currentSystem = AppSettings.SelectedCalendarSystem;
+            Debug.WriteLine($"SettingsViewModel: Loading initial state from AppSettings. CurrentSystem='{currentSystem}'");
 
-            AppSettings.SelectedCalendarSystem = loadedSystem;
-
-            // Use OnPropertyChanged directly to avoid triggering save during load
-            OnPropertyChanged(nameof(IsGregorianSelected));
-            OnPropertyChanged(nameof(IsPersianSelected));
-            _isGregorianSelected = loadedSystem == CalendarSystemType.Gregorian;
-            _isPersianSelected = loadedSystem == CalendarSystemType.Persian;
-            OnPropertyChanged(nameof(IsGregorianSelected));
-            OnPropertyChanged(nameof(IsPersianSelected));
+            // Update the boolean properties for RadioButton binding based on the static value
+            // Use UpdateProperty helper to set initial values without triggering save/notify logic unnecessarily
+            UpdateProperty(ref _isGregorianSelected, currentSystem == CalendarSystemType.Gregorian, nameof(IsGregorianSelected));
+            UpdateProperty(ref _isPersianSelected, currentSystem == CalendarSystemType.Persian, nameof(IsPersianSelected));
         }
+        // --- End MODIFIED LoadSettings ---
 
+        // PropertyChanged handler remains the same (updates AppSettings, saves Prefs, sends message)
         private void SettingsViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
         {
             CalendarSystemType newSystem;
 
-            // Determine the new system based on which boolean property changed *to true*
             if (e.PropertyName == nameof(IsGregorianSelected) && IsGregorianSelected)
             {
                 newSystem = CalendarSystemType.Gregorian;
-                if (IsPersianSelected) UpdateProperty(ref _isPersianSelected, false, nameof(IsPersianSelected)); // Use helper to avoid loop
+                if (IsPersianSelected) UpdateProperty(ref _isPersianSelected, false, nameof(IsPersianSelected));
             }
             else if (e.PropertyName == nameof(IsPersianSelected) && IsPersianSelected)
             {
                 newSystem = CalendarSystemType.Persian;
-                if (IsGregorianSelected) UpdateProperty(ref _isGregorianSelected, false, nameof(IsGregorianSelected)); // Use helper to avoid loop
+                if (IsGregorianSelected) UpdateProperty(ref _isGregorianSelected, false, nameof(IsGregorianSelected));
             }
-            else
-            {
-                return; // Only act when a selection becomes true
-            }
+            else { return; }
 
-            // Check if the system actually changed from the currently loaded setting
             if (AppSettings.SelectedCalendarSystem != newSystem)
             {
-                Debug.WriteLine($"SettingsViewModel: PropertyChanged detected change to {newSystem}. Saving and notifying.");
-
+                Debug.WriteLine($"SettingsViewModel: PropertyChanged detected user change to {newSystem}. Saving and notifying.");
+                // Update static setting FIRST
+                AppSettings.SelectedCalendarSystem = newSystem;
                 // Save to Preferences
                 Preferences.Set(AppSettings.CalendarSystemKey, (int)newSystem);
-
-                // Update the static AppSettings immediately
-                AppSettings.SelectedCalendarSystem = newSystem;
-
-                // *** SEND NOTIFICATION MESSAGE ***
+                // Send notification message
                 WeakReferenceMessenger.Default.Send(new CalendarSettingChangedMessage());
                 Debug.WriteLine("SettingsViewModel: Sent CalendarSettingChangedMessage.");
             }
         }
 
-        // Helper to update backing field and raise PropertyChanged, avoiding infinite loops
-        // (Can be added to ObservableObject base class or kept here)
+        // Helper to update backing field and raise PropertyChanged if value changed
         protected bool UpdateProperty<T>(ref T field, T value, string propertyName)
         {
             if (EqualityComparer<T>.Default.Equals(field, value)) return false;
