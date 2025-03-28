@@ -1,4 +1,4 @@
-﻿// ViewModels/MainViewModel.cs
+﻿// File: ViewModels\MainViewModel.cs
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
@@ -12,6 +12,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Maui.ApplicationModel; // Needed for MainThread
+using Microsoft.Maui.Controls; // Needed for Shell
 using Tickly.Messages;
 using Tickly.Models;
 using Tickly.Views;
@@ -19,6 +20,7 @@ using Tickly.Utils; // Needed for DateUtils
 
 namespace Tickly.ViewModels;
 
+// Ensure the class is partial for source generators to work
 public partial class MainViewModel : ObservableObject
 {
     [ObservableProperty]
@@ -32,10 +34,11 @@ public partial class MainViewModel : ObservableObject
     {
         _filePath = Path.Combine(FileSystem.AppDataDirectory, "tasks.json");
         _tasks = new ObservableCollection<TaskItem>();
-        _tasks.CollectionChanged += Tasks_CollectionChanged;
+        // Subscribe AFTER initial load to avoid unnecessary saves during load
+        // _tasks.CollectionChanged += Tasks_CollectionChanged; // Moved to end of LoadTasksAsync
 
         // Load initial data
-        LoadTasksCommand.Execute(null);
+        _ = LoadTasksAsync(); // Use async void pattern cautiously; Task is returned but not awaited here
 
         // Register message listeners for CRUD operations and settings changes
         WeakReferenceMessenger.Default.Register<AddTaskMessage>(this, (r, m) => HandleAddTask(m.Value));
@@ -52,7 +55,17 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand]
     private async Task NavigateToAddPage()
     {
-        await Shell.Current.GoToAsync(nameof(AddTaskPopupPage), true); // Modal navigation
+        try
+        {
+            // Ensure IsEditMode is false in the target ViewModel if navigating for Add
+            await Shell.Current.GoToAsync(nameof(AddTaskPopupPage), true,
+                new Dictionary<string, object> { { "TaskToEdit", null } }); // Explicitly pass null
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Error navigating to add page: {ex.Message}");
+            // Optionally show user error
+        }
     }
 
     /// <summary>
@@ -66,73 +79,115 @@ public partial class MainViewModel : ObservableObject
             Debug.WriteLine("NavigateToEditPage: taskToEdit is null.");
             return;
         }
-        Debug.WriteLine($"Navigating to edit task: {taskToEdit.Title} ({taskToEdit.Id})");
-        var navigationParameter = new Dictionary<string, object> { { "TaskToEdit", taskToEdit } };
-        await Shell.Current.GoToAsync(nameof(AddTaskPopupPage), true, navigationParameter);
+        try
+        {
+            Debug.WriteLine($"Navigating to edit task: {taskToEdit.Title} ({taskToEdit.Id})");
+            var navigationParameter = new Dictionary<string, object> { { "TaskToEdit", taskToEdit } };
+            await Shell.Current.GoToAsync(nameof(AddTaskPopupPage), true, navigationParameter);
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Error navigating to edit page for task {taskToEdit.Id}: {ex.Message}");
+            // Optionally show user error
+        }
     }
 
     /// <summary>
     /// Loads tasks from the JSON file into the ObservableCollection.
+    /// Renamed to LoadTasksAsync and returns Task.
     /// </summary>
-    [RelayCommand]
-    private async Task LoadTasks()
+    [RelayCommand] // Generates LoadTasksAsyncCommand for potential external use
+    private async Task LoadTasksAsync()
     {
         // Prevent loading during save
-        lock (_saveLock) { if (_isSaving) { Debug.WriteLine("LoadTasks skipped, save in progress."); return; } }
+        lock (_saveLock) { if (_isSaving) { Debug.WriteLine("LoadTasksAsync skipped, save in progress."); return; } }
 
-        Debug.WriteLine($"LoadTasks: Attempting to load tasks from: {_filePath}");
+        Debug.WriteLine($"LoadTasksAsync: Attempting to load tasks from: {_filePath}");
 
-        Tasks.CollectionChanged -= Tasks_CollectionChanged; // Unsubscribe during bulk load
+        bool wasSubscribed = false;
+        // Check if already subscribed before unsubscribing
         try
         {
-            if (!File.Exists(_filePath))
-            {
-                Debug.WriteLine("LoadTasks: Task file not found. Clearing tasks.");
-                if (Tasks.Any()) MainThread.BeginInvokeOnMainThread(Tasks.Clear); // Clear on UI thread
-                return;
-            }
+            // Temporarily unsubscribe to prevent CollectionChanged firing during load
+            Tasks.CollectionChanged -= Tasks_CollectionChanged;
+            wasSubscribed = true; // Assume it was, handle potential exception if not
+            Debug.WriteLine("LoadTasksAsync: Unsubscribed from CollectionChanged.");
+        }
+        catch
+        {
+            Debug.WriteLine("LoadTasksAsync: Was not subscribed to CollectionChanged.");
+            /* Ignore if not subscribed */
+        }
 
-            string json = await File.ReadAllTextAsync(_filePath);
-            if (string.IsNullOrWhiteSpace(json))
-            {
-                Debug.WriteLine("LoadTasks: Task file is empty. Clearing tasks.");
-                if (Tasks.Any()) MainThread.BeginInvokeOnMainThread(Tasks.Clear); // Clear on UI thread
-                return;
-            }
 
-            var loadedTasks = JsonSerializer.Deserialize<List<TaskItem>>(json);
-            var tasksToAdd = loadedTasks?.OrderBy(t => t.Order).ToList() ?? new List<TaskItem>();
+        try
+        {
+            List<TaskItem> tasksToAdd = new List<TaskItem>();
+            if (File.Exists(_filePath))
+            {
+                string json = await File.ReadAllTextAsync(_filePath);
+                if (!string.IsNullOrWhiteSpace(json))
+                {
+                    try
+                    {
+                        var loadedTasks = JsonSerializer.Deserialize<List<TaskItem>>(json);
+                        // Ensure OrderBy happens even if loadedTasks is null/empty
+                        tasksToAdd = loadedTasks?.OrderBy(t => t.Order).ToList() ?? new List<TaskItem>();
+                    }
+                    catch (JsonException jsonEx)
+                    {
+                        Debug.WriteLine($"LoadTasksAsync: Error deserializing tasks JSON: {jsonEx.Message}");
+                        // Prevent adding corrupted data, keep tasksToAdd empty
+                    }
+                }
+                else
+                {
+                    Debug.WriteLine("LoadTasksAsync: Task file is empty.");
+                }
+            }
+            else
+            {
+                Debug.WriteLine("LoadTasksAsync: Task file not found.");
+            }
 
             // Update the UI collection on the main thread
-            MainThread.BeginInvokeOnMainThread(() =>
+            await MainThread.InvokeOnMainThreadAsync(() => // Use awaitable version
             {
                 Tasks.Clear(); // Clear existing items
                 foreach (var task in tasksToAdd)
                 {
                     task.IsFadingOut = false; // Reset animation state on load
-                    // Debug.WriteLine($"LoadTasks: Loading Task='{task.Title}', TimeType='{task.TimeType}'"); // Optional detailed log
                     Tasks.Add(task);
                 }
-                Debug.WriteLine($"LoadTasks: Successfully loaded and added {Tasks.Count} tasks.");
-                // Optionally notify if bindings depend on the 'Tasks' property itself changing (though Clear/Add usually suffices)
-                // OnPropertyChanged(nameof(Tasks));
+                Debug.WriteLine($"LoadTasksAsync: Cleared and added {Tasks.Count} tasks to collection.");
+                // Update Order property based on loaded order (or initial add)
+                UpdateTaskOrderProperty(); // Needs to run on MainThread after collection update
             });
-        }
-        catch (JsonException jsonEx)
-        {
-            Debug.WriteLine($"LoadTasks: Error deserializing tasks JSON: {jsonEx.Message}");
-            MainThread.BeginInvokeOnMainThread(Tasks.Clear); // Clear on error (UI thread)
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"LoadTasks: Error loading tasks: {ex.GetType().Name} - {ex.Message}");
-            MainThread.BeginInvokeOnMainThread(Tasks.Clear); // Clear on error (UI thread)
+            Debug.WriteLine($"LoadTasksAsync: Error loading tasks: {ex.GetType().Name} - {ex.Message}");
+            // Optionally clear tasks on error, ensuring it's on MainThread
+            if (Tasks.Any())
+            {
+                await MainThread.InvokeOnMainThreadAsync(Tasks.Clear);
+            }
         }
         finally
         {
-            // Always re-subscribe
-            Tasks.CollectionChanged += Tasks_CollectionChanged;
-            Debug.WriteLine("LoadTasks finished.");
+            // Always re-subscribe if it was originally subscribed or if tasks now exist
+            if (wasSubscribed || Tasks.Any())
+            {
+                // Ensure not doubly subscribed
+                Tasks.CollectionChanged -= Tasks_CollectionChanged;
+                Tasks.CollectionChanged += Tasks_CollectionChanged;
+                Debug.WriteLine("LoadTasksAsync: Re-subscribed to CollectionChanged.");
+            }
+            else
+            {
+                Debug.WriteLine("LoadTasksAsync: No tasks loaded and was not subscribed, staying unsubscribed.");
+            }
+            Debug.WriteLine("LoadTasksAsync finished.");
         }
     }
 
@@ -143,7 +198,7 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand]
     private async Task MarkTaskDone(TaskItem? task)
     {
-        if (task == null || task.IsFadingOut) // Prevent action if null or already animating out
+        if (task == null || task.IsFadingOut)
         {
             Debug.WriteLine($"MarkTaskDone: Skipped - Task is null or already fading out (Task: {task?.Title}).");
             return;
@@ -151,162 +206,295 @@ public partial class MainViewModel : ObservableObject
 
         Debug.WriteLine($"MarkTaskDone: Processing task '{task.Title}', TimeType: {task.TimeType}");
 
-        // --- Logic for One-Time / Specific Date Tasks ---
         if (task.TimeType == TaskTimeType.None || task.TimeType == TaskTimeType.SpecificDate)
         {
             Debug.WriteLine($"MarkTaskDone: Task '{task.Title}' is one-time/specific. Fading out.");
-            task.IsFadingOut = true; // Trigger fade-out animation via binding
+            task.IsFadingOut = true;
 
-            await Task.Delay(350); // Wait for animation (adjust duration as needed)
+            await Task.Delay(350);
 
-            // Ensure removal happens on the UI thread
-            MainThread.BeginInvokeOnMainThread(() =>
+            // Use awaitable version for MainThread
+            await MainThread.InvokeOnMainThreadAsync(async () =>
             {
-                bool removed = Tasks.Remove(task); // Remove from the collection
+                bool removed = Tasks.Remove(task);
                 if (removed)
                 {
-                    Debug.WriteLine($"MarkTaskDone: Removed task '{task.Title}'. Triggering save.");
-                    _ = TriggerSave(); // Trigger save asynchronously
+                    Debug.WriteLine($"MarkTaskDone: Removed task '{task.Title}'. Updating order and triggering save.");
+                    UpdateTaskOrderProperty(); // Update order after removal (runs on MainThread)
+                    await TriggerSave(); // Trigger save now requires await
                 }
                 else
                 {
-                    // Should not happen if task was valid, but reset state if removal fails
                     Debug.WriteLine($"MarkTaskDone: Failed to remove task '{task.Title}' after fade.");
-                    task.IsFadingOut = false;
+                    task.IsFadingOut = false; // Reset state if removal failed
                 }
             });
         }
-        // --- Logic for Repeating Tasks ---
         else if (task.TimeType == TaskTimeType.Repeating)
         {
             Debug.WriteLine($"MarkTaskDone: Task '{task.Title}' is repeating.");
-            // Calculate the next due date using the utility function
             DateTime? nextDueDate = DateUtils.CalculateNextDueDate(task);
 
             if (nextDueDate.HasValue)
             {
                 Debug.WriteLine($"MarkTaskDone: Next due date calculated: {nextDueDate.Value:d}");
-                task.DueDate = nextDueDate; // Update the task's due date property
+                // Update DueDate directly - ObservableObject handles notification
+                task.DueDate = nextDueDate;
 
-                // Move task to the end of the list on the UI thread
-                MainThread.BeginInvokeOnMainThread(() =>
+                // Use awaitable version for MainThread
+                await MainThread.InvokeOnMainThreadAsync(async () =>
                 {
-                    // Check if remove succeeds before adding back to prevent issues
-                    if (Tasks.Remove(task))
+                    if (Tasks.Remove(task)) // Move to end visually
                     {
-                        Tasks.Add(task); // Add to the end
-                        Debug.WriteLine($"MarkTaskDone: Moved task '{task.Title}' to end.");
-                        _ = TriggerSave(); // Trigger save asynchronously
+                        Tasks.Add(task);
+                        Debug.WriteLine($"MarkTaskDone: Moved repeating task '{task.Title}' to end.");
+                        UpdateTaskOrderProperty(); // Update order after move (runs on MainThread)
+                        await TriggerSave(); // Trigger save now requires await
                     }
                     else
                     {
                         Debug.WriteLine($"MarkTaskDone: Failed to remove repeating task '{task.Title}' before moving.");
-                        // If removal fails, we might need error handling or state reset
                     }
                 });
             }
             else
             {
-                // Log if next date calculation fails (e.g., invalid repetition type)
                 Debug.WriteLine($"MarkTaskDone: Could not calculate next due date for '{task.Title}'. Not moving or saving.");
             }
         }
     }
 
+
+    // *** NEW SORT COMMAND ***
+    /// <summary>
+    /// Sorts tasks by Priority (High->Low) then alphabetically by Title.
+    /// </summary>
+    [RelayCommand]
+    private async Task SortTasks()
+    {
+        Debug.WriteLine("SortTasks: Sorting tasks by Priority then Title...");
+
+        // Get current tasks and sort them in a new list
+        // Ensure access to Tasks is on the main thread if needed, though reading might be safe
+        List<TaskItem> currentTasks = new List<TaskItem>();
+        await MainThread.InvokeOnMainThreadAsync(() => {
+            currentTasks = new List<TaskItem>(Tasks);
+        });
+
+        List<TaskItem> sortedTasks = currentTasks
+            .OrderBy(t => t.Priority) // Enum order High=0, Medium=1, Low=2 works correctly
+            .ThenBy(t => t.Title, StringComparer.OrdinalIgnoreCase) // Case-insensitive title sort
+            .ToList();
+
+        // Unsubscribe to prevent saves during batch update
+        Tasks.CollectionChanged -= Tasks_CollectionChanged;
+        Debug.WriteLine("SortTasks: Unsubscribed from CollectionChanged.");
+
+        try
+        {
+            // Update the collection on the main thread
+            await MainThread.InvokeOnMainThreadAsync(() => // Use awaitable version
+            {
+                Tasks.Clear();
+                foreach (var task in sortedTasks)
+                {
+                    Tasks.Add(task);
+                }
+                Debug.WriteLine($"SortTasks: Collection updated with {Tasks.Count} sorted tasks.");
+                UpdateTaskOrderProperty(); // Ensure Order property reflects the new sort (runs on MainThread)
+            });
+
+            // Save the new sorted order
+            await TriggerSave(); // TriggerSave already updates order again, but it's okay
+            Debug.WriteLine("SortTasks: Save triggered.");
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"SortTasks: Error during sorting or saving: {ex.Message}");
+            // Handle error appropriately (e.g., display message to user)
+        }
+        finally
+        {
+            // Always re-subscribe if tasks exist
+            if (Tasks.Any())
+            {
+                Tasks.CollectionChanged -= Tasks_CollectionChanged; // Prevent double subscription
+                Tasks.CollectionChanged += Tasks_CollectionChanged;
+                Debug.WriteLine("SortTasks: Re-subscribed to CollectionChanged.");
+            }
+            else
+            {
+                Debug.WriteLine("SortTasks: No tasks after sort, staying unsubscribed.");
+            }
+        }
+    }
+    // *** END NEW SORT COMMAND ***
+
+
     // --- Message Handlers ---
 
-    /// <summary>
-    /// Handles the message when the calendar setting is changed in SettingsViewModel.
-    /// Triggers a reload of tasks to update date formatting via converters.
-    /// </summary>
-    private void HandleCalendarSettingChanged()
+    // *** WORKAROUND: Call LoadTasksAsync() directly instead of LoadTasksAsyncCommand ***
+    private async void HandleCalendarSettingChanged() // Use async void for handlers awaiting async work
     {
-        Debug.WriteLine("MainViewModel: Received CalendarSettingChangedMessage. Triggering LoadTasksCommand.");
-        // Force reload of tasks to apply new date formatting
-        if (LoadTasksCommand.CanExecute(null))
+        Debug.WriteLine("MainViewModel: Received CalendarSettingChangedMessage. Triggering LoadTasksAsync directly.");
+        // Reload tasks to update date formatting
+
+        try
         {
-            LoadTasksCommand.Execute(null);
+            // Directly await the private async method instead of the generated command property
+            await LoadTasksAsync();
         }
-        else
+        catch (Exception ex)
         {
-            Debug.WriteLine("MainViewModel: LoadTasksCommand cannot execute (possibly still running).");
-            // Consider queuing or alternative refresh mechanism if needed
+            Debug.WriteLine($"Error executing LoadTasksAsync directly: {ex.Message}");
+            // Handle execution error if necessary
         }
     }
 
-    /// <summary>
-    /// Adds a new task received via message to the collection and triggers save.
-    /// </summary>
-    private async void HandleAddTask(TaskItem? newTask) // Allow nullable
+    private async void HandleAddTask(TaskItem? newTask)
     {
         if (newTask == null) { Debug.WriteLine("Received AddTaskMessage with null task."); return; }
-        Debug.WriteLine($"Received AddTaskMessage for: {newTask.Title}, TimeType: {newTask.TimeType}");
-        newTask.Order = Tasks.Count; // Assign order based on current count
-        Tasks.Add(newTask); // Add to collection (triggers CollectionChanged -> Add)
-        await TriggerSave(); // Save the new state
+        Debug.WriteLine($"Received AddTaskMessage for: {newTask.Title}");
+
+        // Add on UI thread using awaitable version
+        await MainThread.InvokeOnMainThreadAsync(async () => // Make lambda async
+        {
+            // Assign order based on current count BEFORE adding
+            newTask.Order = Tasks.Count;
+            Tasks.Add(newTask);
+            Debug.WriteLine($"HandleAddTask: Added '{newTask.Title}', new count: {Tasks.Count}.");
+            // UpdateTaskOrderProperty(); // Not needed here, order assigned correctly
+            await TriggerSave(); // Await TriggerSave within the MainThread lambda
+        });
     }
 
-    /// <summary>
-    /// Replaces an existing task with updated data received via message and triggers save.
-    /// Uses item replacement to ensure immediate UI update for converter-based bindings.
-    /// </summary>
-    private async void HandleUpdateTask(TaskItem? updatedTask) // Allow nullable
+    private async void HandleUpdateTask(TaskItem? updatedTask)
     {
         if (updatedTask == null) { Debug.WriteLine("Received UpdateTaskMessage with null task."); return; }
+        Debug.WriteLine($"Received UpdateTaskMessage for: {updatedTask.Title} ({updatedTask.Id})");
 
-        // Find the index of the task to update
-        int index = -1;
-        for (int i = 0; i < Tasks.Count; i++) { if (Tasks[i].Id == updatedTask.Id) { index = i; break; } }
-
-        if (index != -1)
+        // Find and replace on UI thread using awaitable version
+        await MainThread.InvokeOnMainThreadAsync(async () => // Make lambda async
         {
-            Debug.WriteLine($"HandleUpdateTask: Found task '{updatedTask.Title}' at index {index}. Replacing item.");
-            updatedTask.Order = index; // Ensure Order property matches its position
-            Tasks[index] = updatedTask; // Replace item (triggers CollectionChanged -> Replace)
-            await TriggerSave(); // Save the updated state
-        }
-        else { Debug.WriteLine($"HandleUpdateTask: Update failed: Task with ID {updatedTask.Id} not found."); }
+            int index = -1;
+            for (int i = 0; i < Tasks.Count; i++) { if (Tasks[i].Id == updatedTask.Id) { index = i; break; } }
+
+            if (index != -1)
+            {
+                // Ensure Order property matches its position before replacing
+                updatedTask.Order = index;
+                Tasks[index] = updatedTask; // Replace item (triggers CollectionChanged -> Replace)
+                Debug.WriteLine($"HandleUpdateTask: Replaced task at index {index}.");
+                // UpdateTaskOrderProperty(); // Not needed here, order preserved/updated
+                await TriggerSave(); // Await TriggerSave AFTER replacement within MainThread lambda
+            }
+            else
+            {
+                Debug.WriteLine($"HandleUpdateTask: Update failed: Task with ID {updatedTask.Id} not found.");
+            }
+        });
     }
 
-    /// <summary>
-    /// Removes a task identified by ID received via message and triggers save.
-    /// </summary>
+
     private async void HandleDeleteTask(Guid taskId)
     {
-        var taskToRemove = Tasks.FirstOrDefault(t => t.Id == taskId);
-        if (taskToRemove != null)
+        Debug.WriteLine($"Received DeleteTaskMessage for Task ID: {taskId}");
+        // Find and remove on UI thread using awaitable version
+        await MainThread.InvokeOnMainThreadAsync(async () => // Make lambda async
         {
-            Debug.WriteLine($"Received DeleteTaskMessage for: {taskToRemove.Title} ({taskId})");
-            Tasks.Remove(taskToRemove); // Remove from collection (triggers CollectionChanged -> Remove)
-            await TriggerSave(); // Save the new state
-        }
-        else { Debug.WriteLine($"Delete failed: Task with ID {taskId} not found."); }
+            var taskToRemove = Tasks.FirstOrDefault(t => t.Id == taskId);
+            if (taskToRemove != null)
+            {
+                if (Tasks.Remove(taskToRemove))
+                {
+                    Debug.WriteLine($"HandleDeleteTask: Removed '{taskToRemove.Title}'. Updating order.");
+                    UpdateTaskOrderProperty(); // Update order after removal (runs on MainThread)
+                    await TriggerSave(); // Await TriggerSave AFTER removal and order update within MainThread lambda
+                }
+                else
+                {
+                    Debug.WriteLine($"HandleDeleteTask: Failed to remove task '{taskToRemove.Title}' from collection.");
+                }
+            }
+            else
+            {
+                Debug.WriteLine($"Delete failed: Task with ID {taskId} not found.");
+            }
+        });
     }
 
     // --- Saving Logic ---
 
-    /// <summary>
-    /// Handles changes to the Tasks collection, specifically saving after Move operations.
-    /// </summary>
-    private async void Tasks_CollectionChanged(object sender, NotifyCollectionChangedEventArgs e)
+    private async void Tasks_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
-        // Only explicitly trigger save on Move, as other actions (Add, Replace, Remove)
-        // trigger saves via their respective message handlers.
+        // This handler now primarily deals with 'Move' actions explicitly
+        // Other actions (Add, Remove, Replace) trigger saves from their respective handlers
+        // Sort triggers its own save
+        // Reset doesn't require an explicit save unless desired
+
         if (e.Action == NotifyCollectionChangedAction.Move)
         {
-            Debug.WriteLine($"CollectionChanged: Action=Move. Triggering save.");
-            await TriggerSave();
+            Debug.WriteLine($"CollectionChanged: Action=Move detected. Updating order and triggering save.");
+            // Ensure order update happens on MainThread, then trigger save
+            await MainThread.InvokeOnMainThreadAsync(async () =>
+            {
+                UpdateTaskOrderProperty();
+                await TriggerSave();
+            });
         }
-        else { Debug.WriteLine($"CollectionChanged: Action={e.Action}"); }
+        else
+        {
+            // Log other actions, but saves are handled elsewhere
+            Debug.WriteLine($"CollectionChanged: Action={e.Action}. Save handled by initiating action.");
+        }
     }
 
     /// <summary>
-    /// Serializes the current task list (after updating order) and writes it to the JSON file.
-    /// Manages the _isSaving flag internally.
+    /// Updates the Order property of each TaskItem based on its current index in the Tasks collection.
+    /// MUST be called on the Main thread as it accesses the Tasks collection directly.
+    /// </summary>
+    private void UpdateTaskOrderProperty()
+    {
+        // This method is now always called from within a MainThread context (InvokeOnMainThreadAsync/BeginInvokeOnMainThread)
+        // or dispatches itself if called incorrectly.
+        if (!MainThread.IsMainThread)
+        {
+            Debug.WriteLine("WARNING: UpdateTaskOrderProperty called from non-UI thread. Dispatching.");
+            MainThread.BeginInvokeOnMainThread(() => UpdateTaskOrderPropertyInternal());
+        }
+        else
+        {
+            UpdateTaskOrderPropertyInternal();
+        }
+    }
+
+    private void UpdateTaskOrderPropertyInternal()
+    {
+        // Actual implementation assumes it's on the Main thread
+        for (int i = 0; i < Tasks.Count; i++)
+        {
+            // Check if the task exists at the index, safety for potential race conditions (though unlikely here)
+            if (i < Tasks.Count && Tasks[i] != null && Tasks[i].Order != i)
+            {
+                Tasks[i].Order = i;
+                // No need to manually raise PropertyChanged for Order unless something external binds to it directly
+            }
+        }
+        Debug.WriteLine($"UpdateTaskOrderPropertyInternal: Order property updated for {Tasks.Count} tasks.");
+    }
+
+
+    /// <summary>
+    /// Serializes the current task list and writes it to the JSON file.
+    /// Assumes Order property is up-to-date (caller responsibility).
+    /// Manages the _isSaving flag internally. Should be awaited.
     /// </summary>
     private async Task SaveTasks()
     {
         bool acquiredLock = false;
+        // Initialize tasksToSave
+        List<TaskItem> tasksToSave = new List<TaskItem>();
+
         try
         {
             // Acquire lock and set saving flag
@@ -315,58 +503,73 @@ public partial class MainViewModel : ObservableObject
                 if (_isSaving) { Debug.WriteLine("SaveTasks: Save already in progress. Exiting."); return; }
                 _isSaving = true;
                 acquiredLock = true;
+                Debug.WriteLine("SaveTasks: Lock acquired, _isSaving set to true.");
             }
 
-            List<TaskItem> tasksToSave;
-            // Lock collection only while reading/setting order
-            lock (Tasks)
+            // Read task list snapshot quickly, assuming order is correct
+            // Needs to be on MainThread to safely access Tasks collection
+            await MainThread.InvokeOnMainThreadAsync(() =>
             {
-                // Ensure Order property is correct based on current position
-                for (int i = 0; i < Tasks.Count; i++) { if (Tasks[i].Order != i) { Tasks[i].Order = i; } }
-                // Create a snapshot for saving
+                // Assign the snapshot to the initialized list
                 tasksToSave = new List<TaskItem>(Tasks);
-            }
+            });
+
 
             Debug.WriteLine($"SaveTasks: Attempting to save {tasksToSave.Count} tasks...");
 
-            // Serialize the snapshot
-            string json = JsonSerializer.Serialize(tasksToSave, new JsonSerializerOptions { WriteIndented = true });
-            // Write to file
-            await File.WriteAllTextAsync(_filePath, json);
-            Debug.WriteLine($"SaveTasks: Tasks saved successfully to {_filePath}");
-
-#if WINDOWS && DEBUG
-            // Optional: Open containing folder logic
-#endif
+            // Check if tasksToSave has actually been populated (safety)
+            if (tasksToSave != null)
+            {
+                string json = JsonSerializer.Serialize(tasksToSave, new JsonSerializerOptions { WriteIndented = true });
+                await File.WriteAllTextAsync(_filePath, json);
+                Debug.WriteLine($"SaveTasks: Tasks saved successfully to {_filePath}");
+            }
+            else
+            {
+                Debug.WriteLine($"SaveTasks: tasksToSave list was unexpectedly null. Save aborted.");
+            }
         }
         catch (Exception ex)
         {
             Debug.WriteLine($"SaveTasks: Error saving tasks: {ex.Message}");
-            // Consider notifying user of save failure
         }
         finally
         {
-            // Ensure save flag is reset *only if lock was acquired by this call*
             if (acquiredLock)
             {
-                lock (_saveLock) { _isSaving = false; }
-                Debug.WriteLine("SaveTasks finished, _isSaving reset.");
+                lock (_saveLock)
+                {
+                    _isSaving = false;
+                    Debug.WriteLine("SaveTasks: Lock released, _isSaving set to false.");
+                }
             }
         }
     }
 
     /// <summary>
     /// Initiates a debounced save operation if one isn't already running.
+    /// Ensures the Order property is updated before saving. Should be awaited.
     /// </summary>
     private async Task TriggerSave()
     {
-        // Check if a save is already in progress or pending without acquiring the main save lock yet
+        // Update Order properties on the MainThread before checking the save lock
+        // Use BeginInvoke to avoid potential deadlocks if TriggerSave is called from MainThread handler
+        MainThread.BeginInvokeOnMainThread(UpdateTaskOrderProperty);
+
+        // Check if a save is already in progress or pending
         lock (_saveLock) { if (_isSaving) { Debug.WriteLine("TriggerSave: Skipped, save already in progress/pending."); return; } }
 
         Debug.WriteLine("TriggerSave: Initiating save cycle...");
-        await Task.Delay(300); // Debounce delay
-        // SaveTasks handles setting/resetting _isSaving flag internally now
-        await SaveTasks();
+        try
+        {
+            await Task.Delay(300); // Debounce delay
+            await SaveTasks(); // Await the actual save operation
+            Debug.WriteLine("TriggerSave: Save cycle complete.");
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"TriggerSave: Error during debounce or SaveTasks call: {ex.Message}");
+        }
     }
 
 } // End of MainViewModel class

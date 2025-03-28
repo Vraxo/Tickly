@@ -1,5 +1,6 @@
 ﻿<?xml version="1.0" encoding="utf-8" ?>
-<!-- MainPage.xaml -->
+<!-- File: MainPage.xaml -->
+<!-- NOTE: The above XML declaration MUST be the very first line, no comments or spaces before it -->
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:vm="clr-namespace:Tickly.ViewModels"
@@ -8,10 +9,40 @@
              x:Class="Tickly.MainPage"
              BackgroundColor="Black"
              Title="Tickly Tasks">
+    <!-- Keep original Title for accessibility/fallback -->
 
     <ContentPage.BindingContext>
         <vm:MainViewModel />
     </ContentPage.BindingContext>
+
+    <!-- *** ADD Shell.TitleView *** -->
+    <Shell.TitleView>
+        <Grid ColumnDefinitions="*, Auto" VerticalOptions="FillAndExpand" Margin="0,0,10,0">
+            <!-- Page Title -->
+            <Label Grid.Column="0"
+                   Text="Tickly Tasks"
+                   TextColor="{AppThemeBinding Light=Black, Dark=White}"
+                   FontSize="18"
+                   FontAttributes="Bold"
+                   VerticalOptions="Center"
+                   HorizontalOptions="Start"
+                   Margin="10,0,0,0"/>
+            <!-- Sort Button -->
+            <Button Grid.Column="1"
+                    Text="Sort"
+                    Command="{Binding SortTasksCommand}"
+                    BackgroundColor="Transparent"
+                    TextColor="{StaticResource Primary}"
+                FontSize="14"
+                    FontAttributes="Bold"
+                    VerticalOptions="Center"
+                    HorizontalOptions="End"
+                    Padding="10,5"
+                    BorderWidth="0"/>
+        </Grid>
+    </Shell.TitleView>
+    <!-- *** END Shell.TitleView *** -->
+
 
     <ContentPage.Resources>
         <ResourceDictionary>
@@ -111,36 +142,26 @@
                             </VerticalStackLayout>
 
                             <!-- Check Circle Area (Wrapper Grid) -->
-                            <!-- *** MODIFICATION START: Wrap Border in a Grid for Hit Testing *** -->
                             <Grid Grid.Column="2"
                                   VerticalOptions="Center"
                                   HorizontalOptions="Center"
-                                  Margin="5,0,0,0"  
+                                  Margin="5,0,0,0"
                                   Padding="5">
-                                <!-- Add Padding to increase tap area size -->
-                                <!-- Set BackgroundColor="Transparent" if needed, but Grid is usually transparent -->
-
                                 <Grid.GestureRecognizers>
-                                    <!-- Tap gesture for MARKING DONE (Attached to Wrapper Grid) -->
                                     <TapGestureRecognizer
                                         Command="{Binding Source={RelativeSource AncestorType={x:Type vm:MainViewModel}}, Path=MarkTaskDoneCommand}"
                                         CommandParameter="{Binding .}"/>
                                 </Grid.GestureRecognizers>
-
-                                <!-- The Visual Check Circle (Border) -->
                                 <Border Stroke="{AppThemeBinding Light=Gray, Dark=LightGray}"
                                         StrokeThickness="2"
                                         HeightRequest="24"
                                         WidthRequest="24"
                                         VerticalOptions="Center"
                                         HorizontalOptions="Center">
-                                    <!-- Gesture Recognizer REMOVED from Border -->
                                     <Border.StrokeShape>
                                         <Ellipse/>
                                     </Border.StrokeShape>
                                 </Border>
-                                <!-- *** MODIFICATION END *** -->
-
                             </Grid>
 
                         </Grid>
