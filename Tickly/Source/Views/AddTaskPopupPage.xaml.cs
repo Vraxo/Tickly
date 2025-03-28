@@ -12,6 +12,7 @@ using System.Linq;
 using Tickly.Messages; // Contains AddTaskMessage, UpdateTaskMessage, DeleteTaskMessage
 using Tickly.Models;   // Contains TaskItem and enums
 using Tickly.Services; // Needed for AppSettings
+using Tickly.Utils;    // Needed for DateUtils helper
 
 namespace Tickly.Views;
 
@@ -52,8 +53,10 @@ public partial class AddTaskPopupPageViewModel : ObservableObject
     [ObservableProperty]
     private string _title = string.Empty; // Bound to the Title Entry
 
+    // This DueDate property is now ONLY used by the "Specific Date" DatePicker.
+    // It's NOT used as the start date for Repeating tasks anymore during creation.
     [ObservableProperty]
-    private DateTime _dueDate = DateTime.Today; // Bound to both DatePickers
+    private DateTime _dueDate = DateTime.Today;
 
     // Radio button states for Time Type
     [ObservableProperty]
@@ -73,31 +76,21 @@ public partial class AddTaskPopupPageViewModel : ObservableObject
     [ObservableProperty]
     private bool _isWeeklySelected;
 
-    // --- DayOfWeek Handling Modifications ---
-
-    // Store the culture info based on settings for reuse
-    private readonly CultureInfo _calendarCulture; // Made readonly as it's set in constructor
-
-    // Holds the list of day names to display in the Picker (e.g., "Saturday", "Sunday" or "شنبه", "یکشنبه")
-    [ObservableProperty]
-    private ObservableCollection<string> _displayDaysOfWeek = new();
-
-    // Holds the currently selected day name *string* from the Picker
-    [ObservableProperty]
-    private string? _selectedDisplayDayOfWeek;
-
-    // We still need the underlying DayOfWeek enum for storage/logic
+    // --- DayOfWeek Handling ---
+    private readonly CultureInfo _calendarCulture; // Readonly, set in constructor
+    [ObservableProperty] private ObservableCollection<string> _displayDaysOfWeek = new();
+    [ObservableProperty] private string? _selectedDisplayDayOfWeek;
     private DayOfWeek _selectedDayOfWeekEnum = DateTime.Today.DayOfWeek;
 
     // --- Constructor ---
     public AddTaskPopupPageViewModel()
     {
-        // Determine culture based on saved setting *at ViewModel creation time*
+        // Determine culture based on saved setting
         _calendarCulture = AppSettings.SelectedCalendarSystem == CalendarSystemType.Persian
                           ? new CultureInfo("fa-IR")
-                          : CultureInfo.InvariantCulture; // Use Invariant for consistent Gregorian day names/order
+                          : CultureInfo.InvariantCulture;
 
-        LoadDisplayDaysOfWeek(); // Populate the picker items based on the determined culture
+        LoadDisplayDaysOfWeek(); // Populate day names for picker
 
         // Set default selected display day based on today
         _selectedDayOfWeekEnum = DateTime.Today.DayOfWeek;
@@ -122,7 +115,7 @@ public partial class AddTaskPopupPageViewModel : ObservableObject
         // Set up event handlers
         SetupOptionChangeHandlers();
         SetupTimeTypeChangeHandlers();
-        this.PropertyChanged += ViewModel_PropertyChanged; // Handle changes to SelectedDisplayDayOfWeek
+        this.PropertyChanged += ViewModel_PropertyChanged; // Handle picker selection changes
 
         RecalculateWeeklyVisibility(); // Initial check for weekly picker visibility
     }
@@ -134,316 +127,228 @@ public partial class AddTaskPopupPageViewModel : ObservableObject
     {
         DisplayDaysOfWeek.Clear();
         string[] dayNames = _calendarCulture.DateTimeFormat.DayNames;
-
-        // Order based on calendar system
         if (AppSettings.SelectedCalendarSystem == CalendarSystemType.Persian)
         {
-            // Persian order: Shanbeh (Saturday, index 6) to Jomeh (Friday, index 5)
-            // .NET DayNames for fa-IR: [0]یکشنبه, [1]دوشنبه, [2]سه‌شنبه, [3]چهارشنبه, [4]پنجشنبه, [5]جمعه, [6]شنبه
-            DisplayDaysOfWeek.Add(dayNames[6]); // Saturday
-            DisplayDaysOfWeek.Add(dayNames[0]); // Sunday
-            DisplayDaysOfWeek.Add(dayNames[1]); // Monday
-            DisplayDaysOfWeek.Add(dayNames[2]); // Tuesday
-            DisplayDaysOfWeek.Add(dayNames[3]); // Wednesday
-            DisplayDaysOfWeek.Add(dayNames[4]); // Thursday
-            DisplayDaysOfWeek.Add(dayNames[5]); // Friday
+            DisplayDaysOfWeek.Add(dayNames[6]); DisplayDaysOfWeek.Add(dayNames[0]); DisplayDaysOfWeek.Add(dayNames[1]);
+            DisplayDaysOfWeek.Add(dayNames[2]); DisplayDaysOfWeek.Add(dayNames[3]); DisplayDaysOfWeek.Add(dayNames[4]);
+            DisplayDaysOfWeek.Add(dayNames[5]);
         }
-        else // Gregorian (ordered Sunday to Saturday as per DayOfWeek enum)
+        else
         {
             var sortedDays = Enum.GetValues(typeof(DayOfWeek)).Cast<DayOfWeek>().OrderBy(d => (int)d);
-            foreach (var day in sortedDays)
-            {
-                // Use GetDayName for consistency
-                DisplayDaysOfWeek.Add(_calendarCulture.DateTimeFormat.GetDayName(day));
-            }
+            foreach (var day in sortedDays) { DisplayDaysOfWeek.Add(_calendarCulture.DateTimeFormat.GetDayName(day)); }
         }
-        System.Diagnostics.Debug.WriteLine($"Loaded DisplayDaysOfWeek ({_calendarCulture.Name}): {string.Join(", ", DisplayDaysOfWeek)}");
+        Debug.WriteLine($"Loaded DisplayDaysOfWeek ({_calendarCulture.Name}): {string.Join(", ", DisplayDaysOfWeek)}");
     }
 
-    // Maps DayOfWeek enum TO display string (e.g., DayOfWeek.Saturday -> "Saturday" or "شنبه")
+    // Maps DayOfWeek enum TO display string
     private string MapDayOfWeekToDisplayDay(DayOfWeek dayOfWeek, CultureInfo culture)
-    {
-        try
-        {
-            // Ensure correct name is retrieved based on culture
-            return culture.DateTimeFormat.GetDayName(dayOfWeek);
-        }
-        catch (Exception ex)
-        {
-            Debug.WriteLine($"Error mapping DayOfWeek {dayOfWeek} to display day: {ex.Message}");
-            return dayOfWeek.ToString(); // Fallback to enum name
-        }
-    }
+    { try { return culture.DateTimeFormat.GetDayName(dayOfWeek); } catch { return dayOfWeek.ToString(); } }
 
-    // Maps display string BACK TO DayOfWeek enum (e.g., "Saturday" or "شنبه" -> DayOfWeek.Saturday)
+    // Maps display string BACK TO DayOfWeek enum
     private DayOfWeek MapDisplayDayToDayOfWeek(string? displayDay, CultureInfo culture)
     {
-        if (string.IsNullOrEmpty(displayDay))
-        {
-            Debug.WriteLine($"Warning: MapDisplayDayToDayOfWeek called with null/empty displayDay. Falling back to Today.");
-            return DateTime.Today.DayOfWeek; // Default fallback
-        }
-
+        if (string.IsNullOrEmpty(displayDay)) return DateTime.Today.DayOfWeek;
         string[] dayNames = culture.DateTimeFormat.DayNames;
-        for (int i = 0; i < dayNames.Length; i++)
-        {
-            // Use OrdinalIgnoreCase for robust comparison
-            if (string.Equals(dayNames[i], displayDay, StringComparison.OrdinalIgnoreCase))
-            {
-                // The index 'i' in DateTimeFormat.DayNames corresponds directly to the DayOfWeek enum value
-                // (e.g., Sunday is index 0 in the array and DayOfWeek.Sunday is 0)
-                return (DayOfWeek)i;
-            }
-        }
-        System.Diagnostics.Debug.WriteLine($"Warning: Could not map display day '{displayDay}' back to DayOfWeek enum using culture {culture.Name}. Falling back to Today.");
-        return DateTime.Today.DayOfWeek; // Fallback if no match found
+        for (int i = 0; i < dayNames.Length; i++) { if (string.Equals(dayNames[i], displayDay, StringComparison.OrdinalIgnoreCase)) return (DayOfWeek)i; }
+        Debug.WriteLine($"Warning: Could not map display day '{displayDay}' back to DayOfWeek."); return DateTime.Today.DayOfWeek;
     }
 
+    // Handles changes for RepetitionType options
+    private void SetupOptionChangeHandlers() { foreach (var option in RepetitionTypeOptions) { option.PropertyChanged += HandleOptionPropertyChanged; } }
+    private void HandleOptionPropertyChanged(object? sender, PropertyChangedEventArgs args) { if (sender is SelectableOption<TaskRepetitionType> && args.PropertyName == nameof(SelectableOption<TaskRepetitionType>.IsSelected)) RecalculateWeeklyVisibility(); }
 
-    // --- Event Handlers ---
-
-    private void SetupOptionChangeHandlers()
-    {
-        foreach (var option in RepetitionTypeOptions)
-        {
-            option.PropertyChanged += HandleOptionPropertyChanged;
-        }
-    }
-
-    private void HandleOptionPropertyChanged(object? sender, PropertyChangedEventArgs args)
-    {
-        if (sender is SelectableOption<TaskRepetitionType> && args.PropertyName == nameof(SelectableOption<TaskRepetitionType>.IsSelected))
-        {
-            RecalculateWeeklyVisibility();
-        }
-    }
-
-    private void SetupTimeTypeChangeHandlers()
-    {
-        this.PropertyChanged += (sender, args) =>
-        {
-            if (args.PropertyName == nameof(IsTimeTypeRepeating) ||
-                args.PropertyName == nameof(IsTimeTypeSpecificDate) ||
-                args.PropertyName == nameof(IsTimeTypeNone))
-            {
-                RecalculateWeeklyVisibility();
-            }
-        };
-    }
+    // Handles changes for main TimeType radio buttons
+    private void SetupTimeTypeChangeHandlers() { this.PropertyChanged += (sender, args) => { if (args.PropertyName is nameof(IsTimeTypeRepeating) or nameof(IsTimeTypeSpecificDate) or nameof(IsTimeTypeNone)) RecalculateWeeklyVisibility(); }; }
 
     // Handle changes to the selected *display* day to update the underlying enum
-    private void ViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
-    {
-        if (e.PropertyName == nameof(SelectedDisplayDayOfWeek))
-        {
-            // When the Picker's selected item (string) changes, update the internal enum value
-            _selectedDayOfWeekEnum = MapDisplayDayToDayOfWeek(SelectedDisplayDayOfWeek, _calendarCulture);
-            Debug.WriteLine($"SelectedDisplayDayOfWeek changed to '{SelectedDisplayDayOfWeek}', mapped to enum: {_selectedDayOfWeekEnum}");
-        }
-    }
-
+    private void ViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e) { if (e.PropertyName == nameof(SelectedDisplayDayOfWeek)) { _selectedDayOfWeekEnum = MapDisplayDayToDayOfWeek(SelectedDisplayDayOfWeek, _calendarCulture); Debug.WriteLine($"SelectedDisplayDayOfWeek changed, mapped enum: {_selectedDayOfWeekEnum}"); } }
 
     // Updates visibility of weekly picker
-    private void RecalculateWeeklyVisibility()
-    {
-        IsWeeklySelected = IsTimeTypeRepeating && (RepetitionTypeOptions.FirstOrDefault(o => o.IsSelected)?.Value == TaskRepetitionType.Weekly);
-        // Debug.WriteLine($"RecalculateWeeklyVisibility: IsWeeklySelected={IsWeeklySelected}"); // Less verbose debug
-    }
+    private void RecalculateWeeklyVisibility() { IsWeeklySelected = IsTimeTypeRepeating && (RepetitionTypeOptions.FirstOrDefault(o => o.IsSelected)?.Value == TaskRepetitionType.Weekly); }
 
     // --- Edit Mode Initialization ---
     public void InitializeForEdit(TaskItem task)
     {
         _taskToEdit = task;
         IsEditMode = true;
-
         Title = task.Title;
+        // Set the Specific Date Picker's date, even if the task is repeating,
+        // just so it has a sensible value if the user switches type.
         DueDate = task.DueDate ?? DateTime.Today;
 
         IsTimeTypeNone = task.TimeType == TaskTimeType.None;
         IsTimeTypeSpecificDate = task.TimeType == TaskTimeType.SpecificDate;
         IsTimeTypeRepeating = task.TimeType == TaskTimeType.Repeating;
 
-        // Set Priority RadioButtons
         foreach (var option in PriorityOptions) { option.IsSelected = (option.Value == task.Priority); }
 
-        // Set RepetitionType RadioButtons
-        if (IsTimeTypeRepeating)
-        {
-            foreach (var option in RepetitionTypeOptions)
-            {
-                option.IsSelected = (option.Value == (task.RepetitionType ?? TaskRepetitionType.Daily));
-            }
-        }
+        if (IsTimeTypeRepeating) { foreach (var option in RepetitionTypeOptions) { option.IsSelected = (option.Value == (task.RepetitionType ?? TaskRepetitionType.Daily)); } }
         else { foreach (var option in RepetitionTypeOptions) { option.IsSelected = false; } }
 
-        // Initialize DayOfWeek: Set the internal enum and then update the display string for the Picker
         _selectedDayOfWeekEnum = task.RepetitionDayOfWeek ?? DateTime.Today.DayOfWeek;
-        // Important: Use the culture loaded by this ViewModel instance
         SelectedDisplayDayOfWeek = MapDayOfWeekToDisplayDay(_selectedDayOfWeekEnum, _calendarCulture);
 
-        RecalculateWeeklyVisibility(); // Ensure correct visibility after loading
+        RecalculateWeeklyVisibility();
+        Debug.WriteLine($"Initialized ViewModel for Edit: {task.Title}");
     }
 
-    // --- Data Retrieval ---
+    // --- Data Retrieval (MODIFIED) ---
     public TaskItem GetTaskItemFromViewModel()
     {
         var selectedPriority = PriorityOptions.FirstOrDefault(p => p.IsSelected)?.Value ?? TaskPriority.Medium;
-
-        // *** Default timeType to None ***
         TaskTimeType timeType = TaskTimeType.None;
-        DateTime? finalDueDate = null;
+        DateTime? finalDueDate = null; // Will be calculated/set below
         TaskRepetitionType? repetitionType = null;
-        DayOfWeek? repetitionDayOfWeek = null; // Use the stored enum value
+        DayOfWeek? repetitionDayOfWeek = null;
 
-        // *** Check if SpecificDate is selected ***
         if (IsTimeTypeSpecificDate)
         {
-            timeType = TaskTimeType.SpecificDate; // *** Assign SpecificDate ***
-            finalDueDate = DueDate;
+            timeType = TaskTimeType.SpecificDate;
+            // Use the date from the dedicated DatePicker for specific dates
+            finalDueDate = DueDate.Date; // Use picker's date, strip time
+            Debug.WriteLine($"GetTaskItem: Type=SpecificDate, Date={finalDueDate}");
         }
         else if (IsTimeTypeRepeating)
         {
-            timeType = TaskTimeType.Repeating; // *** Assign Repeating ***
-            finalDueDate = DueDate;
+            timeType = TaskTimeType.Repeating;
             repetitionType = RepetitionTypeOptions.FirstOrDefault(r => r.IsSelected)?.Value ?? TaskRepetitionType.Daily;
+            repetitionDayOfWeek = (repetitionType == TaskRepetitionType.Weekly) ? _selectedDayOfWeekEnum : null;
 
-            if (repetitionType == TaskRepetitionType.Weekly)
+            // Calculate initial DueDate for NEW repeating tasks based on logic
+            if (!IsEditMode)
             {
-                repetitionDayOfWeek = _selectedDayOfWeekEnum;
+                DateTime today = DateTime.Today;
+                switch (repetitionType)
+                {
+                    case TaskRepetitionType.Daily:
+                    case TaskRepetitionType.AlternateDay:
+                        finalDueDate = today; // Start today
+                        break;
+                    case TaskRepetitionType.Weekly:
+                        // Start on the next occurrence of the selected day, including today
+                        finalDueDate = DateUtils.GetNextWeekday(today, _selectedDayOfWeekEnum);
+                        break;
+                    default:
+                        finalDueDate = today; // Fallback
+                        break;
+                }
+                Debug.WriteLine($"GetTaskItem: Type=Repeating (New), Rep={repetitionType}, InitialDate={finalDueDate}");
+            }
+            else // If EDITING a repeating task
+            {
+                // Use the existing DueDate from the task being edited.
+                // This date only changes when marked done.
+                finalDueDate = _taskToEdit?.DueDate?.Date;
+                Debug.WriteLine($"GetTaskItem: Type=Repeating (Edit), Rep={repetitionType}, Keeping Date={finalDueDate}");
             }
         }
-        // If neither SpecificDate nor Repeating is selected, timeType remains None.
+        else // TimeType is None
+        {
+            Debug.WriteLine($"GetTaskItem: Type=None");
+            finalDueDate = null; // Ensure date is null for 'None' type
+        }
+
 
         // Update existing task or create new one
         if (IsEditMode && _taskToEdit != null)
         {
+            Debug.WriteLine($"GetTaskItem: Updating existing TaskItem: {_taskToEdit.Id}");
             _taskToEdit.Title = Title;
             _taskToEdit.Priority = selectedPriority;
-            // *** Assign the determined timeType to the task object ***
             _taskToEdit.TimeType = timeType;
-            _taskToEdit.DueDate = finalDueDate;
+            // Only update DueDate if type is SpecificDate OR if it was null and now isn't (unlikely edit case)
+            if (timeType == TaskTimeType.SpecificDate || (_taskToEdit.DueDate == null && finalDueDate != null))
+            {
+                _taskToEdit.DueDate = finalDueDate;
+            }
             _taskToEdit.RepetitionType = repetitionType;
             _taskToEdit.RepetitionDayOfWeek = repetitionDayOfWeek;
             return _taskToEdit;
         }
-        else
+        else // Creating NEW task
         {
-            // *** Pass the determined timeType to the constructor ***
+            Debug.WriteLine($"GetTaskItem: Creating new TaskItem");
+            // Use the calculated finalDueDate
             return new TaskItem(Title, selectedPriority, timeType, finalDueDate, repetitionType, repetitionDayOfWeek);
         }
     }
 
-    // Property to access the ID for deletion confirmation
+    // Property for Delete confirmation
     public Guid? TaskIdToDelete => _taskToEdit?.Id;
-}
+
+    // Helper to update backing field and raise PropertyChanged if value changed
+    protected bool UpdateProperty<T>(ref T field, T value, string propertyName)
+    { if (EqualityComparer<T>.Default.Equals(field, value)) return false; field = value; OnPropertyChanged(propertyName); return true; }
+
+} // End of ViewModel Class
 
 
-// --- Code-Behind for the Add/Edit Task Page ---
-// Connects the XAML UI to the ViewModel and handles navigation events.
+// --- Code-Behind (AddTaskPopupPage.xaml.cs) ---
 [QueryProperty(nameof(TaskToEdit), "TaskToEdit")]
 public partial class AddTaskPopupPage : ContentPage
 {
-    // Use readonly if ViewModel is only assigned in constructor
     private readonly AddTaskPopupPageViewModel _viewModel;
-
-    // Property that receives the TaskItem object when navigating for editing
     private TaskItem? _taskToEdit;
+
+    // Property to receive edited task via navigation
     public TaskItem? TaskToEdit
     {
         set
         {
             _taskToEdit = value;
-            // Ensure ViewModel exists before trying to initialize
             if (_taskToEdit != null && _viewModel != null)
             {
-                Debug.WriteLine($"AddTaskPopupPage: Received task for edit via QueryProperty: {_taskToEdit.Title}");
                 _viewModel.InitializeForEdit(_taskToEdit);
-            }
-            else if (_taskToEdit == null && value != null)
-            {
-                Debug.WriteLine("AddTaskPopupPage: Received non-null value for TaskToEdit, but cast failed or ViewModel null.");
             }
         }
     }
 
-    // --- Constructor ---
+    // Constructor
     public AddTaskPopupPage()
     {
         InitializeComponent();
-        // Create and assign the ViewModel
         _viewModel = new AddTaskPopupPageViewModel();
         BindingContext = _viewModel;
-        Debug.WriteLine("AddTaskPopupPage: Initialized and ViewModel created.");
+        Debug.WriteLine("AddTaskPopupPage: Initialized.");
     }
 
-    // --- Lifecycle Overrides ---
+    // Optional: Handle cases where QueryProperty might set before BindingContext is ready
     protected override void OnNavigatedTo(NavigatedToEventArgs args)
     {
         base.OnNavigatedTo(args);
-        Debug.WriteLine($"AddTaskPopupPage: NavigatedTo. IsEditMode = {_viewModel.IsEditMode}");
-        // Safety check in case QueryProperty setter runs before ViewModel is fully ready
-        // or if navigation happens in a way that bypasses QueryProperty initially.
-        if (_taskToEdit != null && !_viewModel.IsEditMode)
+        if (_taskToEdit != null && !_viewModel.IsEditMode) // Check if edit init is needed
         {
-            Debug.WriteLine("AddTaskPopupPage: OnNavigatedTo - Forcing InitializeForEdit.");
             _viewModel.InitializeForEdit(_taskToEdit);
+            Debug.WriteLine("AddTaskPopupPage: Forced InitializeForEdit in OnNavigatedTo.");
         }
     }
 
-    // --- Event Handlers for Buttons ---
-
-    // Handles the "Confirm" or "Update" button click
+    // Confirm/Update Button Handler
     private async void OnConfirmClicked(object sender, EventArgs e)
     {
         if (string.IsNullOrWhiteSpace(_viewModel.Title))
-        {
-            await DisplayAlert("Validation Error", "Task title cannot be empty.", "OK");
-            return;
-        }
+        { await DisplayAlert("Validation Error", "Task title cannot be empty.", "OK"); return; }
 
         var taskData = _viewModel.GetTaskItemFromViewModel();
-
-        if (_viewModel.IsEditMode)
-        {
-            WeakReferenceMessenger.Default.Send(new UpdateTaskMessage(taskData));
-            Debug.WriteLine($"Sent UpdateTaskMessage for ID: {taskData.Id}");
-        }
-        else
-        {
-            WeakReferenceMessenger.Default.Send(new AddTaskMessage(taskData));
-            Debug.WriteLine($"Sent AddTaskMessage for Title: {taskData.Title}");
-        }
-
+        if (_viewModel.IsEditMode) { WeakReferenceMessenger.Default.Send(new UpdateTaskMessage(taskData)); }
+        else { WeakReferenceMessenger.Default.Send(new AddTaskMessage(taskData)); }
         await Shell.Current.Navigation.PopModalAsync();
     }
 
-    // Handles the "Cancel" button click
+    // Cancel Button Handler
     private async void OnCancelClicked(object sender, EventArgs e)
-    {
-        await Shell.Current.Navigation.PopModalAsync();
-    }
+    { await Shell.Current.Navigation.PopModalAsync(); }
 
-    // Handles the "Delete" button click
+    // Delete Button Handler
     private async void OnDeleteClicked(object sender, EventArgs e)
     {
-        if (!_viewModel.IsEditMode || _viewModel.TaskIdToDelete == null)
-        {
-            Debug.WriteLine("Delete clicked, but not in edit mode or TaskId is null.");
-            return;
-        }
-
-        bool confirmed = await DisplayAlert(
-            "Confirm Delete",
-            $"Are you sure you want to delete the task '{_viewModel.Title}'?",
-            "Delete",
-            "Cancel"
-        );
-
+        if (!_viewModel.IsEditMode || _viewModel.TaskIdToDelete == null) return;
+        bool confirmed = await DisplayAlert("Confirm Delete", $"Delete '{_viewModel.Title}'?", "Delete", "Cancel");
         if (confirmed)
         {
             WeakReferenceMessenger.Default.Send(new DeleteTaskMessage(_viewModel.TaskIdToDelete.Value));
-            Debug.WriteLine($"Sent DeleteTaskMessage for ID: {_viewModel.TaskIdToDelete.Value}");
             await Shell.Current.Navigation.PopModalAsync();
         }
     }
-}
+} // End of Code-Behind Class

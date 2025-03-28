@@ -15,6 +15,7 @@ using Microsoft.Maui.ApplicationModel; // Needed for MainThread
 using Tickly.Messages;
 using Tickly.Models;
 using Tickly.Views;
+using Tickly.Utils; // Needed for DateUtils
 
 namespace Tickly.ViewModels;
 
@@ -25,7 +26,7 @@ public partial class MainViewModel : ObservableObject
 
     private readonly string _filePath;
     private bool _isSaving = false;
-    private readonly object _saveLock = new object();
+    private readonly object _saveLock = new object(); // Used for coordinating SaveTasks/LoadTasks
 
     public MainViewModel()
     {
@@ -33,9 +34,10 @@ public partial class MainViewModel : ObservableObject
         _tasks = new ObservableCollection<TaskItem>();
         _tasks.CollectionChanged += Tasks_CollectionChanged;
 
+        // Load initial data
         LoadTasksCommand.Execute(null);
 
-        // Register message listeners
+        // Register message listeners for CRUD operations and settings changes
         WeakReferenceMessenger.Default.Register<AddTaskMessage>(this, (r, m) => HandleAddTask(m.Value));
         WeakReferenceMessenger.Default.Register<UpdateTaskMessage>(this, (r, m) => HandleUpdateTask(m.Value));
         WeakReferenceMessenger.Default.Register<DeleteTaskMessage>(this, (r, m) => HandleDeleteTask(m.Value));
@@ -44,61 +46,106 @@ public partial class MainViewModel : ObservableObject
 
     // --- Commands ---
 
+    /// <summary>
+    /// Navigates to the Add Task page.
+    /// </summary>
     [RelayCommand]
     private async Task NavigateToAddPage()
     {
-        await Shell.Current.GoToAsync(nameof(AddTaskPopupPage), true);
+        await Shell.Current.GoToAsync(nameof(AddTaskPopupPage), true); // Modal navigation
     }
 
+    /// <summary>
+    /// Navigates to the Edit Task page, passing the selected task.
+    /// </summary>
     [RelayCommand]
-    private async Task NavigateToEditPage(TaskItem taskToEdit)
+    private async Task NavigateToEditPage(TaskItem? taskToEdit) // Allow nullable TaskItem
     {
-        if (taskToEdit == null) return;
+        if (taskToEdit == null)
+        {
+            Debug.WriteLine("NavigateToEditPage: taskToEdit is null.");
+            return;
+        }
         Debug.WriteLine($"Navigating to edit task: {taskToEdit.Title} ({taskToEdit.Id})");
         var navigationParameter = new Dictionary<string, object> { { "TaskToEdit", taskToEdit } };
         await Shell.Current.GoToAsync(nameof(AddTaskPopupPage), true, navigationParameter);
     }
 
+    /// <summary>
+    /// Loads tasks from the JSON file into the ObservableCollection.
+    /// </summary>
     [RelayCommand]
     private async Task LoadTasks()
     {
+        // Prevent loading during save
         lock (_saveLock) { if (_isSaving) { Debug.WriteLine("LoadTasks skipped, save in progress."); return; } }
+
         Debug.WriteLine($"LoadTasks: Attempting to load tasks from: {_filePath}");
 
-        Tasks.CollectionChanged -= Tasks_CollectionChanged;
+        Tasks.CollectionChanged -= Tasks_CollectionChanged; // Unsubscribe during bulk load
         try
         {
-            if (!File.Exists(_filePath)) { Debug.WriteLine("LoadTasks: Task file not found."); if (Tasks.Any()) Tasks.Clear(); return; }
+            if (!File.Exists(_filePath))
+            {
+                Debug.WriteLine("LoadTasks: Task file not found. Clearing tasks.");
+                if (Tasks.Any()) MainThread.BeginInvokeOnMainThread(Tasks.Clear); // Clear on UI thread
+                return;
+            }
+
             string json = await File.ReadAllTextAsync(_filePath);
-            if (string.IsNullOrWhiteSpace(json)) { Debug.WriteLine("LoadTasks: Task file is empty."); if (Tasks.Any()) Tasks.Clear(); return; }
+            if (string.IsNullOrWhiteSpace(json))
+            {
+                Debug.WriteLine("LoadTasks: Task file is empty. Clearing tasks.");
+                if (Tasks.Any()) MainThread.BeginInvokeOnMainThread(Tasks.Clear); // Clear on UI thread
+                return;
+            }
 
             var loadedTasks = JsonSerializer.Deserialize<List<TaskItem>>(json);
             var tasksToAdd = loadedTasks?.OrderBy(t => t.Order).ToList() ?? new List<TaskItem>();
 
+            // Update the UI collection on the main thread
             MainThread.BeginInvokeOnMainThread(() =>
             {
-                Tasks.Clear();
+                Tasks.Clear(); // Clear existing items
                 foreach (var task in tasksToAdd)
                 {
-                    task.IsFadingOut = false; // Ensure animation state is reset on load
-                    Debug.WriteLine($"LoadTasks: Loading Task='{task.Title}', TimeType='{task.TimeType}'");
+                    task.IsFadingOut = false; // Reset animation state on load
+                    // Debug.WriteLine($"LoadTasks: Loading Task='{task.Title}', TimeType='{task.TimeType}'"); // Optional detailed log
                     Tasks.Add(task);
                 }
-                Debug.WriteLine($"LoadTasks: Successfully loaded {Tasks.Count} tasks.");
-                OnPropertyChanged(nameof(Tasks));
+                Debug.WriteLine($"LoadTasks: Successfully loaded and added {Tasks.Count} tasks.");
+                // Optionally notify if bindings depend on the 'Tasks' property itself changing (though Clear/Add usually suffices)
+                // OnPropertyChanged(nameof(Tasks));
             });
         }
-        catch (Exception ex) { Debug.WriteLine($"LoadTasks: Error - {ex.GetType().Name}: {ex.Message}"); MainThread.BeginInvokeOnMainThread(Tasks.Clear); }
-        finally { Tasks.CollectionChanged += Tasks_CollectionChanged; Debug.WriteLine("LoadTasks finished."); }
+        catch (JsonException jsonEx)
+        {
+            Debug.WriteLine($"LoadTasks: Error deserializing tasks JSON: {jsonEx.Message}");
+            MainThread.BeginInvokeOnMainThread(Tasks.Clear); // Clear on error (UI thread)
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"LoadTasks: Error loading tasks: {ex.GetType().Name} - {ex.Message}");
+            MainThread.BeginInvokeOnMainThread(Tasks.Clear); // Clear on error (UI thread)
+        }
+        finally
+        {
+            // Always re-subscribe
+            Tasks.CollectionChanged += Tasks_CollectionChanged;
+            Debug.WriteLine("LoadTasks finished.");
+        }
     }
 
-    // --- NEW Command to Mark Task Done ---
+    /// <summary>
+    /// Handles the action when a task's check circle is tapped.
+    /// Removes one-time tasks or updates repeating tasks.
+    /// </summary>
     [RelayCommand]
     private async Task MarkTaskDone(TaskItem? task)
     {
-        if (task == null || task.IsFadingOut) // Prevent double clicks during fade
+        if (task == null || task.IsFadingOut) // Prevent action if null or already animating out
         {
-            Debug.WriteLine("MarkTaskDone: Task is null or already fading out.");
+            Debug.WriteLine($"MarkTaskDone: Skipped - Task is null or already fading out (Task: {task?.Title}).");
             return;
         }
 
@@ -107,26 +154,24 @@ public partial class MainViewModel : ObservableObject
         // --- Logic for One-Time / Specific Date Tasks ---
         if (task.TimeType == TaskTimeType.None || task.TimeType == TaskTimeType.SpecificDate)
         {
-            Debug.WriteLine($"MarkTaskDone: Task '{task.Title}' is one-time/specific. Fading out and removing.");
-            // 1. Trigger Animation (set property, UI binding handles opacity change)
-            task.IsFadingOut = true;
+            Debug.WriteLine($"MarkTaskDone: Task '{task.Title}' is one-time/specific. Fading out.");
+            task.IsFadingOut = true; // Trigger fade-out animation via binding
 
-            // 2. Wait for animation (adjust duration as needed)
-            await Task.Delay(350); // e.g., 350 milliseconds
+            await Task.Delay(350); // Wait for animation (adjust duration as needed)
 
-            // 3. Remove from collection (ensure this happens on UI thread if Task.Delay switched context)
+            // Ensure removal happens on the UI thread
             MainThread.BeginInvokeOnMainThread(() =>
             {
-                bool removed = Tasks.Remove(task);
-                Debug.WriteLine($"MarkTaskDone: Removed task '{task.Title}' from collection: {removed}");
+                bool removed = Tasks.Remove(task); // Remove from the collection
                 if (removed)
                 {
-                    // 4. Trigger save (can be awaited or run async void)
-                    _ = TriggerSave(); // Fire and forget save after removal
+                    Debug.WriteLine($"MarkTaskDone: Removed task '{task.Title}'. Triggering save.");
+                    _ = TriggerSave(); // Trigger save asynchronously
                 }
                 else
                 {
-                    // If removal failed, reset fade state (though this shouldn't happen if task was valid)
+                    // Should not happen if task was valid, but reset state if removal fails
+                    Debug.WriteLine($"MarkTaskDone: Failed to remove task '{task.Title}' after fade.");
                     task.IsFadingOut = false;
                 }
             });
@@ -134,129 +179,119 @@ public partial class MainViewModel : ObservableObject
         // --- Logic for Repeating Tasks ---
         else if (task.TimeType == TaskTimeType.Repeating)
         {
-            Debug.WriteLine($"MarkTaskDone: Task '{task.Title}' is repeating. Calculating next date and moving.");
+            Debug.WriteLine($"MarkTaskDone: Task '{task.Title}' is repeating.");
+            // Calculate the next due date using the utility function
+            DateTime? nextDueDate = DateUtils.CalculateNextDueDate(task);
 
-            // 1. Calculate Next Due Date
-            DateTime? nextDueDate = CalculateNextDueDate(task);
             if (nextDueDate.HasValue)
             {
-                Debug.WriteLine($"MarkTaskDone: Next due date calculated: {nextDueDate.Value:O}");
-                task.DueDate = nextDueDate; // Update the task's date
+                Debug.WriteLine($"MarkTaskDone: Next due date calculated: {nextDueDate.Value:d}");
+                task.DueDate = nextDueDate; // Update the task's due date property
 
-                // 2. Move to Bottom (Remove and Add)
-                // Ensure operations on ObservableCollection are on the UI thread
+                // Move task to the end of the list on the UI thread
                 MainThread.BeginInvokeOnMainThread(() =>
                 {
-                    if (Tasks.Remove(task)) // Remove from current position
+                    // Check if remove succeeds before adding back to prevent issues
+                    if (Tasks.Remove(task))
                     {
                         Tasks.Add(task); // Add to the end
-                        Debug.WriteLine($"MarkTaskDone: Moved task '{task.Title}' to the end.");
-                        // 3. Trigger save (can be awaited or run async void)
-                        _ = TriggerSave(); // Fire and forget save after move
+                        Debug.WriteLine($"MarkTaskDone: Moved task '{task.Title}' to end.");
+                        _ = TriggerSave(); // Trigger save asynchronously
                     }
                     else
                     {
                         Debug.WriteLine($"MarkTaskDone: Failed to remove repeating task '{task.Title}' before moving.");
+                        // If removal fails, we might need error handling or state reset
                     }
                 });
             }
             else
             {
-                Debug.WriteLine($"MarkTaskDone: Could not calculate next due date for task '{task.Title}'. Not moving or saving.");
-                // Optionally handle this case - maybe treat as non-repeating?
+                // Log if next date calculation fails (e.g., invalid repetition type)
+                Debug.WriteLine($"MarkTaskDone: Could not calculate next due date for '{task.Title}'. Not moving or saving.");
             }
         }
     }
 
-    // --- Helper Methods ---
-
-    private DateTime? CalculateNextDueDate(TaskItem task)
-    {
-        // Use current DueDate as base, fallback to Today if null (shouldn't happen for valid repeating tasks)
-        DateTime baseDate = task.DueDate ?? DateTime.Today;
-
-        switch (task.RepetitionType)
-        {
-            case TaskRepetitionType.Daily:
-                return baseDate.AddDays(1);
-
-            case TaskRepetitionType.AlternateDay:
-                return baseDate.AddDays(2);
-
-            case TaskRepetitionType.Weekly:
-                if (task.RepetitionDayOfWeek.HasValue)
-                {
-                    // Find the next occurrence of the specified DayOfWeek strictly *after* the baseDate
-                    DateTime nextDate = baseDate.AddDays(1); // Start checking from the day *after* the base date
-                    while (nextDate.DayOfWeek != task.RepetitionDayOfWeek.Value)
-                    {
-                        nextDate = nextDate.AddDays(1);
-                    }
-                    return nextDate;
-                }
-                else
-                {
-                    // Fallback for weekly if no specific day is set (shouldn't happen with current UI)
-                    return baseDate.AddDays(7);
-                }
-
-            default:
-                return null; // Unknown repetition type
-        }
-    }
-
-
     // --- Message Handlers ---
 
+    /// <summary>
+    /// Handles the message when the calendar setting is changed in SettingsViewModel.
+    /// Triggers a reload of tasks to update date formatting via converters.
+    /// </summary>
     private void HandleCalendarSettingChanged()
     {
         Debug.WriteLine("MainViewModel: Received CalendarSettingChangedMessage. Triggering LoadTasksCommand.");
-        if (LoadTasksCommand.CanExecute(null)) { LoadTasksCommand.Execute(null); }
-        else { Debug.WriteLine("MainViewModel: LoadTasksCommand cannot execute."); }
+        // Force reload of tasks to apply new date formatting
+        if (LoadTasksCommand.CanExecute(null))
+        {
+            LoadTasksCommand.Execute(null);
+        }
+        else
+        {
+            Debug.WriteLine("MainViewModel: LoadTasksCommand cannot execute (possibly still running).");
+            // Consider queuing or alternative refresh mechanism if needed
+        }
     }
 
-    private async void HandleAddTask(TaskItem newTask)
+    /// <summary>
+    /// Adds a new task received via message to the collection and triggers save.
+    /// </summary>
+    private async void HandleAddTask(TaskItem? newTask) // Allow nullable
     {
-        if (newTask == null) return;
+        if (newTask == null) { Debug.WriteLine("Received AddTaskMessage with null task."); return; }
         Debug.WriteLine($"Received AddTaskMessage for: {newTask.Title}, TimeType: {newTask.TimeType}");
-        newTask.Order = Tasks.Count;
-        Tasks.Add(newTask);
-        await TriggerSave();
+        newTask.Order = Tasks.Count; // Assign order based on current count
+        Tasks.Add(newTask); // Add to collection (triggers CollectionChanged -> Add)
+        await TriggerSave(); // Save the new state
     }
 
-    private async void HandleUpdateTask(TaskItem updatedTask)
+    /// <summary>
+    /// Replaces an existing task with updated data received via message and triggers save.
+    /// Uses item replacement to ensure immediate UI update for converter-based bindings.
+    /// </summary>
+    private async void HandleUpdateTask(TaskItem? updatedTask) // Allow nullable
     {
-        // Uses Item Replacement for UI Refresh
-        if (updatedTask == null) return;
+        if (updatedTask == null) { Debug.WriteLine("Received UpdateTaskMessage with null task."); return; }
+
+        // Find the index of the task to update
         int index = -1;
         for (int i = 0; i < Tasks.Count; i++) { if (Tasks[i].Id == updatedTask.Id) { index = i; break; } }
+
         if (index != -1)
         {
             Debug.WriteLine($"HandleUpdateTask: Found task '{updatedTask.Title}' at index {index}. Replacing item.");
-            updatedTask.Order = index;
-            Tasks[index] = updatedTask;
-            await TriggerSave();
+            updatedTask.Order = index; // Ensure Order property matches its position
+            Tasks[index] = updatedTask; // Replace item (triggers CollectionChanged -> Replace)
+            await TriggerSave(); // Save the updated state
         }
         else { Debug.WriteLine($"HandleUpdateTask: Update failed: Task with ID {updatedTask.Id} not found."); }
     }
 
+    /// <summary>
+    /// Removes a task identified by ID received via message and triggers save.
+    /// </summary>
     private async void HandleDeleteTask(Guid taskId)
     {
         var taskToRemove = Tasks.FirstOrDefault(t => t.Id == taskId);
         if (taskToRemove != null)
         {
             Debug.WriteLine($"Received DeleteTaskMessage for: {taskToRemove.Title} ({taskId})");
-            Tasks.Remove(taskToRemove);
-            await TriggerSave();
+            Tasks.Remove(taskToRemove); // Remove from collection (triggers CollectionChanged -> Remove)
+            await TriggerSave(); // Save the new state
         }
         else { Debug.WriteLine($"Delete failed: Task with ID {taskId} not found."); }
     }
 
     // --- Saving Logic ---
 
+    /// <summary>
+    /// Handles changes to the Tasks collection, specifically saving after Move operations.
+    /// </summary>
     private async void Tasks_CollectionChanged(object sender, NotifyCollectionChangedEventArgs e)
     {
-        // Only need to explicitly save on Move, other actions trigger save via handlers
+        // Only explicitly trigger save on Move, as other actions (Add, Replace, Remove)
+        // trigger saves via their respective message handlers.
         if (e.Action == NotifyCollectionChangedAction.Move)
         {
             Debug.WriteLine($"CollectionChanged: Action=Move. Triggering save.");
@@ -265,34 +300,72 @@ public partial class MainViewModel : ObservableObject
         else { Debug.WriteLine($"CollectionChanged: Action={e.Action}"); }
     }
 
+    /// <summary>
+    /// Serializes the current task list (after updating order) and writes it to the JSON file.
+    /// Manages the _isSaving flag internally.
+    /// </summary>
     private async Task SaveTasks()
     {
         bool acquiredLock = false;
         try
         {
-            lock (_saveLock) { if (_isSaving) { Debug.WriteLine("SaveTasks: Save already in progress. Exiting."); return; } _isSaving = true; acquiredLock = true; }
+            // Acquire lock and set saving flag
+            lock (_saveLock)
+            {
+                if (_isSaving) { Debug.WriteLine("SaveTasks: Save already in progress. Exiting."); return; }
+                _isSaving = true;
+                acquiredLock = true;
+            }
 
             List<TaskItem> tasksToSave;
+            // Lock collection only while reading/setting order
             lock (Tasks)
             {
+                // Ensure Order property is correct based on current position
                 for (int i = 0; i < Tasks.Count; i++) { if (Tasks[i].Order != i) { Tasks[i].Order = i; } }
+                // Create a snapshot for saving
                 tasksToSave = new List<TaskItem>(Tasks);
             }
+
             Debug.WriteLine($"SaveTasks: Attempting to save {tasksToSave.Count} tasks...");
 
+            // Serialize the snapshot
             string json = JsonSerializer.Serialize(tasksToSave, new JsonSerializerOptions { WriteIndented = true });
+            // Write to file
             await File.WriteAllTextAsync(_filePath, json);
-            Debug.WriteLine($"SaveTasks: Tasks saved successfully.");
+            Debug.WriteLine($"SaveTasks: Tasks saved successfully to {_filePath}");
+
+#if WINDOWS && DEBUG
+            // Optional: Open containing folder logic
+#endif
         }
-        catch (Exception ex) { Debug.WriteLine($"SaveTasks: Error saving tasks: {ex.Message}"); }
-        finally { if (acquiredLock) { lock (_saveLock) { _isSaving = false; } Debug.WriteLine("SaveTasks finished, _isSaving reset."); } }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"SaveTasks: Error saving tasks: {ex.Message}");
+            // Consider notifying user of save failure
+        }
+        finally
+        {
+            // Ensure save flag is reset *only if lock was acquired by this call*
+            if (acquiredLock)
+            {
+                lock (_saveLock) { _isSaving = false; }
+                Debug.WriteLine("SaveTasks finished, _isSaving reset.");
+            }
+        }
     }
 
+    /// <summary>
+    /// Initiates a debounced save operation if one isn't already running.
+    /// </summary>
     private async Task TriggerSave()
     {
+        // Check if a save is already in progress or pending without acquiring the main save lock yet
         lock (_saveLock) { if (_isSaving) { Debug.WriteLine("TriggerSave: Skipped, save already in progress/pending."); return; } }
+
         Debug.WriteLine("TriggerSave: Initiating save cycle...");
-        await Task.Delay(300);
+        await Task.Delay(300); // Debounce delay
+        // SaveTasks handles setting/resetting _isSaving flag internally now
         await SaveTasks();
     }
 

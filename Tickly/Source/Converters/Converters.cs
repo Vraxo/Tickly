@@ -22,66 +22,82 @@ public class PriorityToColorConverter : IValueConverter
             {
                 TaskPriority.High => Colors.Red,
                 TaskPriority.Medium => Colors.Orange,
-                TaskPriority.Low => Colors.LimeGreen,
+                TaskPriority.Low => Colors.LimeGreen, // Using LimeGreen for better visibility on black
                 _ => Colors.Gray,
             };
         }
-        return Colors.Gray;
+        return Colors.Gray; // Default color if conversion fails
     }
 
-    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => throw new NotImplementedException();
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        // Not needed for this application
+        throw new NotImplementedException();
+    }
 }
 
 /// <summary>
 /// Converts a TaskItem object into a display string describing its time/repetition,
 /// respecting the selected calendar system setting and showing "Today"/"Tomorrow".
+/// For repeating tasks, it shows the next due date.
 /// </summary>
 public class TaskTimeToStringConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
     {
-        if (value is not TaskItem task) return string.Empty;
+        // Ensure the input value is a TaskItem
+        if (value is not TaskItem task)
+        {
+            return string.Empty; // Return empty if not a TaskItem
+        }
 
+        // Get the currently selected calendar system
         CalendarSystemType calendarSystem = AppSettings.SelectedCalendarSystem;
         CultureInfo formatCulture = calendarSystem == CalendarSystemType.Persian
-                                    ? new CultureInfo("fa-IR")
-                                    : CultureInfo.InvariantCulture;
+                                    ? new CultureInfo("fa-IR") // Use Persian culture for Persian calendar
+                                    : CultureInfo.InvariantCulture; // Use Invariant for consistent Gregorian formatting
+
+        // Optional Debugging
+        // Debug.WriteLine($"TaskTimeToStringConverter: Task='{task.Title}', Read Setting='{calendarSystem}', Culture='{formatCulture.Name}'");
 
         try
         {
-            // Debugging (Optional - can be removed later)
-            // Debug.WriteLine($"TaskTimeToStringConverter: Task='{task.Title}', Read Setting='{calendarSystem}', Culture='{formatCulture.Name}'");
-
+            // Generate the display string based on the task's TimeType
             switch (task.TimeType)
             {
                 case TaskTimeType.SpecificDate:
                     if (task.DueDate == null) return "No date";
-                    // Format A: Used for specific, non-repeating dates
+                    // Use full format for specific, non-repeating dates
                     return FormatDate(task.DueDate.Value, calendarSystem, formatCulture, "ddd, dd MMM yyyy");
 
                 case TaskTimeType.Repeating:
+                    // Build the repetition description part
                     string repetition = task.RepetitionType switch
                     {
                         TaskRepetitionType.Daily => "Daily",
                         TaskRepetitionType.AlternateDay => "Every other day",
                         TaskRepetitionType.Weekly => $"Weekly on {GetDayName(task.RepetitionDayOfWeek, formatCulture)}",
-                        _ => "Repeating"
+                        _ => "Repeating" // Default fallback
                     };
-                    string startDate = task.DueDate.HasValue
-                                       // Format B: Used for the start date of repeating tasks
-                                       ? $" (from {FormatDate(task.DueDate.Value, calendarSystem, formatCulture, "dd MMM")})"
-                                       : "";
-                    return $"{repetition}{startDate}";
+                    // *** MODIFIED: Show NEXT DUE DATE instead of "(from...)" ***
+                    string nextDueDateString = task.DueDate.HasValue
+                                        // Use FormatDate helper (handles Today/Tomorrow etc.)
+                                        // Use a shorter, user-friendly format like "ddd, dd MMM"
+                                        ? FormatDate(task.DueDate.Value, calendarSystem, formatCulture, "ddd, dd MMM")
+                                        : "Unknown"; // Should always have a date if repeating
+                    // Construct the final string, e.g., "Daily, due Today" or "Weekly on Sunday, due Sun, 30 Mar"
+                    return $"{repetition}, due {nextDueDateString}";
 
-                case TaskTimeType.None:
-                default:
+                case TaskTimeType.None: // Explicitly handle None case
+                default: // Catches None or any unexpected values
                     return "Any time";
             }
         }
         catch (Exception ex)
         {
+            // Log errors during conversion
             Debug.WriteLine($"Error in TaskTimeToStringConverter for task '{task.Title}': {ex.Message}");
-            return "Date Error";
+            return "Date Error"; // Display an error indicator in the UI
         }
     }
 
@@ -95,24 +111,20 @@ public class TaskTimeToStringConverter : IValueConverter
         DateTime today = DateTime.Today;
         DateTime tomorrow = today.AddDays(1);
 
-        // *** NEW: Check for Today and Tomorrow ***
+        // *** Check for Today and Tomorrow FIRST ***
         if (date.Date == today)
         {
-            Debug.WriteLine($"FormatDate: Date {date:O} is Today.");
+            // Debug.WriteLine($"FormatDate: Date {date:O} is Today.");
             return "Today"; // Return "Today" string
         }
         else if (date.Date == tomorrow)
         {
-            Debug.WriteLine($"FormatDate: Date {date:O} is Tomorrow.");
+            // Debug.WriteLine($"FormatDate: Date {date:O} is Tomorrow.");
             return "Tomorrow"; // Return "Tomorrow" string
         }
-        // *** END NEW CHECK ***
 
-        // --- If not Today or Tomorrow, proceed with existing formatting logic ---
-        Debug.WriteLine($"FormatDate: Date {date:O} is not Today/Tomorrow. Proceeding with formatting...");
-
-        // Debugging (Optional)
-        // Debug.WriteLine($"FormatDate: Input Date='{date:O}', System='{system}', Culture='{formatCulture.Name}', RequestedFormat='{gregorianFormat}'");
+        // --- If not Today or Tomorrow, proceed with formatting ---
+        // Debug.WriteLine($"FormatDate: Date {date:O} is not Today/Tomorrow. Proceeding...");
 
         if (system == CalendarSystemType.Persian)
         {
@@ -122,35 +134,42 @@ public class TaskTimeToStringConverter : IValueConverter
                 int year = pc.GetYear(date);
                 int month = pc.GetMonth(date);
                 int day = pc.GetDayOfMonth(date);
+                // Get day/month names using the specific Persian culture (fa-IR)
                 string dayName = formatCulture.DateTimeFormat.GetAbbreviatedDayName(pc.GetDayOfWeek(date));
                 string monthName = formatCulture.DateTimeFormat.GetAbbreviatedMonthName(month);
 
-                // Debugging (Optional)
-                // Debug.WriteLine($"FormatDate (Persian Parts): Day={day}, Month={month}, MonthName='{monthName}', Year={year}");
-
-                if (gregorianFormat == "ddd, dd MMM yyyy") // Format A
+                // Handle specific format requests manually for Persian
+                if (gregorianFormat == "ddd, dd MMM yyyy") // Long format
                 {
-                    // Debug.WriteLine("FormatDate (Persian): Matched format 'ddd, dd MMM yyyy'.");
                     return $"{dayName}، {day:00} {monthName} {year}";
                 }
-                if (gregorianFormat == "dd MMM") // Format B
+                if (gregorianFormat == "dd MMM") // Short month format
                 {
-                    // Debug.WriteLine("FormatDate (Persian): Matched format 'dd MMM'.");
                     return $"{day:00} {monthName}";
                 }
+                if (gregorianFormat == "ddd, dd MMM") // Medium format (used for repeating tasks)
+                {
+                    return $"{dayName}، {day:00} {monthName}";
+                }
 
+                // Fallback if the requested format isn't explicitly handled above
                 Debug.WriteLine($"FormatDate (Persian): Fallback formatting for requested format '{gregorianFormat}'.");
-                return date.ToString(formatCulture); // Fallback formatting
+                return date.ToString(formatCulture);
+            }
+            catch (ArgumentOutOfRangeException argEx)
+            {
+                Debug.WriteLine($"Persian calendar range error for date {date:O}: {argEx.Message}");
+                return date.ToString("yyyy-MM-dd"); // Fallback on error
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"Persian date formatting error: {ex.Message}");
-                return date.ToString("yyyy-MM-dd"); // Error fallback
+                Debug.WriteLine($"Unexpected Persian date formatting error: {ex.Message}");
+                return date.ToString("yyyy-MM-dd"); // Fallback on error
             }
         }
         else // Gregorian system requested
         {
-            // Debug.WriteLine($"FormatDate (Gregorian): Using standard format '{gregorianFormat}' with culture '{formatCulture.Name}'.");
+            // Use standard .NET formatting with the specified Gregorian format and culture (InvariantCulture)
             return date.ToString(gregorianFormat, formatCulture);
         }
     }
@@ -161,19 +180,28 @@ public class TaskTimeToStringConverter : IValueConverter
     private string GetDayName(DayOfWeek? dayOfWeek, CultureInfo formatCulture)
     {
         if (dayOfWeek == null) return string.Empty;
-        try { return formatCulture.DateTimeFormat.GetDayName(dayOfWeek.Value); }
-        catch (Exception ex) { Debug.WriteLine($"Error getting day name: {ex.Message}"); return dayOfWeek.Value.ToString(); }
+        try
+        {
+            // Retrieve the day name using the specified culture's formatting info
+            return formatCulture.DateTimeFormat.GetDayName(dayOfWeek.Value);
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Error getting day name for {dayOfWeek.Value} with culture {formatCulture.Name}: {ex.Message}");
+            return dayOfWeek.Value.ToString(); // Fallback to enum name on error
+        }
     }
 
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
     {
+        // Not needed for this application
         throw new NotImplementedException();
     }
 }
 
 /// <summary>
-/// Simple converter to invert a boolean value.
+/// Simple converter to invert a boolean value. Useful for visibility bindings.
 /// </summary>
 public class InverseBooleanConverter : IValueConverter
 {

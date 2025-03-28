@@ -15,17 +15,15 @@
     <ContentPage.Resources>
         <ResourceDictionary>
             <converters:InverseBooleanConverter x:Key="InverseBooleanConverter" />
-            <!-- Ensure Primary color is defined globally in App.xaml or Resources/Styles/Colors.xaml -->
-            <!-- <Color x:Key="Primary">#512BD4</Color> -->
-
-            <!-- Optional: Define a style for the minimalist Entry -->
+            <!-- Styles -->
             <Style TargetType="Entry" x:Key="MinimalEntry">
                 <Setter Property="TextColor" Value="White" />
                 <Setter Property="PlaceholderColor" Value="Gray" />
                 <Setter Property="BackgroundColor" Value="Transparent" />
                 <Setter Property="Margin" Value="0,0,0,5" />
-                <!-- Add some bottom margin for spacing -->
             </Style>
+            <!-- Ensure Primary color is defined globally -->
+            <!-- <Color x:Key="Primary">#512BD4</Color> -->
         </ResourceDictionary>
     </ContentPage.Resources>
 
@@ -64,7 +62,6 @@
             </VerticalStackLayout>
 
             <!-- Specific Date Picker (Visible only when SpecificDate is selected) -->
-            <!-- NOTE: This control remains Gregorian visually -->
             <DatePicker x:Name="DueDatePicker"
                         Date="{Binding DueDate}"
                         TextColor="WhiteSmoke"
@@ -88,21 +85,19 @@
                     </BindableLayout.ItemTemplate>
                 </HorizontalStackLayout>
 
-                <!-- Start Date for Repetition -->
-                <!-- NOTE: This control remains Gregorian visually -->
-                <StackLayout Orientation="Horizontal" Spacing="5" Margin="0,5,0,0">
-                    <Label Text="Starting:" VerticalOptions="Center" TextColor="LightGray"/>
-                    <DatePicker x:Name="RepeatStartDatePicker"
-                                Date="{Binding DueDate}"
-                                TextColor="WhiteSmoke"
-                                BackgroundColor="#1E1E1E" />
-                </StackLayout>
+                <!-- *** Start Date for Repetition Picker REMOVED *** -->
+                <!-- <StackLayout Orientation="Horizontal" Spacing="5" Margin="0,5,0,0"> -->
+                <!--     <Label Text="Starting:" VerticalOptions="Center" TextColor="LightGray"/> -->
+                <!--     <DatePicker x:Name="RepeatStartDatePicker" -->
+                <!--                 Date="{Binding DueDate}" -->
+                <!--                 TextColor="WhiteSmoke" -->
+                <!--                 BackgroundColor="#1E1E1E" /> -->
+                <!-- </StackLayout> -->
 
                 <!-- Day of Week Picker (Visible only for Weekly repetition) -->
                 <StackLayout Orientation="Horizontal" Spacing="5" Margin="0,5,0,0"
                              IsVisible="{Binding IsWeeklySelected}">
                     <Label Text="On:" VerticalOptions="Center" TextColor="LightGray"/>
-                    <!-- UPDATED BINDINGS FOR PICKER -->
                     <Picker x:Name="DayOfWeekPicker"
                             Title="Select Day"
                             TextColor="WhiteSmoke"
@@ -110,43 +105,14 @@
                             ItemsSource="{Binding DisplayDaysOfWeek}"
                             SelectedItem="{Binding SelectedDisplayDayOfWeek}"
                             WidthRequest="150" />
-                    <!-- Optional: Placeholder text (Comment Moved) -->
-                    <!-- Bind to new string list (Comment Moved) -->
-                    <!-- Bind to new selected string (Comment Moved) -->
                 </StackLayout>
             </VerticalStackLayout>
 
-            <!-- Action Buttons (Delete, Cancel, Confirm/Update) -->
+            <!-- Action Buttons -->
             <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="10" Margin="0,20,0,0">
-
-                <!-- Delete Button -->
-                <Button Grid.Column="0"
-                        Text="Delete"
-                        Clicked="OnDeleteClicked"
-                        BackgroundColor="DarkRed"
-                        TextColor="White"
-                        IsVisible="{Binding IsEditMode}"
-                        HorizontalOptions="Start" />
-
-                <!-- Spacer -->
-                <!-- Grid.Column="1" acts as a flexible spacer -->
-
-                <!-- Cancel Button -->
-                <Button Grid.Column="2"
-                        Text="Cancel"
-                        Clicked="OnCancelClicked"
-                        BackgroundColor="#444444"
-                        TextColor="WhiteSmoke"
-                        HorizontalOptions="End" />
-
-                <!-- Confirm / Update Button -->
-                <Button Grid.Column="3"
-                        Text="{Binding ConfirmButtonText}"
-                        Clicked="OnConfirmClicked"
-                        BackgroundColor="{StaticResource Primary}"
-                        TextColor="Black"
-                        HorizontalOptions="End" />
-
+                <Button Grid.Column="0" Text="Delete" Clicked="OnDeleteClicked" BackgroundColor="DarkRed" TextColor="White" IsVisible="{Binding IsEditMode}" HorizontalOptions="Start" />
+                <Button Grid.Column="2" Text="Cancel" Clicked="OnCancelClicked" BackgroundColor="#444444" TextColor="WhiteSmoke" HorizontalOptions="End" />
+                <Button Grid.Column="3" Text="{Binding ConfirmButtonText}" Clicked="OnConfirmClicked" BackgroundColor="{StaticResource Primary}" TextColor="Black" HorizontalOptions="End" />
             </Grid>
 
         </VerticalStackLayout>
