@@ -289,43 +289,47 @@ public partial class AddTaskPopupPageViewModel : ObservableObject
     {
         var selectedPriority = PriorityOptions.FirstOrDefault(p => p.IsSelected)?.Value ?? TaskPriority.Medium;
 
+        // *** Default timeType to None ***
         TaskTimeType timeType = TaskTimeType.None;
         DateTime? finalDueDate = null;
         TaskRepetitionType? repetitionType = null;
         DayOfWeek? repetitionDayOfWeek = null; // Use the stored enum value
 
+        // *** Check if SpecificDate is selected ***
         if (IsTimeTypeSpecificDate)
         {
-            timeType = TaskTimeType.SpecificDate;
+            timeType = TaskTimeType.SpecificDate; // *** Assign SpecificDate ***
             finalDueDate = DueDate;
         }
         else if (IsTimeTypeRepeating)
         {
-            timeType = TaskTimeType.Repeating;
+            timeType = TaskTimeType.Repeating; // *** Assign Repeating ***
             finalDueDate = DueDate;
             repetitionType = RepetitionTypeOptions.FirstOrDefault(r => r.IsSelected)?.Value ?? TaskRepetitionType.Daily;
 
             if (repetitionType == TaskRepetitionType.Weekly)
             {
-                // Get the DayOfWeek from the internally stored enum value (_selectedDayOfWeekEnum)
                 repetitionDayOfWeek = _selectedDayOfWeekEnum;
             }
         }
+        // If neither SpecificDate nor Repeating is selected, timeType remains None.
 
         // Update existing task or create new one
         if (IsEditMode && _taskToEdit != null)
         {
             _taskToEdit.Title = Title;
             _taskToEdit.Priority = selectedPriority;
+            // *** Assign the determined timeType to the task object ***
             _taskToEdit.TimeType = timeType;
             _taskToEdit.DueDate = finalDueDate;
             _taskToEdit.RepetitionType = repetitionType;
-            _taskToEdit.RepetitionDayOfWeek = repetitionDayOfWeek; // Save the enum value
+            _taskToEdit.RepetitionDayOfWeek = repetitionDayOfWeek;
             return _taskToEdit;
         }
         else
         {
-            return new TaskItem(Title, selectedPriority, timeType, finalDueDate, repetitionType, repetitionDayOfWeek); // Save the enum value
+            // *** Pass the determined timeType to the constructor ***
+            return new TaskItem(Title, selectedPriority, timeType, finalDueDate, repetitionType, repetitionDayOfWeek);
         }
     }
 
