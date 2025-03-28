@@ -4,14 +4,18 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:models="clr-namespace:Tickly.Models"
              xmlns:converters="clr-namespace:Tickly.Converters"
+             xmlns:vm="clr-namespace:Tickly.Views"
              x:Class="Tickly.Views.AddTaskPopupPage"
+             x:DataType="vm:AddTaskPopupPageViewModel"
              BackgroundColor="Black"
-             Title="Add New Task">
+             Title="{Binding PageTitle}">
+    <!-- Dynamic Page Title (Add New Task / Edit Task) -->
+    <!-- Set DataType for compile-time checking and intellisense -->
 
     <ContentPage.Resources>
         <ResourceDictionary>
             <converters:InverseBooleanConverter x:Key="InverseBooleanConverter" />
-            <!-- Define Primary color if not already merged from App.xaml -->
+            <!-- Ensure Primary color is defined globally in App.xaml or Resources/Styles/Colors.xaml -->
             <!-- <Color x:Key="Primary">#512BD4</Color> -->
         </ResourceDictionary>
     </ContentPage.Resources>
@@ -19,57 +23,68 @@
     <ScrollView>
         <VerticalStackLayout Padding="20" Spacing="15">
 
+            <!-- Task Title Input -->
             <Label Text="Task Title" TextColor="WhiteSmoke"/>
             <Frame Padding="10,5"
                    CornerRadius="5"
-                   BackgroundColor="Transparent"
-                   BorderColor="Transparent"
+                   BackgroundColor="#1E1E1E"
+                   BorderColor="Gray"
                    HasShadow="False">
                 <Entry x:Name="TitleEntry"
                        Placeholder="Enter task title"
+                       Text="{Binding Title}"
                        TextColor="White"
                        PlaceholderColor="Gray"
-                       BackgroundColor="Transparent"/>
+                       BackgroundColor="Transparent" />
+                <!-- Entry background is transparent inside Frame -->
             </Frame>
 
+            <!-- Priority Selection -->
             <Label Text="Priority" TextColor="WhiteSmoke"/>
             <HorizontalStackLayout Spacing="10" BindableLayout.ItemsSource="{Binding PriorityOptions}">
                 <BindableLayout.ItemTemplate>
-                    <DataTemplate>
+                    <!-- CORRECTED x:DataType SYNTAX BELOW -->
+                    <DataTemplate x:DataType="vm:SelectableOption(models:TaskPriority)">
                         <RadioButton GroupName="PriorityGroup"
                                      IsChecked="{Binding IsSelected}"
                                      Content="{Binding Name}"
-                                     TextColor="WhiteSmoke"/>
+                                     TextColor="WhiteSmoke" />
                     </DataTemplate>
                 </BindableLayout.ItemTemplate>
             </HorizontalStackLayout>
 
+            <!-- Time / Repetition Type Selection -->
             <Label Text="Time / Repetition" TextColor="WhiteSmoke"/>
             <VerticalStackLayout Spacing="5">
                 <RadioButton GroupName="TimeTypeGroup" Content="None (Any time)" TextColor="WhiteSmoke"
-                             IsChecked="{Binding IsTimeTypeNone}"/>
+                             IsChecked="{Binding IsTimeTypeNone}" />
                 <RadioButton GroupName="TimeTypeGroup" Content="Specific Date" TextColor="WhiteSmoke"
-                             IsChecked="{Binding IsTimeTypeSpecificDate}"/>
+                             IsChecked="{Binding IsTimeTypeSpecificDate}" />
                 <RadioButton GroupName="TimeTypeGroup" Content="Repeating" TextColor="WhiteSmoke"
-                              IsChecked="{Binding IsTimeTypeRepeating}"/>
+                              IsChecked="{Binding IsTimeTypeRepeating}" />
             </VerticalStackLayout>
 
-            <!-- Specific Date Picker -->
-            <DatePicker x:Name="DueDatePicker" Date="{Binding DueDate}" TextColor="WhiteSmoke"
+            <!-- Specific Date Picker (Visible only when SpecificDate is selected) -->
+            <DatePicker x:Name="DueDatePicker"
+                        Date="{Binding DueDate}"
+                        TextColor="WhiteSmoke"
+                        BackgroundColor="#1E1E1E"
                         IsVisible="{Binding IsTimeTypeSpecificDate}"
-                        Margin="20,0,0,0"/>
+                        Margin="20,0,0,0" />
 
-            <!-- Repetition Options -->
+            <!-- Repetition Options Section (Visible only when Repeating is selected) -->
             <VerticalStackLayout Spacing="10" Margin="20,5,0,0"
                                  IsVisible="{Binding IsTimeTypeRepeating}">
+
                 <Label Text="Repeat:" TextColor="LightGray"/>
                 <HorizontalStackLayout Spacing="10" BindableLayout.ItemsSource="{Binding RepetitionTypeOptions}">
                     <BindableLayout.ItemTemplate>
-                        <DataTemplate>
+                        <!-- CORRECTED x:DataType SYNTAX BELOW -->
+                        <DataTemplate x:DataType="vm:SelectableOption(models:TaskRepetitionType)">
                             <RadioButton GroupName="RepetitionTypeGroup"
-                                          IsChecked="{Binding IsSelected}"
-                                          Content="{Binding Name}"
-                                          TextColor="WhiteSmoke"/>
+                                         IsChecked="{Binding IsSelected}"
+                                         Content="{Binding Name}"
+                                         TextColor="WhiteSmoke" />
                         </DataTemplate>
                     </BindableLayout.ItemTemplate>
                 </HorizontalStackLayout>
@@ -77,34 +92,56 @@
                 <!-- Start Date for Repetition -->
                 <StackLayout Orientation="Horizontal" Spacing="5" Margin="0,5,0,0">
                     <Label Text="Starting:" VerticalOptions="Center" TextColor="LightGray"/>
-                    <DatePicker x:Name="RepeatStartDatePicker" Date="{Binding DueDate}" TextColor="WhiteSmoke" />
+                    <DatePicker x:Name="RepeatStartDatePicker"
+                                Date="{Binding DueDate}"
+                                TextColor="WhiteSmoke"
+                                BackgroundColor="#1E1E1E" />
                 </StackLayout>
 
-                <!-- Day of Week Picker -->
+                <!-- Day of Week Picker (Visible only for Weekly repetition) -->
                 <StackLayout Orientation="Horizontal" Spacing="5" Margin="0,5,0,0"
                              IsVisible="{Binding IsWeeklySelected}">
                     <Label Text="On:" VerticalOptions="Center" TextColor="LightGray"/>
                     <Picker x:Name="DayOfWeekPicker"
-                             TextColor="WhiteSmoke"
-                             BackgroundColor="#1E1E1E"
-                             ItemsSource="{Binding DaysOfWeek}"
-                             SelectedItem="{Binding SelectedDayOfWeek}"
-                             WidthRequest="150"/>
+                            TextColor="WhiteSmoke"
+                            BackgroundColor="#1E1E1E"
+                            ItemsSource="{Binding DaysOfWeek}"
+                            SelectedItem="{Binding SelectedDayOfWeek}"
+                            WidthRequest="150" />
                 </StackLayout>
             </VerticalStackLayout>
 
-            <!-- Buttons -->
-            <HorizontalStackLayout Spacing="10" HorizontalOptions="End" Margin="0,20,0,0">
-                <!-- Cancel Button - VSM removed, relies on implicit style -->
-                <Button Text="Cancel" Clicked="OnCancelClicked" BackgroundColor="#444444"/>
-                <!-- Explicit VSM block REMOVED from here -->
+            <!-- Action Buttons (Delete, Cancel, Confirm/Update) -->
+            <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="10" Margin="0,20,0,0">
 
+                <!-- Delete Button (Visible only in Edit mode) -->
+                <Button Grid.Column="0"
+                        Text="Delete"
+                        Clicked="OnDeleteClicked"
+                        BackgroundColor="DarkRed"
+                        TextColor="White"
+                        IsVisible="{Binding IsEditMode}"
+                        HorizontalOptions="Start" />
 
-                <!-- Confirm Button - VSM removed, relies on implicit style -->
-                <Button Text="Confirm" Clicked="OnConfirmClicked" BackgroundColor="{StaticResource Primary}"/>
-                <!-- Explicit VSM block REMOVED from here -->
+                <!-- Grid.Column="1" acts as a flexible spacer -->
 
-            </HorizontalStackLayout>
+                <!-- Cancel Button -->
+                <Button Grid.Column="2"
+                        Text="Cancel"
+                        Clicked="OnCancelClicked"
+                        BackgroundColor="#444444"
+                        TextColor="WhiteSmoke"
+                        HorizontalOptions="End" />
+
+                <!-- Confirm / Update Button -->
+                <Button Grid.Column="3"
+                        Text="{Binding ConfirmButtonText}"
+                        Clicked="OnConfirmClicked"
+                        BackgroundColor="{StaticResource Primary}"
+                        TextColor="Black"
+                        HorizontalOptions="End" />
+
+            </Grid>
 
         </VerticalStackLayout>
     </ScrollView>

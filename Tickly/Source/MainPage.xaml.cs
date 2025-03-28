@@ -1,15 +1,14 @@
 ﻿// MainPage.xaml.cs
-namespace Tickly
+namespace Tickly;
+
+// Make sure your namespace matches your project structure
+public partial class MainPage : ContentPage
 {
-    // Make sure your namespace matches your project structure
-    public partial class MainPage : ContentPage
+    public MainPage()
     {
-        public MainPage()
-        {
-            InitializeComponent();
-            // The UI elements and interactions are defined in MainPage.xaml
-            // and handled by the MainViewModel via data binding.
-            // This code-behind file typically stays minimal when using MVVM.
-        }
+        InitializeComponent();
+        // The UI elements and interactions are defined in MainPage.xaml
+        // and handled by the MainViewModel via data binding.
+        // This code-behind file typically stays minimal when using MVVM.
     }
 }
