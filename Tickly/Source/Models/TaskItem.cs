@@ -1,7 +1,7 @@
 ﻿// Models/TaskItem.cs
 using CommunityToolkit.Mvvm.ComponentModel;
 using System;
-using Tickly.Models; // Make sure TaskTimeType enum namespace is included if needed
+using Tickly.Models; // Make sure enum namespace is referenced if separate
 
 namespace Tickly.Models;
 
@@ -16,12 +16,11 @@ public partial class TaskItem : ObservableObject
     [ObservableProperty]
     private TaskPriority _priority;
 
-    // --- THIS IS THE PROPERTY TO CHECK ---
     [ObservableProperty]
-    private TaskTimeType _timeType; // Ensure [ObservableProperty] is present!
+    private TaskTimeType _timeType;
 
     [ObservableProperty]
-    private DateTime? _dueDate;
+    private DateTime? _dueDate; // Base/current due date or start date for repeating
 
     [ObservableProperty]
     private TaskRepetitionType? _repetitionType;
@@ -32,22 +31,24 @@ public partial class TaskItem : ObservableObject
     [ObservableProperty]
     private int _order;
 
+    // --- NEW Property for Animation ---
+    [ObservableProperty]
+    private bool _isFadingOut; // Flag to trigger fade-out animation before removal
+
     // Parameterless constructor for JSON deserialization
     public TaskItem()
     {
         Id = Guid.NewGuid();
         Title = string.Empty;
-        // IMPORTANT: What is the default TimeType here?
-        // Enums default to 0 if not explicitly set, which is TaskTimeType.None.
-        // This is usually fine for deserialization as the JSON value should override it.
-        // _timeType = TaskTimeType.None; // Explicitly setting it doesn't hurt
+        // Default TimeType is TaskTimeType.None (0)
+        IsFadingOut = false; // Default state
     }
 
     // Full constructor
     public TaskItem(
         string title,
         TaskPriority priority,
-        TaskTimeType timeType, // Ensure this parameter exists and is used
+        TaskTimeType timeType,
         DateTime? dueDate,
         TaskRepetitionType? repetitionType,
         DayOfWeek? repetitionDayOfWeek,
@@ -56,14 +57,11 @@ public partial class TaskItem : ObservableObject
         Id = Guid.NewGuid();
         Title = title;
         Priority = priority;
-        TimeType = timeType; // Ensure it's assigned here
+        TimeType = timeType;
         DueDate = dueDate;
         RepetitionType = repetitionType;
         RepetitionDayOfWeek = repetitionDayOfWeek;
         Order = order;
+        IsFadingOut = false; // Default state
     }
-
-    // --- Generated Property (by ObservableProperty) ---
-    // public TaskTimeType TimeType { get => _timeType; set => SetProperty(ref _timeType, value); }
-    // You don't write this, but verify the [ObservableProperty] is on the _timeType field.
 }

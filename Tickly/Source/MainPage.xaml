@@ -9,124 +9,158 @@
              BackgroundColor="Black"
              Title="Tickly Tasks">
 
-    <!-- Set the BindingContext to the MainViewModel -->
     <ContentPage.BindingContext>
         <vm:MainViewModel />
     </ContentPage.BindingContext>
 
-    <!-- Define page-level resources like converters -->
     <ContentPage.Resources>
         <ResourceDictionary>
+            <!-- Converters -->
             <converters:PriorityToColorConverter x:Key="PriorityColorConverter" />
             <converters:TaskTimeToStringConverter x:Key="TaskTimeConverter" />
-            <!-- Ensure Primary color is defined globally in App.xaml or here -->
-            <!-- <Color x:Key="Primary">#512BD4</Color> -->
+            <converters:InverseBooleanConverter x:Key="InverseBooleanConverter" />
+
+            <!-- Styles -->
+            <Style TargetType="Frame" x:Key="PriorityIndicatorFrameStyle">
+                <Setter Property="HeightRequest" Value="12"/>
+                <Setter Property="WidthRequest" Value="12"/>
+                <Setter Property="CornerRadius" Value="6"/>
+                <Setter Property="BackgroundColor" Value="{Binding Priority, Converter={StaticResource PriorityColorConverter}}"/>
+                <Setter Property="VerticalOptions" Value="Center"/>
+                <Setter Property="HorizontalOptions" Value="Center"/>
+                <Setter Property="BorderColor" Value="Transparent"/>
+                <Setter Property="Padding" Value="0"/>
+                <Setter Property="Margin" Value="0,5,0,0"/>
+            </Style>
+            <Style TargetType="Label" x:Key="TaskTitleLabelStyle">
+                <Setter Property="TextColor" Value="{AppThemeBinding Light=Black, Dark=White}"/>
+                <Setter Property="FontSize" Value="16"/>
+                <Setter Property="FontAttributes" Value="Bold"/>
+                <Setter Property="VerticalOptions" Value="Center"/>
+            </Style>
+            <Style TargetType="Label" x:Key="TaskTimeLabelStyle">
+                <Setter Property="TextColor" Value="Gray"/>
+                <Setter Property="FontSize" Value="12"/>
+                <Setter Property="VerticalOptions" Value="Center"/>
+            </Style>
+            <Style TargetType="StackLayout" x:Key="EmptyViewLayoutStyle">
+                <Setter Property="VerticalOptions" Value="Center"/>
+                <Setter Property="HorizontalOptions" Value="Center"/>
+                <Setter Property="Padding" Value="20"/>
+                <Setter Property="Spacing" Value="5"/>
+            </Style>
+            <Style TargetType="Label" x:Key="EmptyViewLabelStyle">
+                <Setter Property="TextColor" Value="Gray"/>
+                <Setter Property="HorizontalTextAlignment" Value="Center"/>
+            </Style>
+            <Style TargetType="Button" x:Key="AddButtonStyle">
+                <Setter Property="Text" Value="+"/>
+                <Setter Property="FontSize" Value="24"/>
+                <Setter Property="FontAttributes" Value="Bold"/>
+                <Setter Property="TextColor" Value="{AppThemeBinding Light=White, Dark=Black}"/>
+                <Setter Property="BackgroundColor" Value="{StaticResource Primary}"/>
+                <Setter Property="CornerRadius" Value="28"/>
+                <Setter Property="HeightRequest" Value="56"/>
+                <Setter Property="WidthRequest" Value="56"/>
+                <Setter Property="HorizontalOptions" Value="End"/>
+                <Setter Property="VerticalOptions" Value="End"/>
+                <Setter Property="Margin" Value="20"/>
+                <Setter Property="SemanticProperties.Hint" Value="Add a new task"/>
+            </Style>
+
         </ResourceDictionary>
     </ContentPage.Resources>
 
-    <!-- Main layout grid -->
     <Grid RowDefinitions="*" ColumnDefinitions="*">
 
-        <!-- Task List using CollectionView -->
+        <!-- Task List -->
         <CollectionView ItemsSource="{Binding Tasks}"
                         CanReorderItems="True"
                         Margin="15,10"
                         SelectionMode="None">
-            <!-- Comment moved outside: Enables drag-and-drop reordering -->
-            <!-- Comment moved outside: We handle taps manually -->
 
             <CollectionView.ItemTemplate>
-                <!-- Define how each task item looks -->
                 <DataTemplate x:DataType="models:TaskItem">
-                    <!-- Wrap the item content in a Grid to attach the gesture recognizer -->
-                    <Grid Padding="10, 8">
-                        <Grid.GestureRecognizers>
-                            <!-- Tap gesture to navigate to the edit page -->
-                            <TapGestureRecognizer
-                                Command="{Binding Source={RelativeSource AncestorType={x:Type vm:MainViewModel}}, Path=NavigateToEditPageCommand}"
-                                CommandParameter="{Binding .}" />
-                            <!-- CommandParameter sends the current TaskItem -->
-                        </Grid.GestureRecognizers>
+                    <!-- Outer container for Opacity binding -->
+                    <Grid Padding="10, 8"
+                          Opacity="{Binding IsFadingOut, Converter={StaticResource InverseBooleanConverter}}">
 
-                        <!-- Original Item Layout (now inside the tappable Grid) -->
+                        <!-- Inner Grid for Item Layout -->
                         <Grid ColumnSpacing="10">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
-                                <!-- For priority indicator -->
+                                <!-- Priority Indicator -->
                                 <ColumnDefinition Width="*" />
-                                <!-- For text content -->
+                                <!-- Text Content -->
+                                <ColumnDefinition Width="Auto" />
+                                <!-- Check Circle Area -->
                             </Grid.ColumnDefinitions>
 
-                            <!-- Priority Indicator (Colored Circle) -->
-                            <Frame Grid.Column="0"
-                                   HeightRequest="12"
-                                   WidthRequest="12"
-                                   CornerRadius="6"
-                                   BackgroundColor="{Binding Priority, Converter={StaticResource PriorityColorConverter}}"
-                                   VerticalOptions="Center"
-                                   HorizontalOptions="Center"
-                                   BorderColor="Transparent"
-                                   Padding="0"
-                                   Margin="0,5,0,0"/>
-                            <!-- Self-closing tag added above -->
-                            <!-- Comment moved outside: Added slight top margin for better alignment -->
+                            <!-- Priority Indicator -->
+                            <Frame Grid.Column="0" Style="{StaticResource PriorityIndicatorFrameStyle}"/>
 
-                            <!-- Task Title and Time -->
+                            <!-- Task Title and Time (Tappable for Editing) -->
                             <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
-                                <Label Text="{Binding Title}"
-                                       TextColor="White"
-                                       FontSize="16"
-                                       FontAttributes="Bold"
-                                       VerticalOptions="Center" />
-                                <!-- Self-closing tag added above -->
-                                <Label Text="{Binding ., Converter={StaticResource TaskTimeConverter}}"
-                                       TextColor="Gray"
-                                       FontSize="12"
-                                       VerticalOptions="Center" />
-                                <!-- Self-closing tag added above -->
+                                <VerticalStackLayout.GestureRecognizers>
+                                    <TapGestureRecognizer
+                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:MainViewModel}}, Path=NavigateToEditPageCommand}"
+                                        CommandParameter="{Binding .}" />
+                                </VerticalStackLayout.GestureRecognizers>
+                                <Label Text="{Binding Title}" Style="{StaticResource TaskTitleLabelStyle}" />
+                                <Label Text="{Binding ., Converter={StaticResource TaskTimeConverter}}" Style="{StaticResource TaskTimeLabelStyle}" />
                             </VerticalStackLayout>
+
+                            <!-- Check Circle Area (Wrapper Grid) -->
+                            <!-- *** MODIFICATION START: Wrap Border in a Grid for Hit Testing *** -->
+                            <Grid Grid.Column="2"
+                                  VerticalOptions="Center"
+                                  HorizontalOptions="Center"
+                                  Margin="5,0,0,0"  
+                                  Padding="5">
+                                <!-- Add Padding to increase tap area size -->
+                                <!-- Set BackgroundColor="Transparent" if needed, but Grid is usually transparent -->
+
+                                <Grid.GestureRecognizers>
+                                    <!-- Tap gesture for MARKING DONE (Attached to Wrapper Grid) -->
+                                    <TapGestureRecognizer
+                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:MainViewModel}}, Path=MarkTaskDoneCommand}"
+                                        CommandParameter="{Binding .}"/>
+                                </Grid.GestureRecognizers>
+
+                                <!-- The Visual Check Circle (Border) -->
+                                <Border Stroke="{AppThemeBinding Light=Gray, Dark=LightGray}"
+                                        StrokeThickness="2"
+                                        HeightRequest="24"
+                                        WidthRequest="24"
+                                        VerticalOptions="Center"
+                                        HorizontalOptions="Center">
+                                    <!-- Gesture Recognizer REMOVED from Border -->
+                                    <Border.StrokeShape>
+                                        <Ellipse/>
+                                    </Border.StrokeShape>
+                                </Border>
+                                <!-- *** MODIFICATION END *** -->
+
+                            </Grid>
+
                         </Grid>
                     </Grid>
                 </DataTemplate>
             </CollectionView.ItemTemplate>
 
-            <!-- View to display when the task list is empty -->
             <CollectionView.EmptyView>
-                <StackLayout VerticalOptions="Center" HorizontalOptions="Center" Padding="20" Spacing="5">
-                    <Label Text="No tasks yet!"
-                           TextColor="Gray"
-                           FontSize="16"
-                           HorizontalTextAlignment="Center"/>
-                    <!-- Self-closing tag added above -->
-                    <Label Text="Click the '+' button to add one."
-                           TextColor="Gray"
-                           FontSize="14"
-                           HorizontalTextAlignment="Center"/>
-                    <!-- Self-closing tag added above -->
+                <StackLayout Style="{StaticResource EmptyViewLayoutStyle}">
+                    <Label Text="No tasks yet!" Style="{StaticResource EmptyViewLabelStyle}" FontSize="16"/>
+                    <Label Text="Click the '+' button to add one." Style="{StaticResource EmptyViewLabelStyle}" FontSize="14"/>
                 </StackLayout>
             </CollectionView.EmptyView>
 
         </CollectionView>
 
-        <!-- Add Task Button (Floating Action Button style) -->
-        <Button Grid.Row="0" Grid.Column="0"
-                Text="+"
-                FontSize="24"
-                FontAttributes="Bold"
-                TextColor="Black"
-                BackgroundColor="{StaticResource Primary}"
-                CornerRadius="28"
-                HeightRequest="56"
-                WidthRequest="56"
-                HorizontalOptions="End"
-                VerticalOptions="End"
-                Margin="20"
-                Command="{Binding NavigateToAddPageCommand}"
-                SemanticProperties.Hint="Add a new task"/>
-        <!-- Self-closing tag added above -->
-        <!-- Comment moved outside: Position bottom-right -->
-        <!-- Comment moved outside: Padding from edges -->
-        <!-- Comment moved outside: No VisualStateManager needed here if defined in Styles.xaml -->
+        <!-- Add Button -->
+        <Button Grid.Row="0" Grid.Column="0" Style="{StaticResource AddButtonStyle}"
+                Command="{Binding NavigateToAddPageCommand}"/>
 
     </Grid>
+
 </ContentPage>
