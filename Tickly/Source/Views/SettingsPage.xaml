@@ -1,0 +1,45 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<!-- XML Declaration MUST be first -->
+<!-- Views/SettingsPage.xaml (New File) -->
+<!-- Comment moved after declaration -->
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:Tickly.ViewModels"
+             x:Class="Tickly.Views.SettingsPage"
+             Title="Settings"
+             BackgroundColor="Black">
+
+    <ContentPage.BindingContext>
+        <!-- Instantiate ViewModel directly or use DI if preferred -->
+        <vm:SettingsViewModel />
+    </ContentPage.BindingContext>
+
+    <ScrollView>
+        <VerticalStackLayout Padding="20" Spacing="15">
+
+            <Label Text="Calendar Settings"
+                   TextColor="WhiteSmoke"
+                   FontSize="Large"
+                   FontAttributes="Bold"
+                   Margin="0,0,0,10"/>
+
+            <Label Text="Choose the calendar system for displaying dates:"
+                   TextColor="LightGray"
+                   FontSize="Small"/>
+
+            <RadioButton GroupName="CalendarGroup"
+                         Content="Gregorian Calendar"
+                         TextColor="WhiteSmoke"
+                         IsChecked="{Binding IsGregorianSelected}" />
+
+            <RadioButton GroupName="CalendarGroup"
+                         Content="Persian (Shamsi) Calendar"
+                         TextColor="WhiteSmoke"
+                         IsChecked="{Binding IsPersianSelected}" />
+
+            <!-- Add more settings here later if needed -->
+
+        </VerticalStackLayout>
+    </ScrollView>
+
+</ContentPage>

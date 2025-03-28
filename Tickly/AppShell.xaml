@@ -1,15 +1,35 @@
 <?xml version="1.0" encoding="UTF-8" ?>
+<!-- XML Declaration MUST be first -->
+<!-- AppShell.xaml -->
+<!-- Comment moved after declaration -->
 <Shell
     x:Class="Tickly.AppShell"
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     xmlns:local="clr-namespace:Tickly"
+    xmlns:views="clr-namespace:Tickly.Views"
     Shell.FlyoutBehavior="Flyout"
     Title="Tickly">
+    <!-- Add views namespace (Comment Moved) -->
 
+    <!-- Main Content (Home) -->
     <ShellContent
         Title="Home"
         ContentTemplate="{DataTemplate local:MainPage}"
-        Route="MainPage" />
+        Route="MainPage"
+        Icon="home.png"/>
+    <!-- Optional Icon (Comment Moved) -->
+
+    <!-- Settings Flyout Item -->
+    <FlyoutItem Title="Settings">
+        <ShellContent
+            Title="Settings"
+            ContentTemplate="{DataTemplate views:SettingsPage}"
+            Route="SettingsPage"
+            Icon="settings.png"/>
+        <!-- Optional Icon (Comment Moved) -->
+    </FlyoutItem>
+
+    <!-- You can add more FlyoutItems or TabBar items here -->
 
 </Shell>

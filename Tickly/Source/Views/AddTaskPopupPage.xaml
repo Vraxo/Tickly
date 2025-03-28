@@ -25,7 +25,6 @@
                 <Setter Property="BackgroundColor" Value="Transparent" />
                 <Setter Property="Margin" Value="0,0,0,5" />
                 <!-- Add some bottom margin for spacing -->
-                <!-- You might need platform-specific tweaks or borders defined here for better visibility -->
             </Style>
         </ResourceDictionary>
     </ContentPage.Resources>
@@ -35,13 +34,10 @@
 
             <!-- Task Title Input -->
             <Label Text="Task Title" TextColor="WhiteSmoke"/>
-            <!-- Removed the Frame, applying style directly to Entry -->
             <Entry x:Name="TitleEntry"
                    Placeholder="Enter task title"
                    Text="{Binding Title}"
                    Style="{StaticResource MinimalEntry}" />
-            <!-- Note: The minimal style makes it just text/placeholder on a transparent background -->
-
 
             <!-- Priority Selection -->
             <Label Text="Priority" TextColor="WhiteSmoke"/>
@@ -68,6 +64,7 @@
             </VerticalStackLayout>
 
             <!-- Specific Date Picker (Visible only when SpecificDate is selected) -->
+            <!-- NOTE: This control remains Gregorian visually -->
             <DatePicker x:Name="DueDatePicker"
                         Date="{Binding DueDate}"
                         TextColor="WhiteSmoke"
@@ -92,6 +89,7 @@
                 </HorizontalStackLayout>
 
                 <!-- Start Date for Repetition -->
+                <!-- NOTE: This control remains Gregorian visually -->
                 <StackLayout Orientation="Horizontal" Spacing="5" Margin="0,5,0,0">
                     <Label Text="Starting:" VerticalOptions="Center" TextColor="LightGray"/>
                     <DatePicker x:Name="RepeatStartDatePicker"
@@ -104,19 +102,24 @@
                 <StackLayout Orientation="Horizontal" Spacing="5" Margin="0,5,0,0"
                              IsVisible="{Binding IsWeeklySelected}">
                     <Label Text="On:" VerticalOptions="Center" TextColor="LightGray"/>
+                    <!-- UPDATED BINDINGS FOR PICKER -->
                     <Picker x:Name="DayOfWeekPicker"
+                            Title="Select Day"
                             TextColor="WhiteSmoke"
                             BackgroundColor="#1E1E1E"
-                            ItemsSource="{Binding DaysOfWeek}"
-                            SelectedItem="{Binding SelectedDayOfWeek}"
+                            ItemsSource="{Binding DisplayDaysOfWeek}"
+                            SelectedItem="{Binding SelectedDisplayDayOfWeek}"
                             WidthRequest="150" />
+                    <!-- Optional: Placeholder text (Comment Moved) -->
+                    <!-- Bind to new string list (Comment Moved) -->
+                    <!-- Bind to new selected string (Comment Moved) -->
                 </StackLayout>
             </VerticalStackLayout>
 
             <!-- Action Buttons (Delete, Cancel, Confirm/Update) -->
             <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="10" Margin="0,20,0,0">
 
-                <!-- Delete Button (Visible only in Edit mode) -->
+                <!-- Delete Button -->
                 <Button Grid.Column="0"
                         Text="Delete"
                         Clicked="OnDeleteClicked"
@@ -125,6 +128,7 @@
                         IsVisible="{Binding IsEditMode}"
                         HorizontalOptions="Start" />
 
+                <!-- Spacer -->
                 <!-- Grid.Column="1" acts as a flexible spacer -->
 
                 <!-- Cancel Button -->
