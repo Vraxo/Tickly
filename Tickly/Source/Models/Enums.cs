@@ -1,4 +1,5 @@
-﻿namespace Tickly.Models;
+﻿// File: Models\Enums.cs
+namespace Tickly.Models;
 
 public enum TaskPriority
 {
@@ -20,3 +21,12 @@ public enum TaskRepetitionType
     AlternateDay, // Every other day from the start date
     Weekly
 }
+
+// *** ADDED ENUM ***
+public enum SortOrderType
+{
+    Manual, // Default order as saved/reordered by user
+    PriorityHighFirst, // High -> Low -> Title
+    PriorityLowFirst // Low -> High -> Title
+}
+// *** END ADDED ENUM ***

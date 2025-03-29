@@ -1,6 +1,4 @@
 ﻿<?xml version="1.0" encoding="utf-8" ?>
-<!-- File: MainPage.xaml -->
-<!-- NOTE: The above XML declaration MUST be the very first line, no comments or spaces before it -->
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:vm="clr-namespace:Tickly.ViewModels"
@@ -9,16 +7,13 @@
              x:Class="Tickly.MainPage"
              BackgroundColor="Black"
              Title="Tickly Tasks">
-    <!-- Keep original Title for accessibility/fallback -->
 
     <ContentPage.BindingContext>
         <vm:MainViewModel />
     </ContentPage.BindingContext>
 
-    <!-- *** ADD Shell.TitleView *** -->
     <Shell.TitleView>
         <Grid ColumnDefinitions="*, Auto" VerticalOptions="FillAndExpand" Margin="0,0,10,0">
-            <!-- Page Title -->
             <Label Grid.Column="0"
                    Text="Tickly Tasks"
                    TextColor="{AppThemeBinding Light=Black, Dark=White}"
@@ -27,7 +22,6 @@
                    VerticalOptions="Center"
                    HorizontalOptions="Start"
                    Margin="10,0,0,0"/>
-            <!-- Sort Button -->
             <Button Grid.Column="1"
                     Text="Sort"
                     Command="{Binding SortTasksCommand}"
@@ -41,17 +35,14 @@
                     BorderWidth="0"/>
         </Grid>
     </Shell.TitleView>
-    <!-- *** END Shell.TitleView *** -->
 
 
     <ContentPage.Resources>
         <ResourceDictionary>
-            <!-- Converters -->
             <converters:PriorityToColorConverter x:Key="PriorityColorConverter" />
             <converters:TaskTimeToStringConverter x:Key="TaskTimeConverter" />
             <converters:InverseBooleanConverter x:Key="InverseBooleanConverter" />
 
-            <!-- Styles -->
             <Style TargetType="Frame" x:Key="PriorityIndicatorFrameStyle">
                 <Setter Property="HeightRequest" Value="12"/>
                 <Setter Property="WidthRequest" Value="12"/>
@@ -104,7 +95,6 @@
 
     <Grid RowDefinitions="*" ColumnDefinitions="*">
 
-        <!-- Task List -->
         <CollectionView ItemsSource="{Binding Tasks}"
                         CanReorderItems="True"
                         Margin="15,10"
@@ -112,25 +102,18 @@
 
             <CollectionView.ItemTemplate>
                 <DataTemplate x:DataType="models:TaskItem">
-                    <!-- Outer container for Opacity binding -->
                     <Grid Padding="10, 8"
                           Opacity="{Binding IsFadingOut, Converter={StaticResource InverseBooleanConverter}}">
 
-                        <!-- Inner Grid for Item Layout -->
                         <Grid ColumnSpacing="10">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
-                                <!-- Priority Indicator -->
                                 <ColumnDefinition Width="*" />
-                                <!-- Text Content -->
                                 <ColumnDefinition Width="Auto" />
-                                <!-- Check Circle Area -->
                             </Grid.ColumnDefinitions>
 
-                            <!-- Priority Indicator -->
                             <Frame Grid.Column="0" Style="{StaticResource PriorityIndicatorFrameStyle}"/>
 
-                            <!-- Task Title and Time (Tappable for Editing) -->
                             <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
                                 <VerticalStackLayout.GestureRecognizers>
                                     <TapGestureRecognizer
@@ -141,7 +124,6 @@
                                 <Label Text="{Binding ., Converter={StaticResource TaskTimeConverter}}" Style="{StaticResource TaskTimeLabelStyle}" />
                             </VerticalStackLayout>
 
-                            <!-- Check Circle Area (Wrapper Grid) -->
                             <Grid Grid.Column="2"
                                   VerticalOptions="Center"
                                   HorizontalOptions="Center"
@@ -178,7 +160,6 @@
 
         </CollectionView>
 
-        <!-- Add Button -->
         <Button Grid.Row="0" Grid.Column="0" Style="{StaticResource AddButtonStyle}"
                 Command="{Binding NavigateToAddPageCommand}"/>
 

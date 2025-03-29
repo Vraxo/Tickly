@@ -1,4 +1,5 @@
 ﻿// File: ViewModels\MainViewModel.cs
+// File: ViewModels\MainViewModel.cs
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
@@ -29,6 +30,10 @@ public partial class MainViewModel : ObservableObject
     private readonly string _filePath;
     private bool _isSaving = false;
     private readonly object _saveLock = new object(); // Used for coordinating SaveTasks/LoadTasks
+
+    // *** ADDED Property for Sort State ***
+    private SortOrderType _currentSortOrder = SortOrderType.Manual;
+    // *** END ADDED Property ***
 
     public MainViewModel()
     {
@@ -95,6 +100,7 @@ public partial class MainViewModel : ObservableObject
     /// <summary>
     /// Loads tasks from the JSON file into the ObservableCollection.
     /// Renamed to LoadTasksAsync and returns Task.
+    /// Respects the saved 'Order' property for manual sorting.
     /// </summary>
     [RelayCommand] // Generates LoadTasksAsyncCommand for potential external use
     private async Task LoadTasksAsync()
@@ -131,7 +137,7 @@ public partial class MainViewModel : ObservableObject
                     try
                     {
                         var loadedTasks = JsonSerializer.Deserialize<List<TaskItem>>(json);
-                        // Ensure OrderBy happens even if loadedTasks is null/empty
+                        // *** Order by the saved 'Order' property ***
                         tasksToAdd = loadedTasks?.OrderBy(t => t.Order).ToList() ?? new List<TaskItem>();
                     }
                     catch (JsonException jsonEx)
@@ -159,10 +165,12 @@ public partial class MainViewModel : ObservableObject
                     task.IsFadingOut = false; // Reset animation state on load
                     Tasks.Add(task);
                 }
-                Debug.WriteLine($"LoadTasksAsync: Cleared and added {Tasks.Count} tasks to collection.");
+                Debug.WriteLine($"LoadTasksAsync: Cleared and added {Tasks.Count} tasks to collection based on saved order.");
                 // Update Order property based on loaded order (or initial add)
                 UpdateTaskOrderProperty(); // Needs to run on MainThread after collection update
             });
+            // Reset sort state to Manual after a load based on file order
+            _currentSortOrder = SortOrderType.Manual;
         }
         catch (Exception ex)
         {
@@ -172,6 +180,8 @@ public partial class MainViewModel : ObservableObject
             {
                 await MainThread.InvokeOnMainThreadAsync(Tasks.Clear);
             }
+            // Reset sort state even on error? Maybe not desirable. Keep Manual from start.
+            // _currentSortOrder = SortOrderType.Manual;
         }
         finally
         {
@@ -229,6 +239,8 @@ public partial class MainViewModel : ObservableObject
                     task.IsFadingOut = false; // Reset state if removal failed
                 }
             });
+            // Completing a task reverts sorting to manual
+            _currentSortOrder = SortOrderType.Manual;
         }
         else if (task.TimeType == TaskTimeType.Repeating)
         {
@@ -256,6 +268,8 @@ public partial class MainViewModel : ObservableObject
                         Debug.WriteLine($"MarkTaskDone: Failed to remove repeating task '{task.Title}' before moving.");
                     }
                 });
+                // Completing a repeating task also reverts sorting to manual
+                _currentSortOrder = SortOrderType.Manual;
             }
             else
             {
@@ -265,26 +279,53 @@ public partial class MainViewModel : ObservableObject
     }
 
 
-    // *** NEW SORT COMMAND ***
     /// <summary>
-    /// Sorts tasks by Priority (High->Low) then alphabetically by Title.
+    /// Cycles through sort orders: Manual -> Priority High First -> Priority Low First -> Manual...
     /// </summary>
     [RelayCommand]
     private async Task SortTasks()
     {
-        Debug.WriteLine("SortTasks: Sorting tasks by Priority then Title...");
+        // Determine the *next* sort order
+        SortOrderType nextSortOrder = _currentSortOrder switch
+        {
+            SortOrderType.Manual => SortOrderType.PriorityHighFirst,
+            SortOrderType.PriorityHighFirst => SortOrderType.PriorityLowFirst,
+            SortOrderType.PriorityLowFirst => SortOrderType.Manual,
+            _ => SortOrderType.Manual // Default fallback
+        };
 
-        // Get current tasks and sort them in a new list
-        // Ensure access to Tasks is on the main thread if needed, though reading might be safe
+        Debug.WriteLine($"SortTasks: Current Sort='{_currentSortOrder}', Cycling to='{nextSortOrder}'.");
+
+        // If next is Manual, reload from saved state
+        if (nextSortOrder == SortOrderType.Manual)
+        {
+            Debug.WriteLine("SortTasks: Reverting to Manual order by reloading tasks.");
+            await LoadTasksAsync(); // LoadTasksAsync already handles order and sets _currentSortOrder to Manual
+            return; // LoadTasksAsync takes care of UI update and state change
+        }
+
+        // Apply the new sort order (PriorityHighFirst or PriorityLowFirst)
         List<TaskItem> currentTasks = new List<TaskItem>();
         await MainThread.InvokeOnMainThreadAsync(() => {
             currentTasks = new List<TaskItem>(Tasks);
         });
 
-        List<TaskItem> sortedTasks = currentTasks
-            .OrderBy(t => t.Priority) // Enum order High=0, Medium=1, Low=2 works correctly
-            .ThenBy(t => t.Title, StringComparer.OrdinalIgnoreCase) // Case-insensitive title sort
-            .ToList();
+        List<TaskItem> sortedTasks;
+
+        if (nextSortOrder == SortOrderType.PriorityHighFirst)
+        {
+            sortedTasks = currentTasks
+                .OrderBy(t => t.Priority) // Enum order High=0, Medium=1, Low=2
+                .ThenBy(t => t.Title, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+        else // nextSortOrder == SortOrderType.PriorityLowFirst
+        {
+            sortedTasks = currentTasks
+                .OrderByDescending(t => t.Priority) // Reverse enum order Low=2, Medium=1, High=0
+                .ThenBy(t => t.Title, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
 
         // Unsubscribe to prevent saves during batch update
         Tasks.CollectionChanged -= Tasks_CollectionChanged;
@@ -300,18 +341,20 @@ public partial class MainViewModel : ObservableObject
                 {
                     Tasks.Add(task);
                 }
-                Debug.WriteLine($"SortTasks: Collection updated with {Tasks.Count} sorted tasks.");
+                Debug.WriteLine($"SortTasks: Collection updated with {Tasks.Count} tasks sorted by {nextSortOrder}.");
                 UpdateTaskOrderProperty(); // Ensure Order property reflects the new sort (runs on MainThread)
             });
 
             // Save the new sorted order
-            await TriggerSave(); // TriggerSave already updates order again, but it's okay
-            Debug.WriteLine("SortTasks: Save triggered.");
+            await TriggerSave(); // TriggerSave updates 'Order' property before saving
+            _currentSortOrder = nextSortOrder; // Update the current sort state *after* successful sort and save trigger
+            Debug.WriteLine($"SortTasks: Save triggered. Current Sort is now '{_currentSortOrder}'.");
         }
         catch (Exception ex)
         {
             Debug.WriteLine($"SortTasks: Error during sorting or saving: {ex.Message}");
             // Handle error appropriately (e.g., display message to user)
+            // Consider resetting _currentSortOrder or reloading on error?
         }
         finally
         {
@@ -328,7 +371,6 @@ public partial class MainViewModel : ObservableObject
             }
         }
     }
-    // *** END NEW SORT COMMAND ***
 
 
     // --- Message Handlers ---
@@ -338,7 +380,7 @@ public partial class MainViewModel : ObservableObject
     {
         Debug.WriteLine("MainViewModel: Received CalendarSettingChangedMessage. Triggering LoadTasksAsync directly.");
         // Reload tasks to update date formatting
-
+        // This will also reset sort order to Manual implicitly via LoadTasksAsync
         try
         {
             // Directly await the private async method instead of the generated command property
@@ -366,6 +408,8 @@ public partial class MainViewModel : ObservableObject
             // UpdateTaskOrderProperty(); // Not needed here, order assigned correctly
             await TriggerSave(); // Await TriggerSave within the MainThread lambda
         });
+        // Adding a task reverts sorting to manual
+        _currentSortOrder = SortOrderType.Manual;
     }
 
     private async void HandleUpdateTask(TaskItem? updatedTask)
@@ -393,6 +437,8 @@ public partial class MainViewModel : ObservableObject
                 Debug.WriteLine($"HandleUpdateTask: Update failed: Task with ID {updatedTask.Id} not found.");
             }
         });
+        // Updating a task reverts sorting to manual
+        _currentSortOrder = SortOrderType.Manual;
     }
 
 
@@ -421,6 +467,8 @@ public partial class MainViewModel : ObservableObject
                 Debug.WriteLine($"Delete failed: Task with ID {taskId} not found.");
             }
         });
+        // Deleting a task reverts sorting to manual
+        _currentSortOrder = SortOrderType.Manual;
     }
 
     // --- Saving Logic ---
@@ -441,11 +489,14 @@ public partial class MainViewModel : ObservableObject
                 UpdateTaskOrderProperty();
                 await TriggerSave();
             });
+            // Manual reorder reverts sorting to manual
+            _currentSortOrder = SortOrderType.Manual;
         }
         else
         {
             // Log other actions, but saves are handled elsewhere
             Debug.WriteLine($"CollectionChanged: Action={e.Action}. Save handled by initiating action.");
+            // We might want to set sort to Manual on Add/Remove/Replace too, doing it in handlers
         }
     }
 
@@ -506,10 +557,12 @@ public partial class MainViewModel : ObservableObject
                 Debug.WriteLine("SaveTasks: Lock acquired, _isSaving set to true.");
             }
 
-            // Read task list snapshot quickly, assuming order is correct
-            // Needs to be on MainThread to safely access Tasks collection
+            // Read task list snapshot quickly, *ensuring order property is current first*
+            // Needs to be on MainThread to safely access Tasks collection and update order
             await MainThread.InvokeOnMainThreadAsync(() =>
             {
+                // Update order property just before taking the snapshot for saving
+                UpdateTaskOrderPropertyInternal();
                 // Assign the snapshot to the initialized list
                 tasksToSave = new List<TaskItem>(Tasks);
             });
@@ -554,6 +607,7 @@ public partial class MainViewModel : ObservableObject
     {
         // Update Order properties on the MainThread before checking the save lock
         // Use BeginInvoke to avoid potential deadlocks if TriggerSave is called from MainThread handler
+        // Note: SaveTasks also updates order now, but doing it here ensures it's set before the debounce delay
         MainThread.BeginInvokeOnMainThread(UpdateTaskOrderProperty);
 
         // Check if a save is already in progress or pending
