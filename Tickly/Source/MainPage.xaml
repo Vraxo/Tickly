@@ -28,8 +28,8 @@
             <Picker Grid.Column="1"
                     ItemsSource="{Binding SortOptionsDisplay}"
                     SelectedItem="{Binding SelectedSortOption}"
-                    BackgroundColor="#1E1E1E"
-                    TextColor="WhiteSmoke"
+                    BackgroundColor="Black"
+                TextColor="WhiteSmoke"
                     FontSize="Small"
                     HorizontalOptions="End"
                     VerticalOptions="Center"
@@ -136,7 +136,7 @@
                                   HorizontalOptions="Center"
                                   Margin="5,0,0,0"
                                   Padding="5">
-                                <!-- *** FIX: Add Transparent Background to Grid *** -->
+                                <!-- FIX: Add Transparent Background to Grid -->
                                 <Grid.Background>
                                     <SolidColorBrush Color="Transparent"/>
                                 </Grid.Background>
@@ -145,7 +145,7 @@
                                         Command="{Binding Source={RelativeSource AncestorType={x:Type vm:MainViewModel}}, Path=MarkTaskDoneCommand}"
                                         CommandParameter="{Binding .}"/>
                                 </Grid.GestureRecognizers>
-                                <!-- *** FIX: Make Border InputTransparent *** -->
+                                <!-- FIX: Make Border InputTransparent -->
                                 <Border Stroke="{AppThemeBinding Light=Gray, Dark=LightGray}"
                                         StrokeThickness="2"
                                         HeightRequest="24"
