@@ -129,18 +129,37 @@
                                 <Label Text="{Binding Title}" Style="{StaticResource TaskTitleLabelStyle}" />
                                 <Label Text="{Binding ., Converter={StaticResource TaskTimeConverter}}" Style="{StaticResource TaskTimeLabelStyle}" />
                             </VerticalStackLayout>
-                            <Grid Grid.Column="2" VerticalOptions="Center" HorizontalOptions="Center" Margin="5,0,0,0" Padding="5">
+
+                            <!-- Grid for the Check Circle (MARK TASK DONE AREA) -->
+                            <Grid Grid.Column="2"
+                                  VerticalOptions="Center"
+                                  HorizontalOptions="Center"
+                                  Margin="5,0,0,0"
+                                  Padding="5">
+                                <!-- *** FIX: Add Transparent Background to Grid *** -->
+                                <Grid.Background>
+                                    <SolidColorBrush Color="Transparent"/>
+                                </Grid.Background>
                                 <Grid.GestureRecognizers>
                                     <TapGestureRecognizer
                                         Command="{Binding Source={RelativeSource AncestorType={x:Type vm:MainViewModel}}, Path=MarkTaskDoneCommand}"
                                         CommandParameter="{Binding .}"/>
                                 </Grid.GestureRecognizers>
-                                <Border Stroke="{AppThemeBinding Light=Gray, Dark=LightGray}" StrokeThickness="2" HeightRequest="24" WidthRequest="24" VerticalOptions="Center" HorizontalOptions="Center">
+                                <!-- *** FIX: Make Border InputTransparent *** -->
+                                <Border Stroke="{AppThemeBinding Light=Gray, Dark=LightGray}"
+                                        StrokeThickness="2"
+                                        HeightRequest="24"
+                                        WidthRequest="24"
+                                        VerticalOptions="Center"
+                                        HorizontalOptions="Center"
+                                        InputTransparent="True">
                                     <Border.StrokeShape>
                                         <Ellipse/>
                                     </Border.StrokeShape>
                                 </Border>
                             </Grid>
+                            <!-- End of Check Circle Grid -->
+
                         </Grid>
                     </Grid>
                 </DataTemplate>

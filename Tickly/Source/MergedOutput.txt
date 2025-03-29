@@ -1,7 +1,5 @@
 // File: MainPage.xaml
 <?xml version="1.0" encoding="utf-8" ?>
-<!-- File: MainPage.xaml -->
-<!-- NOTE: The above XML declaration MUST be the very first line, no comments or spaces before it -->
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:vm="clr-namespace:Tickly.ViewModels"
@@ -10,16 +8,14 @@
              x:Class="Tickly.MainPage"
              BackgroundColor="Black"
              Title="Tickly Tasks">
-    <!-- Keep original Title for accessibility/fallback -->
 
     <ContentPage.BindingContext>
         <vm:MainViewModel />
     </ContentPage.BindingContext>
 
-    <!-- *** ADD Shell.TitleView *** -->
+    <!-- Use Shell.TitleView to place Title and Picker side-by-side -->
     <Shell.TitleView>
         <Grid ColumnDefinitions="*, Auto" VerticalOptions="FillAndExpand" Margin="0,0,10,0">
-            <!-- Page Title -->
             <Label Grid.Column="0"
                    Text="Tickly Tasks"
                    TextColor="{AppThemeBinding Light=Black, Dark=White}"
@@ -28,31 +24,28 @@
                    VerticalOptions="Center"
                    HorizontalOptions="Start"
                    Margin="10,0,0,0"/>
-            <!-- Sort Button -->
-            <Button Grid.Column="1"
-                    Text="Sort"
-                    Command="{Binding SortTasksCommand}"
-                    BackgroundColor="Transparent"
-                    TextColor="{StaticResource Primary}"
-                FontSize="14"
-                    FontAttributes="Bold"
-                    VerticalOptions="Center"
+
+            <!-- Picker placed directly in TitleView Grid -->
+            <Picker Grid.Column="1"
+                    ItemsSource="{Binding SortOptionsDisplay}"
+                    SelectedItem="{Binding SelectedSortOption}"
+                    BackgroundColor="#1E1E1E"
+                    TextColor="WhiteSmoke"
+                    FontSize="Small"
                     HorizontalOptions="End"
-                    Padding="10,5"
-                    BorderWidth="0"/>
+                    VerticalOptions="Center"
+                    MinimumWidthRequest="180"
+                    Margin="0,0,5,0"/>
         </Grid>
     </Shell.TitleView>
-    <!-- *** END Shell.TitleView *** -->
 
 
     <ContentPage.Resources>
         <ResourceDictionary>
-            <!-- Converters -->
             <converters:PriorityToColorConverter x:Key="PriorityColorConverter" />
             <converters:TaskTimeToStringConverter x:Key="TaskTimeConverter" />
             <converters:InverseBooleanConverter x:Key="InverseBooleanConverter" />
 
-            <!-- Styles -->
             <Style TargetType="Frame" x:Key="PriorityIndicatorFrameStyle">
                 <Setter Property="HeightRequest" Value="12"/>
                 <Setter Property="WidthRequest" Value="12"/>
@@ -100,38 +93,34 @@
                 <Setter Property="SemanticProperties.Hint" Value="Add a new task"/>
             </Style>
 
+            <!-- General Picker Style REMOVED -->
+
         </ResourceDictionary>
     </ContentPage.Resources>
 
+    <!-- Main Grid Layout - Single Row -->
     <Grid RowDefinitions="*" ColumnDefinitions="*">
 
-        <!-- Task List -->
-        <CollectionView ItemsSource="{Binding Tasks}"
+        <!-- Picker REMOVED from here -->
+
+        <!-- Task List - Row 0 -->
+        <CollectionView Grid.Row="0" Grid.Column="0"
+                        ItemsSource="{Binding Tasks}"
                         CanReorderItems="True"
-                        Margin="15,10"
+                        Margin="15,10,15,10"
                         SelectionMode="None">
 
             <CollectionView.ItemTemplate>
                 <DataTemplate x:DataType="models:TaskItem">
-                    <!-- Outer container for Opacity binding -->
                     <Grid Padding="10, 8"
                           Opacity="{Binding IsFadingOut, Converter={StaticResource InverseBooleanConverter}}">
-
-                        <!-- Inner Grid for Item Layout -->
                         <Grid ColumnSpacing="10">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
-                                <!-- Priority Indicator -->
                                 <ColumnDefinition Width="*" />
-                                <!-- Text Content -->
                                 <ColumnDefinition Width="Auto" />
-                                <!-- Check Circle Area -->
                             </Grid.ColumnDefinitions>
-
-                            <!-- Priority Indicator -->
                             <Frame Grid.Column="0" Style="{StaticResource PriorityIndicatorFrameStyle}"/>
-
-                            <!-- Task Title and Time (Tappable for Editing) -->
                             <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
                                 <VerticalStackLayout.GestureRecognizers>
                                     <TapGestureRecognizer
@@ -141,30 +130,18 @@
                                 <Label Text="{Binding Title}" Style="{StaticResource TaskTitleLabelStyle}" />
                                 <Label Text="{Binding ., Converter={StaticResource TaskTimeConverter}}" Style="{StaticResource TaskTimeLabelStyle}" />
                             </VerticalStackLayout>
-
-                            <!-- Check Circle Area (Wrapper Grid) -->
-                            <Grid Grid.Column="2"
-                                  VerticalOptions="Center"
-                                  HorizontalOptions="Center"
-                                  Margin="5,0,0,0"
-                                  Padding="5">
+                            <Grid Grid.Column="2" VerticalOptions="Center" HorizontalOptions="Center" Margin="5,0,0,0" Padding="5">
                                 <Grid.GestureRecognizers>
                                     <TapGestureRecognizer
                                         Command="{Binding Source={RelativeSource AncestorType={x:Type vm:MainViewModel}}, Path=MarkTaskDoneCommand}"
                                         CommandParameter="{Binding .}"/>
                                 </Grid.GestureRecognizers>
-                                <Border Stroke="{AppThemeBinding Light=Gray, Dark=LightGray}"
-                                        StrokeThickness="2"
-                                        HeightRequest="24"
-                                        WidthRequest="24"
-                                        VerticalOptions="Center"
-                                        HorizontalOptions="Center">
+                                <Border Stroke="{AppThemeBinding Light=Gray, Dark=LightGray}" StrokeThickness="2" HeightRequest="24" WidthRequest="24" VerticalOptions="Center" HorizontalOptions="Center">
                                     <Border.StrokeShape>
                                         <Ellipse/>
                                     </Border.StrokeShape>
                                 </Border>
                             </Grid>
-
                         </Grid>
                     </Grid>
                 </DataTemplate>
@@ -179,8 +156,9 @@
 
         </CollectionView>
 
-        <!-- Add Button -->
-        <Button Grid.Row="0" Grid.Column="0" Style="{StaticResource AddButtonStyle}"
+        <!-- Add Button - Row 0 -->
+        <Button Grid.Row="0" Grid.Column="0"
+                Style="{StaticResource AddButtonStyle}"
                 Command="{Binding NavigateToAddPageCommand}"/>
 
     </Grid>
@@ -190,18 +168,14 @@
 --------------------------------------------------------------------------------
 
 // File: MainPage.xaml.cs
-// MainPage.xaml.cs
+// File: MainPage.xaml.cs
 namespace Tickly;
 
-// Make sure your namespace matches your project structure
 public partial class MainPage : ContentPage
 {
     public MainPage()
     {
         InitializeComponent();
-        // The UI elements and interactions are defined in MainPage.xaml
-        // and handled by the MainViewModel via data binding.
-        // This code-behind file typically stays minimal when using MVVM.
     }
 }
 
@@ -442,7 +416,7 @@ public class CalendarSettingChangedMessage : ValueChangedMessage<bool> // Value 
 --------------------------------------------------------------------------------
 
 // File: Messages\TaskMessages.cs
-// Messages/TaskMessages.cs (Or add to existing Messages file)
+// File: Messages/TaskMessages.cs (Add to this existing file)
 using CommunityToolkit.Mvvm.Messaging.Messages;
 using Tickly.Models;
 using System; // Needed for Guid
@@ -455,20 +429,32 @@ public class AddTaskMessage : ValueChangedMessage<TaskItem>
     public AddTaskMessage(TaskItem value) : base(value) { }
 }
 
-// New UpdateTaskMessage
+// Existing UpdateTaskMessage
 public class UpdateTaskMessage : ValueChangedMessage<TaskItem>
 {
     public UpdateTaskMessage(TaskItem value) : base(value) { }
 }
 
-// New DeleteTaskMessage (Sending Guid is sufficient)
+// Existing DeleteTaskMessage
 public class DeleteTaskMessage : ValueChangedMessage<Guid>
 {
     public DeleteTaskMessage(Guid taskId) : base(taskId) { }
 }
 
+// *** NEW MESSAGE ***
+/// <summary>
+/// Signals that the underlying task data source may have changed (e.g., after import)
+/// and the main view should reload its tasks.
+/// </summary>
+public class TasksReloadRequestedMessage : RequestMessage<bool> // Can just use RequestMessage
+{
+    // No specific data needed, just the signal
+}
+// *** END NEW MESSAGE ***
+
 --------------------------------------------------------------------------------
 
+// File: Models\Enums.cs
 // File: Models\Enums.cs
 namespace Tickly.Models;
 
@@ -492,6 +478,15 @@ public enum TaskRepetitionType
     AlternateDay, // Every other day from the start date
     Weekly
 }
+
+// *** ADDED ENUM ***
+public enum SortOrderType
+{
+    Manual, // Default order as saved/reordered by user
+    PriorityHighFirst, // High -> Low -> Title
+    PriorityLowFirst // Low -> High -> Title
+}
+// *** END ADDED ENUM ***
 
 --------------------------------------------------------------------------------
 
@@ -715,7 +710,6 @@ using Tickly.Utils; // Needed for DateUtils
 
 namespace Tickly.ViewModels;
 
-// Ensure the class is partial for source generators to work
 public partial class MainViewModel : ObservableObject
 {
     [ObservableProperty]
@@ -723,98 +717,78 @@ public partial class MainViewModel : ObservableObject
 
     private readonly string _filePath;
     private bool _isSaving = false;
-    private readonly object _saveLock = new object(); // Used for coordinating SaveTasks/LoadTasks
+    private readonly object _saveLock = new object();
+
+    private SortOrderType _currentSortOrder = SortOrderType.Manual;
+
+    [ObservableProperty]
+    private List<string> _sortOptionsDisplay;
+
+    private string _selectedSortOption;
+    public string SelectedSortOption
+    {
+        get => _selectedSortOption;
+        set
+        {
+            if (SetProperty(ref _selectedSortOption, value))
+            {
+                ApplySortOrderCommand.Execute(null);
+            }
+        }
+    }
+
 
     public MainViewModel()
     {
         _filePath = Path.Combine(FileSystem.AppDataDirectory, "tasks.json");
         _tasks = new ObservableCollection<TaskItem>();
-        // Subscribe AFTER initial load to avoid unnecessary saves during load
-        // _tasks.CollectionChanged += Tasks_CollectionChanged; // Moved to end of LoadTasksAsync
 
-        // Load initial data
-        _ = LoadTasksAsync(); // Use async void pattern cautiously; Task is returned but not awaited here
+        SortOptionsDisplay = new List<string>
+        {
+            "Manual Order",
+            "Priority (High First)",
+            "Priority (Low First)"
+        };
+        _selectedSortOption = SortOptionsDisplay[0];
 
-        // Register message listeners for CRUD operations and settings changes
+        _ = LoadTasksAsync();
+
         WeakReferenceMessenger.Default.Register<AddTaskMessage>(this, (r, m) => HandleAddTask(m.Value));
         WeakReferenceMessenger.Default.Register<UpdateTaskMessage>(this, (r, m) => HandleUpdateTask(m.Value));
         WeakReferenceMessenger.Default.Register<DeleteTaskMessage>(this, (r, m) => HandleDeleteTask(m.Value));
         WeakReferenceMessenger.Default.Register<CalendarSettingChangedMessage>(this, (r, m) => HandleCalendarSettingChanged());
+        // *** Register for Reload Message ***
+        WeakReferenceMessenger.Default.Register<TasksReloadRequestedMessage>(this, async (r, m) => await HandleTasksReloadRequested());
+        // *** END Register ***
     }
 
-    // --- Commands ---
 
-    /// <summary>
-    /// Navigates to the Add Task page.
-    /// </summary>
     [RelayCommand]
     private async Task NavigateToAddPage()
     {
-        try
-        {
-            // Ensure IsEditMode is false in the target ViewModel if navigating for Add
-            await Shell.Current.GoToAsync(nameof(AddTaskPopupPage), true,
-                new Dictionary<string, object> { { "TaskToEdit", null } }); // Explicitly pass null
-        }
-        catch (Exception ex)
-        {
-            Debug.WriteLine($"Error navigating to add page: {ex.Message}");
-            // Optionally show user error
-        }
+        try { await Shell.Current.GoToAsync(nameof(AddTaskPopupPage), true, new Dictionary<string, object> { { "TaskToEdit", null } }); }
+        catch (Exception ex) { Debug.WriteLine($"Error navigating to add page: {ex.Message}"); }
     }
 
-    /// <summary>
-    /// Navigates to the Edit Task page, passing the selected task.
-    /// </summary>
     [RelayCommand]
-    private async Task NavigateToEditPage(TaskItem? taskToEdit) // Allow nullable TaskItem
+    private async Task NavigateToEditPage(TaskItem? taskToEdit)
     {
-        if (taskToEdit == null)
-        {
-            Debug.WriteLine("NavigateToEditPage: taskToEdit is null.");
-            return;
-        }
+        if (taskToEdit == null) { return; }
         try
         {
-            Debug.WriteLine($"Navigating to edit task: {taskToEdit.Title} ({taskToEdit.Id})");
             var navigationParameter = new Dictionary<string, object> { { "TaskToEdit", taskToEdit } };
             await Shell.Current.GoToAsync(nameof(AddTaskPopupPage), true, navigationParameter);
         }
-        catch (Exception ex)
-        {
-            Debug.WriteLine($"Error navigating to edit page for task {taskToEdit.Id}: {ex.Message}");
-            // Optionally show user error
-        }
+        catch (Exception ex) { Debug.WriteLine($"Error navigating to edit page for task {taskToEdit.Id}: {ex.Message}"); }
     }
 
-    /// <summary>
-    /// Loads tasks from the JSON file into the ObservableCollection.
-    /// Renamed to LoadTasksAsync and returns Task.
-    /// </summary>
-    [RelayCommand] // Generates LoadTasksAsyncCommand for potential external use
+    [RelayCommand]
     private async Task LoadTasksAsync()
     {
-        // Prevent loading during save
-        lock (_saveLock) { if (_isSaving) { Debug.WriteLine("LoadTasksAsync skipped, save in progress."); return; } }
-
+        lock (_saveLock) { if (_isSaving) { return; } }
         Debug.WriteLine($"LoadTasksAsync: Attempting to load tasks from: {_filePath}");
-
         bool wasSubscribed = false;
-        // Check if already subscribed before unsubscribing
-        try
-        {
-            // Temporarily unsubscribe to prevent CollectionChanged firing during load
-            Tasks.CollectionChanged -= Tasks_CollectionChanged;
-            wasSubscribed = true; // Assume it was, handle potential exception if not
-            Debug.WriteLine("LoadTasksAsync: Unsubscribed from CollectionChanged.");
-        }
-        catch
-        {
-            Debug.WriteLine("LoadTasksAsync: Was not subscribed to CollectionChanged.");
-            /* Ignore if not subscribed */
-        }
-
-
+        try { Tasks.CollectionChanged -= Tasks_CollectionChanged; wasSubscribed = true; } catch { }
         try
         {
             List<TaskItem> tasksToAdd = new List<TaskItem>();
@@ -823,457 +797,101 @@ public partial class MainViewModel : ObservableObject
                 string json = await File.ReadAllTextAsync(_filePath);
                 if (!string.IsNullOrWhiteSpace(json))
                 {
-                    try
-                    {
-                        var loadedTasks = JsonSerializer.Deserialize<List<TaskItem>>(json);
-                        // Ensure OrderBy happens even if loadedTasks is null/empty
-                        tasksToAdd = loadedTasks?.OrderBy(t => t.Order).ToList() ?? new List<TaskItem>();
-                    }
-                    catch (JsonException jsonEx)
-                    {
-                        Debug.WriteLine($"LoadTasksAsync: Error deserializing tasks JSON: {jsonEx.Message}");
-                        // Prevent adding corrupted data, keep tasksToAdd empty
-                    }
-                }
-                else
-                {
-                    Debug.WriteLine("LoadTasksAsync: Task file is empty.");
+                    try { var loadedTasks = JsonSerializer.Deserialize<List<TaskItem>>(json); tasksToAdd = loadedTasks?.OrderBy(t => t.Order).ToList() ?? new List<TaskItem>(); }
+                    catch (JsonException jsonEx) { Debug.WriteLine($"LoadTasksAsync: Error deserializing tasks JSON: {jsonEx.Message}"); }
                 }
             }
-            else
+            await MainThread.InvokeOnMainThreadAsync(() =>
             {
-                Debug.WriteLine("LoadTasksAsync: Task file not found.");
-            }
-
-            // Update the UI collection on the main thread
-            await MainThread.InvokeOnMainThreadAsync(() => // Use awaitable version
-            {
-                Tasks.Clear(); // Clear existing items
-                foreach (var task in tasksToAdd)
-                {
-                    task.IsFadingOut = false; // Reset animation state on load
-                    Tasks.Add(task);
-                }
-                Debug.WriteLine($"LoadTasksAsync: Cleared and added {Tasks.Count} tasks to collection.");
-                // Update Order property based on loaded order (or initial add)
-                UpdateTaskOrderProperty(); // Needs to run on MainThread after collection update
+                Tasks.Clear();
+                foreach (var task in tasksToAdd) { task.IsFadingOut = false; Tasks.Add(task); }
+                UpdateTaskOrderProperty();
             });
+            _currentSortOrder = SortOrderType.Manual;
+            UpdateSelectedSortOptionDisplay(SortOrderType.Manual);
         }
         catch (Exception ex)
         {
             Debug.WriteLine($"LoadTasksAsync: Error loading tasks: {ex.GetType().Name} - {ex.Message}");
-            // Optionally clear tasks on error, ensuring it's on MainThread
-            if (Tasks.Any())
-            {
-                await MainThread.InvokeOnMainThreadAsync(Tasks.Clear);
-            }
+            if (Tasks.Any()) await MainThread.InvokeOnMainThreadAsync(Tasks.Clear);
+            _currentSortOrder = SortOrderType.Manual;
+            UpdateSelectedSortOptionDisplay(SortOrderType.Manual);
         }
-        finally
-        {
-            // Always re-subscribe if it was originally subscribed or if tasks now exist
-            if (wasSubscribed || Tasks.Any())
-            {
-                // Ensure not doubly subscribed
-                Tasks.CollectionChanged -= Tasks_CollectionChanged;
-                Tasks.CollectionChanged += Tasks_CollectionChanged;
-                Debug.WriteLine("LoadTasksAsync: Re-subscribed to CollectionChanged.");
-            }
-            else
-            {
-                Debug.WriteLine("LoadTasksAsync: No tasks loaded and was not subscribed, staying unsubscribed.");
-            }
-            Debug.WriteLine("LoadTasksAsync finished.");
-        }
+        finally { if (wasSubscribed || Tasks.Any()) { Tasks.CollectionChanged -= Tasks_CollectionChanged; Tasks.CollectionChanged += Tasks_CollectionChanged; } }
     }
 
-    /// <summary>
-    /// Handles the action when a task's check circle is tapped.
-    /// Removes one-time tasks or updates repeating tasks.
-    /// </summary>
     [RelayCommand]
     private async Task MarkTaskDone(TaskItem? task)
     {
-        if (task == null || task.IsFadingOut)
-        {
-            Debug.WriteLine($"MarkTaskDone: Skipped - Task is null or already fading out (Task: {task?.Title}).");
-            return;
-        }
-
-        Debug.WriteLine($"MarkTaskDone: Processing task '{task.Title}', TimeType: {task.TimeType}");
-
+        if (task == null || task.IsFadingOut) { return; }
         if (task.TimeType == TaskTimeType.None || task.TimeType == TaskTimeType.SpecificDate)
         {
-            Debug.WriteLine($"MarkTaskDone: Task '{task.Title}' is one-time/specific. Fading out.");
             task.IsFadingOut = true;
-
             await Task.Delay(350);
-
-            // Use awaitable version for MainThread
-            await MainThread.InvokeOnMainThreadAsync(async () =>
-            {
-                bool removed = Tasks.Remove(task);
-                if (removed)
-                {
-                    Debug.WriteLine($"MarkTaskDone: Removed task '{task.Title}'. Updating order and triggering save.");
-                    UpdateTaskOrderProperty(); // Update order after removal (runs on MainThread)
-                    await TriggerSave(); // Trigger save now requires await
-                }
-                else
-                {
-                    Debug.WriteLine($"MarkTaskDone: Failed to remove task '{task.Title}' after fade.");
-                    task.IsFadingOut = false; // Reset state if removal failed
-                }
-            });
+            await MainThread.InvokeOnMainThreadAsync(async () => { if (Tasks.Remove(task)) { UpdateTaskOrderProperty(); await TriggerSave(); } else { task.IsFadingOut = false; } });
+            ResetSortToManual();
         }
         else if (task.TimeType == TaskTimeType.Repeating)
         {
-            Debug.WriteLine($"MarkTaskDone: Task '{task.Title}' is repeating.");
             DateTime? nextDueDate = DateUtils.CalculateNextDueDate(task);
-
             if (nextDueDate.HasValue)
             {
-                Debug.WriteLine($"MarkTaskDone: Next due date calculated: {nextDueDate.Value:d}");
-                // Update DueDate directly - ObservableObject handles notification
                 task.DueDate = nextDueDate;
-
-                // Use awaitable version for MainThread
-                await MainThread.InvokeOnMainThreadAsync(async () =>
-                {
-                    if (Tasks.Remove(task)) // Move to end visually
-                    {
-                        Tasks.Add(task);
-                        Debug.WriteLine($"MarkTaskDone: Moved repeating task '{task.Title}' to end.");
-                        UpdateTaskOrderProperty(); // Update order after move (runs on MainThread)
-                        await TriggerSave(); // Trigger save now requires await
-                    }
-                    else
-                    {
-                        Debug.WriteLine($"MarkTaskDone: Failed to remove repeating task '{task.Title}' before moving.");
-                    }
-                });
-            }
-            else
-            {
-                Debug.WriteLine($"MarkTaskDone: Could not calculate next due date for '{task.Title}'. Not moving or saving.");
+                await MainThread.InvokeOnMainThreadAsync(async () => { if (Tasks.Remove(task)) { Tasks.Add(task); UpdateTaskOrderProperty(); await TriggerSave(); } });
+                ResetSortToManual();
             }
         }
     }
 
-
-    // *** NEW SORT COMMAND ***
-    /// <summary>
-    /// Sorts tasks by Priority (High->Low) then alphabetically by Title.
-    /// </summary>
     [RelayCommand]
-    private async Task SortTasks()
+    private async Task ApplySortOrder()
     {
-        Debug.WriteLine("SortTasks: Sorting tasks by Priority then Title...");
-
-        // Get current tasks and sort them in a new list
-        // Ensure access to Tasks is on the main thread if needed, though reading might be safe
+        SortOrderType requestedSortOrder = SelectedSortOption switch { "Priority (High First)" => SortOrderType.PriorityHighFirst, "Priority (Low First)" => SortOrderType.PriorityLowFirst, _ => SortOrderType.Manual };
+        if (requestedSortOrder == _currentSortOrder) { return; }
+        if (requestedSortOrder == SortOrderType.Manual) { await LoadTasksAsync(); return; }
         List<TaskItem> currentTasks = new List<TaskItem>();
-        await MainThread.InvokeOnMainThreadAsync(() => {
-            currentTasks = new List<TaskItem>(Tasks);
-        });
-
-        List<TaskItem> sortedTasks = currentTasks
-            .OrderBy(t => t.Priority) // Enum order High=0, Medium=1, Low=2 works correctly
-            .ThenBy(t => t.Title, StringComparer.OrdinalIgnoreCase) // Case-insensitive title sort
-            .ToList();
-
-        // Unsubscribe to prevent saves during batch update
+        await MainThread.InvokeOnMainThreadAsync(() => { currentTasks = new List<TaskItem>(Tasks); });
+        List<TaskItem> sortedTasks;
+        if (requestedSortOrder == SortOrderType.PriorityHighFirst) { sortedTasks = currentTasks.OrderBy(t => t.Priority).ThenBy(t => t.Title, StringComparer.OrdinalIgnoreCase).ToList(); }
+        else { sortedTasks = currentTasks.OrderByDescending(t => t.Priority).ThenBy(t => t.Title, StringComparer.OrdinalIgnoreCase).ToList(); }
         Tasks.CollectionChanged -= Tasks_CollectionChanged;
-        Debug.WriteLine("SortTasks: Unsubscribed from CollectionChanged.");
-
         try
         {
-            // Update the collection on the main thread
-            await MainThread.InvokeOnMainThreadAsync(() => // Use awaitable version
-            {
-                Tasks.Clear();
-                foreach (var task in sortedTasks)
-                {
-                    Tasks.Add(task);
-                }
-                Debug.WriteLine($"SortTasks: Collection updated with {Tasks.Count} sorted tasks.");
-                UpdateTaskOrderProperty(); // Ensure Order property reflects the new sort (runs on MainThread)
-            });
-
-            // Save the new sorted order
-            await TriggerSave(); // TriggerSave already updates order again, but it's okay
-            Debug.WriteLine("SortTasks: Save triggered.");
+            await MainThread.InvokeOnMainThreadAsync(() => { Tasks.Clear(); foreach (var task in sortedTasks) { Tasks.Add(task); } UpdateTaskOrderProperty(); });
+            await TriggerSave();
+            _currentSortOrder = requestedSortOrder;
         }
-        catch (Exception ex)
-        {
-            Debug.WriteLine($"SortTasks: Error during sorting or saving: {ex.Message}");
-            // Handle error appropriately (e.g., display message to user)
-        }
-        finally
-        {
-            // Always re-subscribe if tasks exist
-            if (Tasks.Any())
-            {
-                Tasks.CollectionChanged -= Tasks_CollectionChanged; // Prevent double subscription
-                Tasks.CollectionChanged += Tasks_CollectionChanged;
-                Debug.WriteLine("SortTasks: Re-subscribed to CollectionChanged.");
-            }
-            else
-            {
-                Debug.WriteLine("SortTasks: No tasks after sort, staying unsubscribed.");
-            }
-        }
+        catch (Exception ex) { Debug.WriteLine($"ApplySortOrder: Error during sorting or saving: {ex.Message}"); }
+        finally { if (Tasks.Any()) { Tasks.CollectionChanged -= Tasks_CollectionChanged; Tasks.CollectionChanged += Tasks_CollectionChanged; } }
     }
-    // *** END NEW SORT COMMAND ***
 
+    private async void HandleCalendarSettingChanged() { await LoadTasksAsync(); }
+    private async void HandleAddTask(TaskItem? newTask) { if (newTask == null) return; await MainThread.InvokeOnMainThreadAsync(async () => { newTask.Order = Tasks.Count; Tasks.Add(newTask); await TriggerSave(); }); ResetSortToManual(); }
+    private async void HandleUpdateTask(TaskItem? updatedTask) { if (updatedTask == null) return; await MainThread.InvokeOnMainThreadAsync(async () => { int index = -1; for (int i = 0; i < Tasks.Count; i++) { if (Tasks[i].Id == updatedTask.Id) { index = i; break; } } if (index != -1) { updatedTask.Order = index; Tasks[index] = updatedTask; await TriggerSave(); } }); ResetSortToManual(); }
+    private async void HandleDeleteTask(Guid taskId) { await MainThread.InvokeOnMainThreadAsync(async () => { var taskToRemove = Tasks.FirstOrDefault(t => t.Id == taskId); if (taskToRemove != null) { if (Tasks.Remove(taskToRemove)) { UpdateTaskOrderProperty(); await TriggerSave(); } } }); ResetSortToManual(); }
+    private async void Tasks_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e) { if (e.Action == NotifyCollectionChangedAction.Move) { await MainThread.InvokeOnMainThreadAsync(async () => { UpdateTaskOrderProperty(); await TriggerSave(); }); ResetSortToManual(); } }
+    private void UpdateTaskOrderProperty() { if (!MainThread.IsMainThread) { MainThread.BeginInvokeOnMainThread(UpdateTaskOrderPropertyInternal); } else { UpdateTaskOrderPropertyInternal(); } }
+    private void UpdateTaskOrderPropertyInternal() { for (int i = 0; i < Tasks.Count; i++) { if (i < Tasks.Count && Tasks[i] != null && Tasks[i].Order != i) { Tasks[i].Order = i; } } }
+    private async Task SaveTasks() { bool acquiredLock = false; List<TaskItem> tasksToSave = new List<TaskItem>(); try { lock (_saveLock) { if (_isSaving) { return; } _isSaving = true; acquiredLock = true; } await MainThread.InvokeOnMainThreadAsync(() => { UpdateTaskOrderPropertyInternal(); tasksToSave = new List<TaskItem>(Tasks); }); if (tasksToSave != null) { string json = JsonSerializer.Serialize(tasksToSave, new JsonSerializerOptions { WriteIndented = true }); await File.WriteAllTextAsync(_filePath, json); } } catch (Exception ex) { Debug.WriteLine($"SaveTasks: Error saving tasks: {ex.Message}"); } finally { if (acquiredLock) { lock (_saveLock) { _isSaving = false; } } } }
+    private async Task TriggerSave() { lock (_saveLock) { if (_isSaving) { return; } } try { await Task.Delay(300); await SaveTasks(); } catch (Exception ex) { Debug.WriteLine($"TriggerSave: Error during debounce or SaveTasks call: {ex.Message}"); } }
+    private void ResetSortToManual() { if (_currentSortOrder != SortOrderType.Manual) { _currentSortOrder = SortOrderType.Manual; UpdateSelectedSortOptionDisplay(SortOrderType.Manual); } }
+    private void UpdateSelectedSortOptionDisplay(SortOrderType sortOrder) { string newDisplayValue = sortOrder switch { SortOrderType.PriorityHighFirst => SortOptionsDisplay[1], SortOrderType.PriorityLowFirst => SortOptionsDisplay[2], _ => SortOptionsDisplay[0] }; if (_selectedSortOption != newDisplayValue) { SetProperty(ref _selectedSortOption, newDisplayValue, nameof(SelectedSortOption)); } }
 
-    // --- Message Handlers ---
-
-    // *** WORKAROUND: Call LoadTasksAsync() directly instead of LoadTasksAsyncCommand ***
-    private async void HandleCalendarSettingChanged() // Use async void for handlers awaiting async work
+    // *** NEW Handler for Reload Message ***
+    private async Task HandleTasksReloadRequested()
     {
-        Debug.WriteLine("MainViewModel: Received CalendarSettingChangedMessage. Triggering LoadTasksAsync directly.");
-        // Reload tasks to update date formatting
-
-        try
-        {
-            // Directly await the private async method instead of the generated command property
-            await LoadTasksAsync();
-        }
-        catch (Exception ex)
-        {
-            Debug.WriteLine($"Error executing LoadTasksAsync directly: {ex.Message}");
-            // Handle execution error if necessary
-        }
+        Debug.WriteLine("MainViewModel: Received TasksReloadRequestedMessage. Reloading tasks...");
+        await LoadTasksAsync();
     }
-
-    private async void HandleAddTask(TaskItem? newTask)
-    {
-        if (newTask == null) { Debug.WriteLine("Received AddTaskMessage with null task."); return; }
-        Debug.WriteLine($"Received AddTaskMessage for: {newTask.Title}");
-
-        // Add on UI thread using awaitable version
-        await MainThread.InvokeOnMainThreadAsync(async () => // Make lambda async
-        {
-            // Assign order based on current count BEFORE adding
-            newTask.Order = Tasks.Count;
-            Tasks.Add(newTask);
-            Debug.WriteLine($"HandleAddTask: Added '{newTask.Title}', new count: {Tasks.Count}.");
-            // UpdateTaskOrderProperty(); // Not needed here, order assigned correctly
-            await TriggerSave(); // Await TriggerSave within the MainThread lambda
-        });
-    }
-
-    private async void HandleUpdateTask(TaskItem? updatedTask)
-    {
-        if (updatedTask == null) { Debug.WriteLine("Received UpdateTaskMessage with null task."); return; }
-        Debug.WriteLine($"Received UpdateTaskMessage for: {updatedTask.Title} ({updatedTask.Id})");
-
-        // Find and replace on UI thread using awaitable version
-        await MainThread.InvokeOnMainThreadAsync(async () => // Make lambda async
-        {
-            int index = -1;
-            for (int i = 0; i < Tasks.Count; i++) { if (Tasks[i].Id == updatedTask.Id) { index = i; break; } }
-
-            if (index != -1)
-            {
-                // Ensure Order property matches its position before replacing
-                updatedTask.Order = index;
-                Tasks[index] = updatedTask; // Replace item (triggers CollectionChanged -> Replace)
-                Debug.WriteLine($"HandleUpdateTask: Replaced task at index {index}.");
-                // UpdateTaskOrderProperty(); // Not needed here, order preserved/updated
-                await TriggerSave(); // Await TriggerSave AFTER replacement within MainThread lambda
-            }
-            else
-            {
-                Debug.WriteLine($"HandleUpdateTask: Update failed: Task with ID {updatedTask.Id} not found.");
-            }
-        });
-    }
-
-
-    private async void HandleDeleteTask(Guid taskId)
-    {
-        Debug.WriteLine($"Received DeleteTaskMessage for Task ID: {taskId}");
-        // Find and remove on UI thread using awaitable version
-        await MainThread.InvokeOnMainThreadAsync(async () => // Make lambda async
-        {
-            var taskToRemove = Tasks.FirstOrDefault(t => t.Id == taskId);
-            if (taskToRemove != null)
-            {
-                if (Tasks.Remove(taskToRemove))
-                {
-                    Debug.WriteLine($"HandleDeleteTask: Removed '{taskToRemove.Title}'. Updating order.");
-                    UpdateTaskOrderProperty(); // Update order after removal (runs on MainThread)
-                    await TriggerSave(); // Await TriggerSave AFTER removal and order update within MainThread lambda
-                }
-                else
-                {
-                    Debug.WriteLine($"HandleDeleteTask: Failed to remove task '{taskToRemove.Title}' from collection.");
-                }
-            }
-            else
-            {
-                Debug.WriteLine($"Delete failed: Task with ID {taskId} not found.");
-            }
-        });
-    }
-
-    // --- Saving Logic ---
-
-    private async void Tasks_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
-    {
-        // This handler now primarily deals with 'Move' actions explicitly
-        // Other actions (Add, Remove, Replace) trigger saves from their respective handlers
-        // Sort triggers its own save
-        // Reset doesn't require an explicit save unless desired
-
-        if (e.Action == NotifyCollectionChangedAction.Move)
-        {
-            Debug.WriteLine($"CollectionChanged: Action=Move detected. Updating order and triggering save.");
-            // Ensure order update happens on MainThread, then trigger save
-            await MainThread.InvokeOnMainThreadAsync(async () =>
-            {
-                UpdateTaskOrderProperty();
-                await TriggerSave();
-            });
-        }
-        else
-        {
-            // Log other actions, but saves are handled elsewhere
-            Debug.WriteLine($"CollectionChanged: Action={e.Action}. Save handled by initiating action.");
-        }
-    }
-
-    /// <summary>
-    /// Updates the Order property of each TaskItem based on its current index in the Tasks collection.
-    /// MUST be called on the Main thread as it accesses the Tasks collection directly.
-    /// </summary>
-    private void UpdateTaskOrderProperty()
-    {
-        // This method is now always called from within a MainThread context (InvokeOnMainThreadAsync/BeginInvokeOnMainThread)
-        // or dispatches itself if called incorrectly.
-        if (!MainThread.IsMainThread)
-        {
-            Debug.WriteLine("WARNING: UpdateTaskOrderProperty called from non-UI thread. Dispatching.");
-            MainThread.BeginInvokeOnMainThread(() => UpdateTaskOrderPropertyInternal());
-        }
-        else
-        {
-            UpdateTaskOrderPropertyInternal();
-        }
-    }
-
-    private void UpdateTaskOrderPropertyInternal()
-    {
-        // Actual implementation assumes it's on the Main thread
-        for (int i = 0; i < Tasks.Count; i++)
-        {
-            // Check if the task exists at the index, safety for potential race conditions (though unlikely here)
-            if (i < Tasks.Count && Tasks[i] != null && Tasks[i].Order != i)
-            {
-                Tasks[i].Order = i;
-                // No need to manually raise PropertyChanged for Order unless something external binds to it directly
-            }
-        }
-        Debug.WriteLine($"UpdateTaskOrderPropertyInternal: Order property updated for {Tasks.Count} tasks.");
-    }
-
-
-    /// <summary>
-    /// Serializes the current task list and writes it to the JSON file.
-    /// Assumes Order property is up-to-date (caller responsibility).
-    /// Manages the _isSaving flag internally. Should be awaited.
-    /// </summary>
-    private async Task SaveTasks()
-    {
-        bool acquiredLock = false;
-        // Initialize tasksToSave
-        List<TaskItem> tasksToSave = new List<TaskItem>();
-
-        try
-        {
-            // Acquire lock and set saving flag
-            lock (_saveLock)
-            {
-                if (_isSaving) { Debug.WriteLine("SaveTasks: Save already in progress. Exiting."); return; }
-                _isSaving = true;
-                acquiredLock = true;
-                Debug.WriteLine("SaveTasks: Lock acquired, _isSaving set to true.");
-            }
-
-            // Read task list snapshot quickly, assuming order is correct
-            // Needs to be on MainThread to safely access Tasks collection
-            await MainThread.InvokeOnMainThreadAsync(() =>
-            {
-                // Assign the snapshot to the initialized list
-                tasksToSave = new List<TaskItem>(Tasks);
-            });
-
-
-            Debug.WriteLine($"SaveTasks: Attempting to save {tasksToSave.Count} tasks...");
-
-            // Check if tasksToSave has actually been populated (safety)
-            if (tasksToSave != null)
-            {
-                string json = JsonSerializer.Serialize(tasksToSave, new JsonSerializerOptions { WriteIndented = true });
-                await File.WriteAllTextAsync(_filePath, json);
-                Debug.WriteLine($"SaveTasks: Tasks saved successfully to {_filePath}");
-            }
-            else
-            {
-                Debug.WriteLine($"SaveTasks: tasksToSave list was unexpectedly null. Save aborted.");
-            }
-        }
-        catch (Exception ex)
-        {
-            Debug.WriteLine($"SaveTasks: Error saving tasks: {ex.Message}");
-        }
-        finally
-        {
-            if (acquiredLock)
-            {
-                lock (_saveLock)
-                {
-                    _isSaving = false;
-                    Debug.WriteLine("SaveTasks: Lock released, _isSaving set to false.");
-                }
-            }
-        }
-    }
-
-    /// <summary>
-    /// Initiates a debounced save operation if one isn't already running.
-    /// Ensures the Order property is updated before saving. Should be awaited.
-    /// </summary>
-    private async Task TriggerSave()
-    {
-        // Update Order properties on the MainThread before checking the save lock
-        // Use BeginInvoke to avoid potential deadlocks if TriggerSave is called from MainThread handler
-        MainThread.BeginInvokeOnMainThread(UpdateTaskOrderProperty);
-
-        // Check if a save is already in progress or pending
-        lock (_saveLock) { if (_isSaving) { Debug.WriteLine("TriggerSave: Skipped, save already in progress/pending."); return; } }
-
-        Debug.WriteLine("TriggerSave: Initiating save cycle...");
-        try
-        {
-            await Task.Delay(300); // Debounce delay
-            await SaveTasks(); // Await the actual save operation
-            Debug.WriteLine("TriggerSave: Save cycle complete.");
-        }
-        catch (Exception ex)
-        {
-            Debug.WriteLine($"TriggerSave: Error during debounce or SaveTasks call: {ex.Message}");
-        }
-    }
-
-} // End of MainViewModel class
+    // *** END NEW Handler ***
+}
 
 --------------------------------------------------------------------------------
 
 // File: ViewModels\SettingsViewModel.cs
-// ViewModels/SettingsViewModel.cs
+// File: ViewModels/SettingsViewModel.cs
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input; // Needed for RelayCommand
 using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Maui.Storage;
 using System.ComponentModel;
@@ -1282,6 +900,10 @@ using Tickly.Messages;
 using Tickly.Models;
 using Tickly.Services;
 using System.Collections.Generic; // For EqualityComparer
+using System.IO; // For Path, File
+using System.Text.Json; // For JsonSerializer validation
+using System.Threading.Tasks; // For Task
+using Microsoft.Maui.ApplicationModel; // For Permissions, Share, FilePicker
 
 namespace Tickly.ViewModels
 {
@@ -1293,27 +915,26 @@ namespace Tickly.ViewModels
         [ObservableProperty]
         private bool _isPersianSelected;
 
+        // Path to the app's internal tasks file
+        private readonly string _appTasksFilePath;
+
         public SettingsViewModel()
         {
-            LoadSettings(); // Now just syncs ViewModel bools with AppSettings
+            _appTasksFilePath = Path.Combine(FileSystem.AppDataDirectory, "tasks.json");
+
+            LoadSettings();
             this.PropertyChanged += SettingsViewModel_PropertyChanged;
         }
 
-        // --- MODIFIED LoadSettings ---
+
         private void LoadSettings()
         {
-            // Read the *already initialized* value from the static AppSettings
             var currentSystem = AppSettings.SelectedCalendarSystem;
             Debug.WriteLine($"SettingsViewModel: Loading initial state from AppSettings. CurrentSystem='{currentSystem}'");
-
-            // Update the boolean properties for RadioButton binding based on the static value
-            // Use UpdateProperty helper to set initial values without triggering save/notify logic unnecessarily
             UpdateProperty(ref _isGregorianSelected, currentSystem == CalendarSystemType.Gregorian, nameof(IsGregorianSelected));
             UpdateProperty(ref _isPersianSelected, currentSystem == CalendarSystemType.Persian, nameof(IsPersianSelected));
         }
-        // --- End MODIFIED LoadSettings ---
 
-        // PropertyChanged handler remains the same (updates AppSettings, saves Prefs, sends message)
         private void SettingsViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
         {
             CalendarSystemType newSystem;
@@ -1328,22 +949,162 @@ namespace Tickly.ViewModels
                 newSystem = CalendarSystemType.Persian;
                 if (IsGregorianSelected) UpdateProperty(ref _isGregorianSelected, false, nameof(IsGregorianSelected));
             }
-            else { return; }
+            else { return; } // Only handle changes to these specific boolean properties
 
+            // Check if the AppSetting actually needs changing
             if (AppSettings.SelectedCalendarSystem != newSystem)
             {
                 Debug.WriteLine($"SettingsViewModel: PropertyChanged detected user change to {newSystem}. Saving and notifying.");
-                // Update static setting FIRST
                 AppSettings.SelectedCalendarSystem = newSystem;
-                // Save to Preferences
                 Preferences.Set(AppSettings.CalendarSystemKey, (int)newSystem);
-                // Send notification message
                 WeakReferenceMessenger.Default.Send(new CalendarSettingChangedMessage());
                 Debug.WriteLine("SettingsViewModel: Sent CalendarSettingChangedMessage.");
             }
         }
 
-        // Helper to update backing field and raise PropertyChanged if value changed
+        // *** NEW Export Command ***
+        [RelayCommand]
+        private async Task ExportTasksAsync()
+        {
+            Debug.WriteLine("ExportTasksAsync: Initiating export...");
+            try
+            {
+                if (!File.Exists(_appTasksFilePath))
+                {
+                    Debug.WriteLine("ExportTasksAsync: No tasks file found to export.");
+                    await ShowAlert("Export Failed", "No tasks file exists to export.", "OK");
+                    return;
+                }
+
+                // Use MAUI Share API to let user choose destination
+                await Share.RequestAsync(new ShareFileRequest
+                {
+                    Title = "Export Tickly Tasks",
+                    File = new ShareFile(_appTasksFilePath, "application/json") // Specify MIME type
+                });
+
+                Debug.WriteLine("ExportTasksAsync: Share request completed (user may have saved or cancelled).");
+                // Optionally show a confirmation, but Share doesn't give explicit success feedback
+                // await ShowAlert("Export", "Share/Save dialog opened.", "OK");
+
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"ExportTasksAsync: Error during export: {ex.Message}");
+                await ShowAlert("Export Error", $"An error occurred during export: {ex.Message}", "OK");
+            }
+        }
+        // *** END Export Command ***
+
+        // *** NEW Import Command ***
+        [RelayCommand]
+        private async Task ImportTasksAsync()
+        {
+            Debug.WriteLine("ImportTasksAsync: Initiating import...");
+            try
+            {
+                var customFileType = new FilePickerFileType(
+                    new Dictionary<DevicePlatform, IEnumerable<string>>
+                    {
+                        { DevicePlatform.iOS, new[] { "public.json" } }, // UTType
+                        { DevicePlatform.Android, new[] { "application/json" } }, // MIME type
+                        { DevicePlatform.WinUI, new[] { ".json" } }, // file extension
+                        { DevicePlatform.MacCatalyst, new[] { "json" } }, // UTType
+                    });
+
+                var options = new PickOptions
+                {
+                    PickerTitle = "Select Tickly tasks JSON file",
+                    FileTypes = customFileType,
+                };
+
+                var result = await FilePicker.PickAsync(options);
+                if (result == null)
+                {
+                    Debug.WriteLine("ImportTasksAsync: File picking cancelled by user.");
+                    return;
+                }
+
+                Debug.WriteLine($"ImportTasksAsync: File picked: {result.FullPath}");
+
+                // --- Basic Validation ---
+                string fileContent;
+                try
+                {
+                    fileContent = await File.ReadAllTextAsync(result.FullPath);
+                    // Attempt deserialization just to see if it's plausible JSON structure
+                    _ = JsonSerializer.Deserialize<List<TaskItem>>(fileContent);
+                    Debug.WriteLine("ImportTasksAsync: File content successfully deserialized (basic validation passed).");
+                }
+                catch (JsonException jsonEx)
+                {
+                    Debug.WriteLine($"ImportTasksAsync: Invalid JSON format: {jsonEx.Message}");
+                    await ShowAlert("Import Failed", "The selected file is not a valid JSON task file.", "OK");
+                    return;
+                }
+                catch (Exception readEx)
+                {
+                    Debug.WriteLine($"ImportTasksAsync: Error reading selected file: {readEx.Message}");
+                    await ShowAlert("Import Failed", $"Could not read the selected file: {readEx.Message}", "OK");
+                    return;
+                }
+
+                // --- Confirmation ---
+                bool confirmed = await ShowConfirmation("Confirm Import", "This will REPLACE your current tasks with the content of the selected file. This cannot be undone. Proceed?", "Replace", "Cancel");
+
+                if (!confirmed)
+                {
+                    Debug.WriteLine("ImportTasksAsync: Import cancelled by user confirmation.");
+                    return;
+                }
+
+                // --- Replace File ---
+                try
+                {
+                    File.Copy(result.FullPath, _appTasksFilePath, true); // Overwrite existing file
+                    Debug.WriteLine($"ImportTasksAsync: Successfully copied selected file to {_appTasksFilePath}");
+
+                    // --- Trigger Reload ---
+                    WeakReferenceMessenger.Default.Send(new TasksReloadRequestedMessage());
+                    Debug.WriteLine("ImportTasksAsync: Sent TasksReloadRequestedMessage.");
+
+                    await ShowAlert("Import Successful", "Tasks imported successfully. The task list has been updated.", "OK");
+                }
+                catch (Exception copyEx)
+                {
+                    Debug.WriteLine($"ImportTasksAsync: Error copying file: {copyEx.Message}");
+                    await ShowAlert("Import Failed", $"Could not replace the tasks file: {copyEx.Message}", "OK");
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"ImportTasksAsync: General error during import: {ex.Message}");
+                await ShowAlert("Import Error", $"An unexpected error occurred during import: {ex.Message}", "OK");
+            }
+        }
+        // *** END Import Command ***
+
+
+        // Helper for showing alerts (slight MVVM violation for simplicity)
+        private async Task ShowAlert(string title, string message, string cancel)
+        {
+            if (Application.Current?.MainPage != null)
+            {
+                await Application.Current.MainPage.DisplayAlert(title, message, cancel);
+            }
+        }
+
+        // Helper for showing confirmation dialog
+        private async Task<bool> ShowConfirmation(string title, string message, string accept, string cancel)
+        {
+            if (Application.Current?.MainPage != null)
+            {
+                return await Application.Current.MainPage.DisplayAlert(title, message, accept, cancel);
+            }
+            return false; // Cannot show dialog
+        }
+
+
         protected bool UpdateProperty<T>(ref T field, T value, string propertyName)
         {
             if (EqualityComparer<T>.Default.Equals(field, value)) return false;
@@ -1893,9 +1654,6 @@ namespace Tickly.Views
 
 // File: Views\SettingsPage.xaml
 <?xml version="1.0" encoding="utf-8" ?>
-<!-- XML Declaration MUST be first -->
-<!-- Views/SettingsPage.xaml (New File) -->
-<!-- Comment moved after declaration -->
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:vm="clr-namespace:Tickly.ViewModels"
@@ -1904,7 +1662,6 @@ namespace Tickly.Views
              BackgroundColor="Black">
 
     <ContentPage.BindingContext>
-        <!-- Instantiate ViewModel directly or use DI if preferred -->
         <vm:SettingsViewModel />
     </ContentPage.BindingContext>
 
@@ -1931,7 +1688,32 @@ namespace Tickly.Views
                          TextColor="WhiteSmoke"
                          IsChecked="{Binding IsPersianSelected}" />
 
-            <!-- Add more settings here later if needed -->
+            <!-- Separator -->
+            <BoxView HeightRequest="1" Color="#333333" Margin="0,15,0,15"/>
+
+            <!-- Data Management Section -->
+            <Label Text="Data Management"
+                   TextColor="WhiteSmoke"
+                   FontSize="Large"
+                   FontAttributes="Bold"
+                   Margin="0,0,0,10"/>
+
+            <Label Text="Export your current tasks to a JSON file or import tasks from a previously exported file (this will replace current tasks)."
+                    TextColor="LightGray"
+                    FontSize="Small"
+                    LineBreakMode="WordWrap"/>
+
+            <HorizontalStackLayout Spacing="10" Margin="0,10,0,0">
+                <Button Text="Export Tasks"
+                         Command="{Binding ExportTasksCommand}"
+                         BackgroundColor="#005A9C"
+                         TextColor="WhiteSmoke"/>
+
+                <Button Text="Import Tasks"
+                         Command="{Binding ImportTasksCommand}"
+                         BackgroundColor="#008000"
+                         TextColor="WhiteSmoke"/>
+            </HorizontalStackLayout>
 
         </VerticalStackLayout>
     </ScrollView>
