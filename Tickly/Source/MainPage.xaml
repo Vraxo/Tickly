@@ -12,6 +12,33 @@
         <vm:MainViewModel />
     </ContentPage.BindingContext>
 
+    <!-- Use Shell.TitleView to place Title and Picker side-by-side -->
+    <Shell.TitleView>
+        <Grid ColumnDefinitions="*, Auto" VerticalOptions="FillAndExpand" Margin="0,0,10,0">
+            <Label Grid.Column="0"
+                   Text="Tickly Tasks"
+                   TextColor="{AppThemeBinding Light=Black, Dark=White}"
+                   FontSize="18"
+                   FontAttributes="Bold"
+                   VerticalOptions="Center"
+                   HorizontalOptions="Start"
+                   Margin="10,0,0,0"/>
+
+            <!-- Picker placed directly in TitleView Grid -->
+            <Picker Grid.Column="1"
+                    ItemsSource="{Binding SortOptionsDisplay}"
+                    SelectedItem="{Binding SelectedSortOption}"
+                    BackgroundColor="#1E1E1E"
+                    TextColor="WhiteSmoke"
+                    FontSize="Small"
+                    HorizontalOptions="End"
+                    VerticalOptions="Center"
+                    MinimumWidthRequest="180"
+                    Margin="0,0,5,0"/>
+        </Grid>
+    </Shell.TitleView>
+
+
     <ContentPage.Resources>
         <ResourceDictionary>
             <converters:PriorityToColorConverter x:Key="PriorityColorConverter" />
@@ -65,40 +92,22 @@
                 <Setter Property="SemanticProperties.Hint" Value="Add a new task"/>
             </Style>
 
-            <!-- Style for the Picker - Adjusted Margin -->
-            <Style TargetType="Picker">
-                <Setter Property="BackgroundColor" Value="#1E1E1E"/>
-                <Setter Property="TextColor" Value="WhiteSmoke"/>
-                <!-- TitleColor is not needed if Title is removed -->
-                <!-- <Setter Property="TitleColor" Value="Gray"/> -->
-                <Setter Property="HorizontalOptions" Value="End"/>
-                <Setter Property="VerticalOptions" Value="Center"/>
-                <!-- Center vertically in its row -->
-                <Setter Property="FontSize" Value="Small"/>
-                <Setter Property="Margin" Value="0,5,15,5"/>
-                <!-- Add top/bottom margin, keep right margin -->
-                <Setter Property="MinimumWidthRequest" Value="180"/>
-                <!-- Give it some minimum width -->
-            </Style>
+            <!-- General Picker Style REMOVED -->
 
         </ResourceDictionary>
     </ContentPage.Resources>
 
-    <!-- Main Grid Layout -->
-    <Grid RowDefinitions="Auto,*" ColumnDefinitions="*">
+    <!-- Main Grid Layout - Single Row -->
+    <Grid RowDefinitions="*" ColumnDefinitions="*">
 
-        <!-- Picker for Sorting - Row 0 - Title removed -->
-        <Picker Grid.Row="0" Grid.Column="0"
-                ItemsSource="{Binding SortOptionsDisplay}"
-                SelectedItem="{Binding SelectedSortOption}"/>
-        <!-- Title="Sort by..." REMOVED -->
+        <!-- Picker REMOVED from here -->
 
-        <!-- Task List - Placed in Row 1 -->
-        <CollectionView Grid.Row="1" Grid.Column="0"
+        <!-- Task List - Row 0 -->
+        <CollectionView Grid.Row="0" Grid.Column="0"
                         ItemsSource="{Binding Tasks}"
                         CanReorderItems="True"
-                        Margin="15,0,15,10"
-            SelectionMode="None">
+                        Margin="15,10,15,10"
+                        SelectionMode="None">
 
             <CollectionView.ItemTemplate>
                 <DataTemplate x:DataType="models:TaskItem">
@@ -146,8 +155,8 @@
 
         </CollectionView>
 
-        <!-- Add Button - Remains overlaid -->
-        <Button Grid.Row="0" Grid.RowSpan="2" Grid.Column="0"
+        <!-- Add Button - Row 0 -->
+        <Button Grid.Row="0" Grid.Column="0"
                 Style="{StaticResource AddButtonStyle}"
                 Command="{Binding NavigateToAddPageCommand}"/>
 
