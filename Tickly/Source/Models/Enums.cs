@@ -1,32 +1,29 @@
-﻿// File: Models\Enums.cs
-namespace Tickly.Models;
+﻿namespace Tickly.Models;
 
 public enum TaskPriority
 {
-    High,   // Red
-    Medium, // Orange
-    Low     // Green
+    High,
+    Medium,
+    Low
 }
 
 public enum TaskTimeType
 {
-    None,         // One-time, any time
-    SpecificDate, // Specific date
-    Repeating     // Daily, Alternate, Weekly
+    None,
+    SpecificDate,
+    Repeating
 }
 
 public enum TaskRepetitionType
 {
     Daily,
-    AlternateDay, // Every other day from the start date
+    AlternateDay,
     Weekly
 }
 
-// *** ADDED ENUM ***
 public enum SortOrderType
 {
-    Manual, // Default order as saved/reordered by user
-    PriorityHighFirst, // High -> Low -> Title
-    PriorityLowFirst // Low -> High -> Title
+    Manual,
+    PriorityHighFirst,
+    PriorityLowFirst
 }
-// *** END ADDED ENUM ***

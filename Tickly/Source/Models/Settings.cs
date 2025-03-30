@@ -1,5 +1,4 @@
-﻿// Models/Settings.cs (New File or add to existing Models)
-namespace Tickly.Models;
+﻿namespace Tickly.Models;
 
 public enum CalendarSystemType
 {

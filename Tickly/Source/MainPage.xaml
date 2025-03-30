@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8" ?>
+﻿ // * File: MainPage.xaml---<?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:vm="clr-namespace:Tickly.ViewModels"
@@ -12,7 +12,6 @@
         <vm:MainViewModel />
     </ContentPage.BindingContext>
 
-    <!-- Use Shell.TitleView to place Title and Picker side-by-side -->
     <Shell.TitleView>
         <Grid ColumnDefinitions="*, Auto" VerticalOptions="FillAndExpand" Margin="0,0,10,0">
             <Label Grid.Column="0"
@@ -24,7 +23,6 @@
                    HorizontalOptions="Start"
                    Margin="10,0,0,0"/>
 
-            <!-- Picker placed directly in TitleView Grid -->
             <Picker Grid.Column="1"
                     ItemsSource="{Binding SortOptionsDisplay}"
                     SelectedItem="{Binding SelectedSortOption}"
@@ -44,6 +42,8 @@
             <converters:PriorityToColorConverter x:Key="PriorityColorConverter" />
             <converters:TaskTimeToStringConverter x:Key="TaskTimeConverter" />
             <converters:InverseBooleanConverter x:Key="InverseBooleanConverter" />
+            <converters:IsTaskCompletableTodayConverter x:Key="IsTaskCompletableTodayConverter" />
+
 
             <Style TargetType="Frame" x:Key="PriorityIndicatorFrameStyle">
                 <Setter Property="HeightRequest" Value="12"/>
@@ -92,17 +92,11 @@
                 <Setter Property="SemanticProperties.Hint" Value="Add a new task"/>
             </Style>
 
-            <!-- General Picker Style REMOVED -->
-
         </ResourceDictionary>
     </ContentPage.Resources>
 
-    <!-- Main Grid Layout - Single Row -->
     <Grid RowDefinitions="*" ColumnDefinitions="*">
 
-        <!-- Picker REMOVED from here -->
-
-        <!-- Task List - Row 0 -->
         <CollectionView Grid.Row="0" Grid.Column="0"
                         ItemsSource="{Binding Tasks}"
                         CanReorderItems="True"
@@ -130,22 +124,32 @@
                                 <Label Text="{Binding ., Converter={StaticResource TaskTimeConverter}}" Style="{StaticResource TaskTimeLabelStyle}" />
                             </VerticalStackLayout>
 
-                            <!-- Grid for the Check Circle (MARK TASK DONE AREA) -->
                             <Grid Grid.Column="2"
                                   VerticalOptions="Center"
                                   HorizontalOptions="Center"
                                   Margin="5,0,0,0"
                                   Padding="5">
-                                <!-- FIX: Add Transparent Background to Grid -->
+                                <Grid.Triggers>
+                                    <DataTrigger TargetType="Grid"
+                                                 Binding="{Binding ., Converter={StaticResource IsTaskCompletableTodayConverter}}"
+                                                 Value="False">
+                                        <Setter Property="Opacity" Value="0.4" />
+                                    </DataTrigger>
+                                    <DataTrigger TargetType="Grid"
+                                                 Binding="{Binding ., Converter={StaticResource IsTaskCompletableTodayConverter}}"
+                                                 Value="True">
+                                        <Setter Property="Opacity" Value="1.0" />
+                                    </DataTrigger>
+                                </Grid.Triggers>
                                 <Grid.Background>
                                     <SolidColorBrush Color="Transparent"/>
                                 </Grid.Background>
                                 <Grid.GestureRecognizers>
                                     <TapGestureRecognizer
                                         Command="{Binding Source={RelativeSource AncestorType={x:Type vm:MainViewModel}}, Path=MarkTaskDoneCommand}"
-                                        CommandParameter="{Binding .}"/>
+                                        CommandParameter="{Binding .}"
+                                        IsEnabled="{Binding ., Converter={StaticResource IsTaskCompletableTodayConverter}}"/>
                                 </Grid.GestureRecognizers>
-                                <!-- FIX: Make Border InputTransparent -->
                                 <Border Stroke="{AppThemeBinding Light=Gray, Dark=LightGray}"
                                         StrokeThickness="2"
                                         HeightRequest="24"
@@ -158,7 +162,6 @@
                                     </Border.StrokeShape>
                                 </Border>
                             </Grid>
-                            <!-- End of Check Circle Grid -->
 
                         </Grid>
                     </Grid>
@@ -174,7 +177,6 @@
 
         </CollectionView>
 
-        <!-- Add Button - Row 0 -->
         <Button Grid.Row="0" Grid.Column="0"
                 Style="{StaticResource AddButtonStyle}"
                 Command="{Binding NavigateToAddPageCommand}"/>
