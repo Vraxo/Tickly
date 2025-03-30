@@ -57,7 +57,7 @@ public class TaskTimeToStringConverter : IValueConverter
     private static CultureInfo GetFormatCulture(CalendarSystemType calendarSystem)
     {
         return calendarSystem == CalendarSystemType.Persian
-            ? new("fa-IR")
+            ? new CultureInfo("fa-IR")
             : CultureInfo.InvariantCulture;
     }
 
@@ -103,10 +103,12 @@ public class TaskTimeToStringConverter : IValueConverter
     private static string FormatDate(DateTime date, CalendarSystemType system, CultureInfo formatCulture, string gregorianFormat)
     {
         string? specialDay = GetSpecialDayString(date.Date);
-
-        if (specialDay is not null && (gregorianFormat == DefaultGregorianDateFormat || gregorianFormat == DayAndShortGregorianDateFormat || gregorianFormat == ShortGregorianDateFormat))
+        if (specialDay != null)
         {
-            return specialDay;
+            if (gregorianFormat == DefaultGregorianDateFormat || gregorianFormat == DayAndShortGregorianDateFormat || gregorianFormat == ShortGregorianDateFormat)
+            {
+                return specialDay;
+            }
         }
 
         return system == CalendarSystemType.Persian
@@ -116,28 +118,23 @@ public class TaskTimeToStringConverter : IValueConverter
 
     private static string? GetSpecialDayString(DateTime date)
     {
-        var today = DateTime.Today;
+        DateTime today = DateTime.Today;
         DateTime tomorrow = today.AddDays(1);
 
-        if (date == today)
-        {
-            return TodayString;
-        }
-
-        return date == tomorrow
-            ? TomorrowString
-            : null;
+        if (date == today) return TodayString;
+        if (date == tomorrow) return TomorrowString;
+        return null;
     }
 
     private static string FormatPersianDate(DateTime date, CultureInfo formatCulture, string gregorianFormat)
     {
         try
         {
-            PersianCalendar persianCalendar = new();
-            int year = persianCalendar.GetYear(date);
-            int month = persianCalendar.GetMonth(date);
-            int day = persianCalendar.GetDayOfMonth(date);
-            string dayName = formatCulture.DateTimeFormat.GetAbbreviatedDayName(persianCalendar.GetDayOfWeek(date));
+            PersianCalendar pc = new();
+            int year = pc.GetYear(date);
+            int month = pc.GetMonth(date);
+            int day = pc.GetDayOfMonth(date);
+            string dayName = formatCulture.DateTimeFormat.GetAbbreviatedDayName(pc.GetDayOfWeek(date));
 
             string monthName = month >= 1 && month <= 12
                 ? PersianAbbreviatedMonthNames[month]
@@ -189,7 +186,7 @@ public class TaskTimeToStringConverter : IValueConverter
 
     private static string GetDayName(DayOfWeek? dayOfWeek, CultureInfo formatCulture)
     {
-        if (dayOfWeek is null)
+        if (dayOfWeek == null)
         {
             return string.Empty;
         }

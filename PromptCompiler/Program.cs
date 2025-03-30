@@ -21,7 +21,7 @@
                         continue;
                     }
 
-                    writer.WriteLine("// * File: " + file[(sourceDirectory.Length + 1)..] + "---");
+                    writer.WriteLine("--- File: " + file[(sourceDirectory.Length + 1)..] + "---");
                     writer.WriteLine(File.ReadAllText(file));
                     writer.WriteLine();
                     writer.WriteLine(new string('-', 80));
