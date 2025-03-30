@@ -12,7 +12,6 @@
         <vm:MainViewModel />
     </ContentPage.BindingContext>
 
-    <!-- Use Shell.TitleView to place Title and Picker side-by-side -->
     <Shell.TitleView>
         <Grid ColumnDefinitions="*, Auto" VerticalOptions="FillAndExpand" Margin="0,0,10,0">
             <Label Grid.Column="0"
@@ -24,12 +23,11 @@
                    HorizontalOptions="Start"
                    Margin="10,0,0,0"/>
 
-            <!-- Picker placed directly in TitleView Grid -->
             <Picker Grid.Column="1"
                     ItemsSource="{Binding SortOptionsDisplay}"
                     SelectedItem="{Binding SelectedSortOption}"
                     BackgroundColor="Black"
-                TextColor="WhiteSmoke"
+                    TextColor="WhiteSmoke"
                     FontSize="Small"
                     HorizontalOptions="End"
                     VerticalOptions="Center"
@@ -44,6 +42,7 @@
             <converters:PriorityToColorConverter x:Key="PriorityColorConverter" />
             <converters:TaskTimeToStringConverter x:Key="TaskTimeConverter" />
             <converters:InverseBooleanConverter x:Key="InverseBooleanConverter" />
+            <converters:FutureRepeatingTaskIsEnabledConverter x:Key="FutureRepeatingTaskIsEnabledConverter" />
 
             <Style TargetType="Frame" x:Key="PriorityIndicatorFrameStyle">
                 <Setter Property="HeightRequest" Value="12"/>
@@ -92,17 +91,11 @@
                 <Setter Property="SemanticProperties.Hint" Value="Add a new task"/>
             </Style>
 
-            <!-- General Picker Style REMOVED -->
-
         </ResourceDictionary>
     </ContentPage.Resources>
 
-    <!-- Main Grid Layout - Single Row -->
     <Grid RowDefinitions="*" ColumnDefinitions="*">
 
-        <!-- Picker REMOVED from here -->
-
-        <!-- Task List - Row 0 -->
         <CollectionView Grid.Row="0" Grid.Column="0"
                         ItemsSource="{Binding Tasks}"
                         CanReorderItems="True"
@@ -111,8 +104,24 @@
 
             <CollectionView.ItemTemplate>
                 <DataTemplate x:DataType="models:TaskItem">
-                    <Grid Padding="10, 8"
-                          Opacity="{Binding IsFadingOut, Converter={StaticResource InverseBooleanConverter}}">
+                    <Grid Padding="10, 8" Opacity="{Binding IsFadingOut, Converter={StaticResource InverseBooleanConverter}}">
+                        <Grid.Style>
+                            <Style TargetType="Grid">
+                                <Setter Property="Opacity" Value="1.0" />
+                                <Style.Triggers>
+                                    <DataTrigger TargetType="Grid" Value="False">
+                                        <DataTrigger.Binding>
+                                            <MultiBinding Converter="{StaticResource FutureRepeatingTaskIsEnabledConverter}">
+                                                <Binding Path="TimeType" />
+                                                <Binding Path="DueDate" />
+                                            </MultiBinding>
+                                        </DataTrigger.Binding>
+                                        <Setter Property="Opacity" Value="0.5" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Grid.Style>
+
                         <Grid ColumnSpacing="10">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
@@ -130,13 +139,17 @@
                                 <Label Text="{Binding ., Converter={StaticResource TaskTimeConverter}}" Style="{StaticResource TaskTimeLabelStyle}" />
                             </VerticalStackLayout>
 
-                            <!-- Grid for the Check Circle (MARK TASK DONE AREA) -->
                             <Grid Grid.Column="2"
                                   VerticalOptions="Center"
                                   HorizontalOptions="Center"
                                   Margin="5,0,0,0"
                                   Padding="5">
-                                <!-- FIX: Add Transparent Background to Grid -->
+                                <Grid.IsEnabled>
+                                    <MultiBinding Converter="{StaticResource FutureRepeatingTaskIsEnabledConverter}">
+                                        <Binding Path="TimeType" />
+                                        <Binding Path="DueDate" />
+                                    </MultiBinding>
+                                </Grid.IsEnabled>
                                 <Grid.Background>
                                     <SolidColorBrush Color="Transparent"/>
                                 </Grid.Background>
@@ -145,7 +158,6 @@
                                         Command="{Binding Source={RelativeSource AncestorType={x:Type vm:MainViewModel}}, Path=MarkTaskDoneCommand}"
                                         CommandParameter="{Binding .}"/>
                                 </Grid.GestureRecognizers>
-                                <!-- FIX: Make Border InputTransparent -->
                                 <Border Stroke="{AppThemeBinding Light=Gray, Dark=LightGray}"
                                         StrokeThickness="2"
                                         HeightRequest="24"
@@ -158,8 +170,6 @@
                                     </Border.StrokeShape>
                                 </Border>
                             </Grid>
-                            <!-- End of Check Circle Grid -->
-
                         </Grid>
                     </Grid>
                 </DataTemplate>
@@ -174,7 +184,6 @@
 
         </CollectionView>
 
-        <!-- Add Button - Row 0 -->
         <Button Grid.Row="0" Grid.Column="0"
                 Style="{StaticResource AddButtonStyle}"
                 Command="{Binding NavigateToAddPageCommand}"/>
