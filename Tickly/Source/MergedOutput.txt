@@ -1,4 +1,4 @@
-// File: MainPage.xaml
+--- File: MainPage.xaml---
 <?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
@@ -29,8 +29,8 @@
             <Picker Grid.Column="1"
                     ItemsSource="{Binding SortOptionsDisplay}"
                     SelectedItem="{Binding SelectedSortOption}"
-                    BackgroundColor="#1E1E1E"
-                    TextColor="WhiteSmoke"
+                    BackgroundColor="Black"
+                TextColor="WhiteSmoke"
                     FontSize="Small"
                     HorizontalOptions="End"
                     VerticalOptions="Center"
@@ -130,18 +130,37 @@
                                 <Label Text="{Binding Title}" Style="{StaticResource TaskTitleLabelStyle}" />
                                 <Label Text="{Binding ., Converter={StaticResource TaskTimeConverter}}" Style="{StaticResource TaskTimeLabelStyle}" />
                             </VerticalStackLayout>
-                            <Grid Grid.Column="2" VerticalOptions="Center" HorizontalOptions="Center" Margin="5,0,0,0" Padding="5">
+
+                            <!-- Grid for the Check Circle (MARK TASK DONE AREA) -->
+                            <Grid Grid.Column="2"
+                                  VerticalOptions="Center"
+                                  HorizontalOptions="Center"
+                                  Margin="5,0,0,0"
+                                  Padding="5">
+                                <!-- FIX: Add Transparent Background to Grid -->
+                                <Grid.Background>
+                                    <SolidColorBrush Color="Transparent"/>
+                                </Grid.Background>
                                 <Grid.GestureRecognizers>
                                     <TapGestureRecognizer
                                         Command="{Binding Source={RelativeSource AncestorType={x:Type vm:MainViewModel}}, Path=MarkTaskDoneCommand}"
                                         CommandParameter="{Binding .}"/>
                                 </Grid.GestureRecognizers>
-                                <Border Stroke="{AppThemeBinding Light=Gray, Dark=LightGray}" StrokeThickness="2" HeightRequest="24" WidthRequest="24" VerticalOptions="Center" HorizontalOptions="Center">
+                                <!-- FIX: Make Border InputTransparent -->
+                                <Border Stroke="{AppThemeBinding Light=Gray, Dark=LightGray}"
+                                        StrokeThickness="2"
+                                        HeightRequest="24"
+                                        WidthRequest="24"
+                                        VerticalOptions="Center"
+                                        HorizontalOptions="Center"
+                                        InputTransparent="True">
                                     <Border.StrokeShape>
                                         <Ellipse/>
                                     </Border.StrokeShape>
                                 </Border>
                             </Grid>
+                            <!-- End of Check Circle Grid -->
+
                         </Grid>
                     </Grid>
                 </DataTemplate>
@@ -167,7 +186,7 @@
 
 --------------------------------------------------------------------------------
 
-// File: MainPage.xaml.cs
+--- File: MainPage.xaml.cs---
 // File: MainPage.xaml.cs
 namespace Tickly;
 
@@ -181,7 +200,7 @@ public partial class MainPage : ContentPage
 
 --------------------------------------------------------------------------------
 
-// File: Converters\Converters.cs
+--- File: Converters\Converters.cs---
 // Converters/Converters.cs
 using System;
 using System.Globalization;
@@ -395,7 +414,7 @@ public class InverseBooleanConverter : IValueConverter
 
 --------------------------------------------------------------------------------
 
-// File: Messages\CalendarSettingsChangedMessage.cs
+--- File: Messages\CalendarSettingsChangedMessage.cs---
 // Messages/CalendarSettingChangedMessage.cs
 using CommunityToolkit.Mvvm.Messaging.Messages;
 
@@ -415,7 +434,7 @@ public class CalendarSettingChangedMessage : ValueChangedMessage<bool> // Value 
 
 --------------------------------------------------------------------------------
 
-// File: Messages\TaskMessages.cs
+--- File: Messages\TaskMessages.cs---
 // File: Messages/TaskMessages.cs (Add to this existing file)
 using CommunityToolkit.Mvvm.Messaging.Messages;
 using Tickly.Models;
@@ -454,7 +473,7 @@ public class TasksReloadRequestedMessage : RequestMessage<bool> // Can just use 
 
 --------------------------------------------------------------------------------
 
-// File: Models\Enums.cs
+--- File: Models\Enums.cs---
 // File: Models\Enums.cs
 namespace Tickly.Models;
 
@@ -490,7 +509,7 @@ public enum SortOrderType
 
 --------------------------------------------------------------------------------
 
-// File: Models\Settings.cs
+--- File: Models\Settings.cs---
 // Models/Settings.cs (New File or add to existing Models)
 namespace Tickly.Models;
 
@@ -502,7 +521,7 @@ public enum CalendarSystemType
 
 --------------------------------------------------------------------------------
 
-// File: Models\TaskItem.cs
+--- File: Models\TaskItem.cs---
 // Models/TaskItem.cs
 using CommunityToolkit.Mvvm.ComponentModel;
 using System;
@@ -573,7 +592,7 @@ public partial class TaskItem : ObservableObject
 
 --------------------------------------------------------------------------------
 
-// File: Services\AppSettings.cs
+--- File: Services\AppSettings.cs---
 // Services/AppSettings.cs
 using Microsoft.Maui.Storage; // Required for Preferences
 using System.Diagnostics;
@@ -624,7 +643,7 @@ namespace Tickly.Services
 
 --------------------------------------------------------------------------------
 
-// File: Utils\DateUtils.cs
+--- File: Utils\DateUtils.cs---
 // Utils/DateUtils.cs
 using System;
 
@@ -687,7 +706,7 @@ public static class DateUtils
 
 --------------------------------------------------------------------------------
 
-// File: ViewModels\MainViewModel.cs
+--- File: ViewModels\MainViewModel.cs---
 // File: ViewModels\MainViewModel.cs
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -888,7 +907,7 @@ public partial class MainViewModel : ObservableObject
 
 --------------------------------------------------------------------------------
 
-// File: ViewModels\SettingsViewModel.cs
+--- File: ViewModels\SettingsViewModel.cs---
 // File: ViewModels/SettingsViewModel.cs
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input; // Needed for RelayCommand
@@ -1117,7 +1136,7 @@ namespace Tickly.ViewModels
 
 --------------------------------------------------------------------------------
 
-// File: Views\AddTaskPopupPage.xaml
+--- File: Views\AddTaskPopupPage.xaml---
 <?xml version="1.0" encoding="utf-8" ?>
 <!-- Views/AddTaskPopupPage.xaml -->
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
@@ -1241,7 +1260,7 @@ namespace Tickly.ViewModels
 
 --------------------------------------------------------------------------------
 
-// File: Views\AddTaskPopupPage.xaml.cs
+--- File: Views\AddTaskPopupPage.xaml.cs---
 // File: Views\AddTaskPopupPage.xaml.cs
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Messaging;
@@ -1652,7 +1671,7 @@ namespace Tickly.Views
 
 --------------------------------------------------------------------------------
 
-// File: Views\SettingsPage.xaml
+--- File: Views\SettingsPage.xaml---
 <?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
@@ -1722,7 +1741,7 @@ namespace Tickly.Views
 
 --------------------------------------------------------------------------------
 
-// File: Views\SettingsPage.xaml.cs
+--- File: Views\SettingsPage.xaml.cs---
 // Views/SettingsPage.xaml.cs (New File)
 namespace Tickly.Views;
 

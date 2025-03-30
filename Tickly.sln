@@ -7,6 +7,11 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Tickly", "Tickly\Tickly.csp
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PromptCompiler", "PromptCompiler\PromptCompiler.csproj", "{553F20A4-550D-47BD-8FF8-0EE870788782}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{9BB1D0B7-F2A6-49E6-91B8-17054FE6C9B2}"
+	ProjectSection(SolutionItems) = preProject
+		.editorconfig = .editorconfig
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -17,6 +22,7 @@ Global
 		{DC1F9AAA-9144-48AC-867F-D33D73A2793A}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{DC1F9AAA-9144-48AC-867F-D33D73A2793A}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{DC1F9AAA-9144-48AC-867F-D33D73A2793A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{DC1F9AAA-9144-48AC-867F-D33D73A2793A}.Release|Any CPU.Deploy.0 = Release|Any CPU
 		{553F20A4-550D-47BD-8FF8-0EE870788782}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{553F20A4-550D-47BD-8FF8-0EE870788782}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{553F20A4-550D-47BD-8FF8-0EE870788782}.Release|Any CPU.ActiveCfg = Release|Any CPU

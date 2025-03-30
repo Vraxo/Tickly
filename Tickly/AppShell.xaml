@@ -3,104 +3,40 @@
     x:Class="Tickly.AppShell"
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-    xmlns:views="clr-namespace:Tickly.Views"
     xmlns:local="clr-namespace:Tickly"
-    FlyoutBehavior="Flyout"
-    BackgroundColor="Black"
-    Title="Tickly">
+    xmlns:views="clr-namespace:Tickly.Views"
+    Shell.FlyoutBehavior="Flyout"
+    Shell.BackgroundColor="Black"
+    Shell.TitleColor="{AppThemeBinding Light=Black, Dark=White}"
+    Shell.DisabledColor="#B4FFFFFF"
+    Shell.UnselectedColor="#95FFFFFF"
+    Shell.FlyoutBackgroundColor="Black">
 
-    <!-- Define Flyout Header (Optional) -->
-    <!-- Example:
     <Shell.FlyoutHeader>
-        <Border Padding="15" BackgroundColor="#1A1A1A">
-            <Label Text="Tickly Menu"
-                   TextColor="WhiteSmoke"
-                   FontSize="18"
-                   FontAttributes="Bold"
-                   HorizontalTextAlignment="Center"
-                   VerticalTextAlignment="Center"/>
-        </Border>
+        <ContentView>
+            <ContentView.Padding>
+                <OnPlatform x:TypeArguments="Thickness">
+                    <On Platform="Android" Value="0,40,0,0"/>
+                    <On Platform="iOS" Value="0,20,0,0"/>
+                    <On Platform="WinUI" Value="0,0,0,0"/>
+                    <On Platform="MacCatalyst" Value="0,0,0,0"/>
+                </OnPlatform>
+            </ContentView.Padding>
+        </ContentView>
     </Shell.FlyoutHeader>
-    -->
 
-    <!-- Define Flyout Items -->
-
-    <!-- Home/Tasks Page -->
-    <FlyoutItem Title="Home" Route="MainPageRoute">
-        <!-- Provide an icon if available, e.g., FlyoutIcon="home_icon.png" -->
+    <FlyoutItem Title="Tasks" Icon="icon_list.png">
         <ShellContent
             Title="Tasks"
             ContentTemplate="{DataTemplate local:MainPage}"
             Route="MainPage" />
     </FlyoutItem>
 
-    <!-- Settings Page -->
-    <FlyoutItem Title="Settings" Route="SettingsPageRoute">
-        <!-- Provide an icon if available, e.g., FlyoutIcon="settings_icon.png" -->
+    <FlyoutItem Title="Settings" Icon="icon_settings.png">
         <ShellContent
             Title="Settings"
             ContentTemplate="{DataTemplate views:SettingsPage}"
             Route="SettingsPage" />
     </FlyoutItem>
-
-    <!-- Add any other FlyoutItems or MenuItems below -->
-
-
-    <!-- *** ItemTemplate FOR PADDING *** -->
-    <Shell.ItemTemplate>
-        <DataTemplate>
-            <!-- Outer Grid container for each FlyoutItem -->
-            <Grid x:Name="FlyoutItemGrid">
-                <!-- Standard padding inside the item -->
-                <Grid.Padding>
-                    <OnPlatform x:TypeArguments="Thickness" Default="10,5,10,5" />
-                </Grid.Padding>
-                <!-- Margin applied outside the item container -->
-                <Grid.Margin>
-                    <OnPlatform x:TypeArguments="Thickness">
-                        <!-- INCREASED top MARGIN for Android -->
-                        <On Platform="Android" Value="0,40,0,0" />
-                        <!-- Adjust '40' as needed for visual spacing -->
-                    </OnPlatform>
-                </Grid.Margin>
-
-                <!-- Standard Flyout Item Content (Icon and Title) -->
-                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
-                    <!-- Icon Placeholder -->
-                    <Image Source="{Binding FlyoutIcon}"
-                           HeightRequest="20" WidthRequest="20"
-                           Margin="5,0,0,0"
-                           VerticalOptions="Center"/>
-                    <!-- Title Label (Check this line extremely carefully in your file) -->
-                    <Label Grid.Column="1"
-                           Text="{Binding Title}"
-                           TextColor="WhiteSmoke"
-                           VerticalTextAlignment="Center" />
-                    <!-- THE PREVIOUS LINE MUST END EXACTLY LIKE THIS: /> -->
-                    <!-- NO extra characters like '<' should be after the /> -->
-                </Grid>
-                <!-- Closes inner Grid -->
-            </Grid>
-            <!-- Closes outer Grid -->
-        </DataTemplate>
-    </Shell.ItemTemplate>
-    <!-- *** END OF ItemTemplate *** -->
-
-    <!-- Optional: Define custom MenuItemTemplate if needed -->
-    <!-- Example MenuItemTemplate:
-    <Shell.MenuItemTemplate>
-        <DataTemplate>
-            <Grid ColumnDefinitions="Auto,*" Padding="10, 5" ColumnSpacing="10">
-                <Image Source="{Binding Icon}"
-                       HeightRequest="20" WidthRequest="20"
-                       VerticalOptions="Center"/>
-                <Label Grid.Column="1"
-                       Text="{Binding Text}"
-                       TextColor="WhiteSmoke"
-                       VerticalTextAlignment="Center" />
-            </Grid>
-        </DataTemplate>
-    </Shell.MenuItemTemplate>
-    -->
 
 </Shell>
