@@ -1,12 +1,12 @@
 ﻿<?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
-             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-             xmlns:vm="clr-namespace:Tickly.ViewModels"
-             xmlns:models="clr-namespace:Tickly.Models"
-             xmlns:converters="clr-namespace:Tickly.Converters"
-             x:Class="Tickly.MainPage"
-             BackgroundColor="Black"
-             Title="Tickly Tasks">
+         xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+         xmlns:vm="clr-namespace:Tickly.ViewModels"
+         xmlns:models="clr-namespace:Tickly.Models"
+         xmlns:converters="clr-namespace:Tickly.Converters"
+         x:Class="Tickly.MainPage"
+         BackgroundColor="Black"
+         Title="Tickly Tasks">
 
     <ContentPage.BindingContext>
         <vm:MainViewModel />
@@ -15,24 +15,24 @@
     <Shell.TitleView>
         <Grid ColumnDefinitions="*, Auto" VerticalOptions="FillAndExpand" Margin="0,0,10,0">
             <Label Grid.Column="0"
-                   Text="Tickly Tasks"
-                   TextColor="{AppThemeBinding Light=Black, Dark=White}"
-                   FontSize="18"
-                   FontAttributes="Bold"
-                   VerticalOptions="Center"
-                   HorizontalOptions="Start"
-                   Margin="10,0,0,0"/>
+               Text="Tickly Tasks"
+               TextColor="{AppThemeBinding Light=Black, Dark=White}"
+               FontSize="18"
+               FontAttributes="Bold"
+               VerticalOptions="Center"
+               HorizontalOptions="Start"
+               Margin="10,0,0,0"/>
 
             <Picker Grid.Column="1"
-                    ItemsSource="{Binding SortOptionsDisplay}"
-                    SelectedItem="{Binding SelectedSortOption}"
-                    BackgroundColor="Black"
-                    TextColor="WhiteSmoke"
-                    FontSize="Small"
-                    HorizontalOptions="End"
-                    VerticalOptions="Center"
-                    MinimumWidthRequest="180"
-                    Margin="0,0,5,0"/>
+                ItemsSource="{Binding SortOptionsDisplay}"
+                SelectedItem="{Binding SelectedSortOption}"
+                BackgroundColor="Black"
+                TextColor="WhiteSmoke"
+                FontSize="Small"
+                HorizontalOptions="End"
+                VerticalOptions="Center"
+                MinimumWidthRequest="180"
+                Margin="0,0,5,0"/>
         </Grid>
     </Shell.TitleView>
 
@@ -97,10 +97,10 @@
     <Grid RowDefinitions="*" ColumnDefinitions="*">
 
         <CollectionView Grid.Row="0" Grid.Column="0"
-                        ItemsSource="{Binding Tasks}"
-                        CanReorderItems="True"
-                        Margin="15,10,15,10"
-                        SelectionMode="None">
+                    ItemsSource="{Binding Tasks}"
+                    CanReorderItems="True"
+                    Margin="15,10,15,0"
+                    SelectionMode="None">
 
             <CollectionView.ItemTemplate>
                 <DataTemplate x:DataType="models:TaskItem">
@@ -132,18 +132,18 @@
                             <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
                                 <VerticalStackLayout.GestureRecognizers>
                                     <TapGestureRecognizer
-                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:MainViewModel}}, Path=NavigateToEditPageCommand}"
-                                        CommandParameter="{Binding .}" />
+                                    Command="{Binding Source={RelativeSource AncestorType={x:Type vm:MainViewModel}}, Path=NavigateToEditPageCommand}"
+                                    CommandParameter="{Binding .}" />
                                 </VerticalStackLayout.GestureRecognizers>
                                 <Label Text="{Binding Title}" Style="{StaticResource TaskTitleLabelStyle}" />
                                 <Label Text="{Binding ., Converter={StaticResource TaskTimeConverter}}" Style="{StaticResource TaskTimeLabelStyle}" />
                             </VerticalStackLayout>
 
                             <Grid Grid.Column="2"
-                                  VerticalOptions="Center"
-                                  HorizontalOptions="Center"
-                                  Margin="5,0,0,0"
-                                  Padding="5">
+                              VerticalOptions="Center"
+                              HorizontalOptions="Center"
+                              Margin="5,0,0,0"
+                              Padding="5">
                                 <Grid.IsEnabled>
                                     <MultiBinding Converter="{StaticResource FutureRepeatingTaskIsEnabledConverter}">
                                         <Binding Path="TimeType" />
@@ -155,16 +155,16 @@
                                 </Grid.Background>
                                 <Grid.GestureRecognizers>
                                     <TapGestureRecognizer
-                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:MainViewModel}}, Path=MarkTaskDoneCommand}"
-                                        CommandParameter="{Binding .}"/>
+                                    Command="{Binding Source={RelativeSource AncestorType={x:Type vm:MainViewModel}}, Path=MarkTaskDoneCommand}"
+                                    CommandParameter="{Binding .}"/>
                                 </Grid.GestureRecognizers>
                                 <Border Stroke="{AppThemeBinding Light=Gray, Dark=LightGray}"
-                                        StrokeThickness="2"
-                                        HeightRequest="24"
-                                        WidthRequest="24"
-                                        VerticalOptions="Center"
-                                        HorizontalOptions="Center"
-                                        InputTransparent="True">
+                                    StrokeThickness="2"
+                                    HeightRequest="24"
+                                    WidthRequest="24"
+                                    VerticalOptions="Center"
+                                    HorizontalOptions="Center"
+                                    InputTransparent="True">
                                     <Border.StrokeShape>
                                         <Ellipse/>
                                     </Border.StrokeShape>
@@ -182,11 +182,15 @@
                 </StackLayout>
             </CollectionView.EmptyView>
 
+            <CollectionView.Footer>
+                <ContentView HeightRequest="90" BackgroundColor="Transparent"/>
+            </CollectionView.Footer>
+
         </CollectionView>
 
         <Button Grid.Row="0" Grid.Column="0"
-                Style="{StaticResource AddButtonStyle}"
-                Command="{Binding NavigateToAddPageCommand}"/>
+            Style="{StaticResource AddButtonStyle}"
+            Command="{Binding NavigateToAddPageCommand}"/>
 
     </Grid>
 
