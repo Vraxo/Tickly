@@ -1,225 +1,268 @@
-﻿// File: ViewModels/SettingsViewModel.cs
+﻿using System.Diagnostics;
+using System.Text.Json;
 using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input; // Needed for RelayCommand
+using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
-using Microsoft.Maui.Storage;
-using System.ComponentModel;
-using System.Diagnostics;
 using Tickly.Messages;
 using Tickly.Models;
 using Tickly.Services;
-using System.Collections.Generic; // For EqualityComparer
-using System.IO; // For Path, File
-using System.Text.Json; // For JsonSerializer validation
-using System.Threading.Tasks; // For Task
-using Microsoft.Maui.ApplicationModel; // For Permissions, Share, FilePicker
 
-namespace Tickly.ViewModels
+namespace Tickly.ViewModels;
+
+public sealed partial class SettingsViewModel : ObservableObject
 {
-    public partial class SettingsViewModel : ObservableObject
+    private bool _isGregorianSelected;
+    private bool _isPersianSelected;
+    private readonly string _applicationTasksFilePath;
+
+    public bool IsGregorianSelected
     {
-        [ObservableProperty]
-        private bool _isGregorianSelected;
-
-        [ObservableProperty]
-        private bool _isPersianSelected;
-
-        // Path to the app's internal tasks file
-        private readonly string _appTasksFilePath;
-
-        public SettingsViewModel()
+        get => _isGregorianSelected;
+        set
         {
-            _appTasksFilePath = Path.Combine(FileSystem.AppDataDirectory, "tasks.json");
-
-            LoadSettings();
-            this.PropertyChanged += SettingsViewModel_PropertyChanged;
-        }
-
-
-        private void LoadSettings()
-        {
-            var currentSystem = AppSettings.SelectedCalendarSystem;
-            Debug.WriteLine($"SettingsViewModel: Loading initial state from AppSettings. CurrentSystem='{currentSystem}'");
-            UpdateProperty(ref _isGregorianSelected, currentSystem == CalendarSystemType.Gregorian, nameof(IsGregorianSelected));
-            UpdateProperty(ref _isPersianSelected, currentSystem == CalendarSystemType.Persian, nameof(IsPersianSelected));
-        }
-
-        private void SettingsViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
-        {
-            CalendarSystemType newSystem;
-
-            if (e.PropertyName == nameof(IsGregorianSelected) && IsGregorianSelected)
+            if (SetProperty(ref _isGregorianSelected, value) && value)
             {
-                newSystem = CalendarSystemType.Gregorian;
-                if (IsPersianSelected) UpdateProperty(ref _isPersianSelected, false, nameof(IsPersianSelected));
-            }
-            else if (e.PropertyName == nameof(IsPersianSelected) && IsPersianSelected)
-            {
-                newSystem = CalendarSystemType.Persian;
-                if (IsGregorianSelected) UpdateProperty(ref _isGregorianSelected, false, nameof(IsGregorianSelected));
-            }
-            else { return; } // Only handle changes to these specific boolean properties
-
-            // Check if the AppSetting actually needs changing
-            if (AppSettings.SelectedCalendarSystem != newSystem)
-            {
-                Debug.WriteLine($"SettingsViewModel: PropertyChanged detected user change to {newSystem}. Saving and notifying.");
-                AppSettings.SelectedCalendarSystem = newSystem;
-                Preferences.Set(AppSettings.CalendarSystemKey, (int)newSystem);
-                WeakReferenceMessenger.Default.Send(new CalendarSettingChangedMessage());
-                Debug.WriteLine("SettingsViewModel: Sent CalendarSettingChangedMessage.");
+                OnCalendarSelectionChanged(true);
             }
         }
+    }
 
-        // *** NEW Export Command ***
-        [RelayCommand]
-        private async Task ExportTasksAsync()
+    public bool IsPersianSelected
+    {
+        get => _isPersianSelected;
+        set
         {
-            Debug.WriteLine("ExportTasksAsync: Initiating export...");
-            try
+            if (SetProperty(ref _isPersianSelected, value) && value)
             {
-                if (!File.Exists(_appTasksFilePath))
+                OnCalendarSelectionChanged(false);
+            }
+        }
+    }
+
+    public SettingsViewModel()
+    {
+        _applicationTasksFilePath = Path.Combine(FileSystem.AppDataDirectory, "tasks.json");
+        LoadSettings();
+    }
+
+    private void OnCalendarSelectionChanged(bool isGregorianNowSelected)
+    {
+        if (isGregorianNowSelected)
+        {
+            SetProperty(ref _isPersianSelected, false, nameof(IsPersianSelected));
+            UpdateCalendarSetting(CalendarSystemType.Gregorian);
+        }
+        else
+        {
+            SetProperty(ref _isGregorianSelected, false, nameof(IsGregorianSelected));
+            UpdateCalendarSetting(CalendarSystemType.Persian);
+        }
+    }
+
+    private void UpdateCalendarSetting(CalendarSystemType newSystem)
+    {
+        if (AppSettings.SelectedCalendarSystem == newSystem)
+        {
+            return;
+        }
+
+        AppSettings.SelectedCalendarSystem = newSystem;
+        Preferences.Set(AppSettings.CalendarSystemKey, (int)newSystem);
+        WeakReferenceMessenger.Default.Send(new CalendarSettingChangedMessage());
+    }
+
+    private void LoadSettings()
+    {
+        CalendarSystemType currentSystem = AppSettings.SelectedCalendarSystem;
+
+        bool shouldBeGregorian = currentSystem == CalendarSystemType.Gregorian;
+        bool shouldBePersian = currentSystem == CalendarSystemType.Persian;
+
+        SetProperty(ref _isGregorianSelected, shouldBeGregorian, nameof(IsGregorianSelected));
+        SetProperty(ref _isPersianSelected, shouldBePersian, nameof(IsPersianSelected));
+
+        if (!_isGregorianSelected && !_isPersianSelected)
+        {
+            SetProperty(ref _isGregorianSelected, true, nameof(IsGregorianSelected));
+            AppSettings.SelectedCalendarSystem = CalendarSystemType.Gregorian;
+            Preferences.Set(AppSettings.CalendarSystemKey, (int)CalendarSystemType.Gregorian);
+        }
+    }
+
+    [RelayCommand]
+    private async Task ExportTasksAsync()
+    {
+        string temporaryExportPath = string.Empty;
+
+        try
+        {
+            if (!File.Exists(_applicationTasksFilePath))
+            {
+                await SettingsViewModel.ShowAlertAsync("Export Failed", "No tasks file exists to export.", "OK");
+                return;
+            }
+
+            string exportFilename = $"Tickly-Tasks-{DateTime.Now:yyyy--MM--dd}.json";
+            temporaryExportPath = Path.Combine(FileSystem.CacheDirectory, exportFilename);
+
+            File.Copy(_applicationTasksFilePath, temporaryExportPath, true);
+
+            ShareFileRequest request = new()
+            {
+                Title = "Export Tickly Tasks",
+                File = new(temporaryExportPath, "application/json")
+            };
+
+            await Share.RequestAsync(request);
+        }
+        catch (Exception exception)
+        {
+            await SettingsViewModel.ShowAlertAsync("Export Error", $"An error occurred during export: {exception.Message}", "OK");
+        }
+        finally
+        {
+            if (!string.IsNullOrEmpty(temporaryExportPath) && File.Exists(temporaryExportPath))
+            {
+                try
                 {
-                    Debug.WriteLine("ExportTasksAsync: No tasks file found to export.");
-                    await ShowAlert("Export Failed", "No tasks file exists to export.", "OK");
-                    return;
+                    File.Delete(temporaryExportPath);
                 }
-
-                // Use MAUI Share API to let user choose destination
-                await Share.RequestAsync(new ShareFileRequest
+                catch (Exception cleanupException)
                 {
-                    Title = "Export Tickly Tasks",
-                    File = new ShareFile(_appTasksFilePath, "application/json") // Specify MIME type
+                    Debug.WriteLine($"Error cleaning up temporary file: {cleanupException.Message}");
+                }
+            }
+        }
+    }
+
+    [RelayCommand]
+    private async Task ImportTasksAsync()
+    {
+        try
+        {
+            FilePickerFileType customFileType = new(
+                new Dictionary<DevicePlatform, IEnumerable<string>>
+                {
+                    [DevicePlatform.iOS] = ["public.json"],
+                    [DevicePlatform.Android] = ["application/json"],
+                    [DevicePlatform.WinUI] = [".json"],
+                    [DevicePlatform.MacCatalyst] = ["json"]
                 });
 
-                Debug.WriteLine("ExportTasksAsync: Share request completed (user may have saved or cancelled).");
-                // Optionally show a confirmation, but Share doesn't give explicit success feedback
-                // await ShowAlert("Export", "Share/Save dialog opened.", "OK");
-
-            }
-            catch (Exception ex)
+            PickOptions options = new()
             {
-                Debug.WriteLine($"ExportTasksAsync: Error during export: {ex.Message}");
-                await ShowAlert("Export Error", $"An error occurred during export: {ex.Message}", "OK");
-            }
-        }
-        // *** END Export Command ***
+                PickerTitle = "Select Tickly tasks JSON file",
+                FileTypes = customFileType,
+            };
 
-        // *** NEW Import Command ***
-        [RelayCommand]
-        private async Task ImportTasksAsync()
-        {
-            Debug.WriteLine("ImportTasksAsync: Initiating import...");
+            FileResult? result = await FilePicker.PickAsync(options);
+
+            if (result is null)
+            {
+                return;
+            }
+
+            string fileContent;
+
             try
             {
-                var customFileType = new FilePickerFileType(
-                    new Dictionary<DevicePlatform, IEnumerable<string>>
-                    {
-                        { DevicePlatform.iOS, new[] { "public.json" } }, // UTType
-                        { DevicePlatform.Android, new[] { "application/json" } }, // MIME type
-                        { DevicePlatform.WinUI, new[] { ".json" } }, // file extension
-                        { DevicePlatform.MacCatalyst, new[] { "json" } }, // UTType
-                    });
-
-                var options = new PickOptions
-                {
-                    PickerTitle = "Select Tickly tasks JSON file",
-                    FileTypes = customFileType,
-                };
-
-                var result = await FilePicker.PickAsync(options);
-                if (result == null)
-                {
-                    Debug.WriteLine("ImportTasksAsync: File picking cancelled by user.");
-                    return;
-                }
-
-                Debug.WriteLine($"ImportTasksAsync: File picked: {result.FullPath}");
-
-                // --- Basic Validation ---
-                string fileContent;
-                try
-                {
-                    fileContent = await File.ReadAllTextAsync(result.FullPath);
-                    // Attempt deserialization just to see if it's plausible JSON structure
-                    _ = JsonSerializer.Deserialize<List<TaskItem>>(fileContent);
-                    Debug.WriteLine("ImportTasksAsync: File content successfully deserialized (basic validation passed).");
-                }
-                catch (JsonException jsonEx)
-                {
-                    Debug.WriteLine($"ImportTasksAsync: Invalid JSON format: {jsonEx.Message}");
-                    await ShowAlert("Import Failed", "The selected file is not a valid JSON task file.", "OK");
-                    return;
-                }
-                catch (Exception readEx)
-                {
-                    Debug.WriteLine($"ImportTasksAsync: Error reading selected file: {readEx.Message}");
-                    await ShowAlert("Import Failed", $"Could not read the selected file: {readEx.Message}", "OK");
-                    return;
-                }
-
-                // --- Confirmation ---
-                bool confirmed = await ShowConfirmation("Confirm Import", "This will REPLACE your current tasks with the content of the selected file. This cannot be undone. Proceed?", "Replace", "Cancel");
-
-                if (!confirmed)
-                {
-                    Debug.WriteLine("ImportTasksAsync: Import cancelled by user confirmation.");
-                    return;
-                }
-
-                // --- Replace File ---
-                try
-                {
-                    File.Copy(result.FullPath, _appTasksFilePath, true); // Overwrite existing file
-                    Debug.WriteLine($"ImportTasksAsync: Successfully copied selected file to {_appTasksFilePath}");
-
-                    // --- Trigger Reload ---
-                    WeakReferenceMessenger.Default.Send(new TasksReloadRequestedMessage());
-                    Debug.WriteLine("ImportTasksAsync: Sent TasksReloadRequestedMessage.");
-
-                    await ShowAlert("Import Successful", "Tasks imported successfully. The task list has been updated.", "OK");
-                }
-                catch (Exception copyEx)
-                {
-                    Debug.WriteLine($"ImportTasksAsync: Error copying file: {copyEx.Message}");
-                    await ShowAlert("Import Failed", $"Could not replace the tasks file: {copyEx.Message}", "OK");
-                }
+                fileContent = await File.ReadAllTextAsync(result.FullPath);
+                _ = JsonSerializer.Deserialize<List<TaskItem>>(fileContent);
             }
-            catch (Exception ex)
+            catch (JsonException jsonException)
             {
-                Debug.WriteLine($"ImportTasksAsync: General error during import: {ex.Message}");
-                await ShowAlert("Import Error", $"An unexpected error occurred during import: {ex.Message}", "OK");
+                await SettingsViewModel.ShowAlertAsync("Import Failed", "The selected file is not a valid JSON task file.", "OK");
+                Debug.WriteLine($"Invalid JSON format during import: {jsonException.Message}");
+                return;
             }
-        }
-        // *** END Import Command ***
-
-
-        // Helper for showing alerts (slight MVVM violation for simplicity)
-        private async Task ShowAlert(string title, string message, string cancel)
-        {
-            if (Application.Current?.MainPage != null)
+            catch (Exception readException)
             {
-                await Application.Current.MainPage.DisplayAlert(title, message, cancel);
+                await SettingsViewModel.ShowAlertAsync("Import Failed", $"Could not read the selected file: {readException.Message}", "OK");
+                Debug.WriteLine($"Error reading selected file for import: {readException.Message}");
+                return;
             }
-        }
 
-        // Helper for showing confirmation dialog
-        private async Task<bool> ShowConfirmation(string title, string message, string accept, string cancel)
-        {
-            if (Application.Current?.MainPage != null)
+            bool confirmed = await ShowConfirmationAsync(
+                "Confirm Import",
+                "This will REPLACE your current tasks with the content of the selected file. This cannot be undone. Proceed?",
+                "Replace",
+                "Cancel");
+
+            if (!confirmed)
             {
-                return await Application.Current.MainPage.DisplayAlert(title, message, accept, cancel);
+                return;
             }
-            return false; // Cannot show dialog
+
+            try
+            {
+                File.Copy(result.FullPath, _applicationTasksFilePath, true);
+                WeakReferenceMessenger.Default.Send(new TasksReloadRequestedMessage());
+                await SettingsViewModel.ShowAlertAsync("Import Successful", "Tasks imported successfully. The task list has been updated.", "OK");
+            }
+            catch (Exception copyException)
+            {
+                await SettingsViewModel.ShowAlertAsync("Import Failed", $"Could not replace the tasks file: {copyException.Message}", "OK");
+                Debug.WriteLine($"Error copying imported file: {copyException.Message}");
+            }
         }
-
-
-        protected bool UpdateProperty<T>(ref T field, T value, string propertyName)
+        catch (Exception exception)
         {
-            if (EqualityComparer<T>.Default.Equals(field, value)) return false;
-            field = value;
-            OnPropertyChanged(propertyName);
-            return true;
+            await SettingsViewModel.ShowAlertAsync("Import Error", $"An unexpected error occurred during import: {exception.Message}", "OK");
+            Debug.WriteLine($"General error during import: {exception.Message}");
         }
+    }
+
+    private static async Task ShowAlertAsync(string title, string message, string cancelAction)
+    {
+        Page? currentPage = GetCurrentPage();
+
+        if (currentPage is not null)
+        {
+            await currentPage.DisplayAlert(title, message, cancelAction);
+        }
+        else
+        {
+            Debug.WriteLine($"ShowAlert: Could not find current page to display alert: {title}");
+        }
+    }
+
+    private static async Task<bool> ShowConfirmationAsync(string title, string message, string acceptAction, string cancelAction)
+    {
+        Page? currentPage = GetCurrentPage();
+
+        if (currentPage is not null)
+        {
+            return await currentPage.DisplayAlert(title, message, acceptAction, cancelAction);
+        }
+        else
+        {
+            Debug.WriteLine($"ShowConfirmation: Could not find current page to display confirmation: {title}");
+            return false;
+        }
+    }
+
+    private static Page? GetCurrentPage()
+    {
+        if (Shell.Current is not null)
+        {
+            return Shell.Current.CurrentPage;
+        }
+
+        if (Application.Current?.Windows is not { Count: > 0 } windows)
+        {
+            return null;
+        }
+
+        foreach (Window window in windows)
+        {
+            if (window.Page is null)
+            {
+                continue;
+            }
+
+            return window.Page;
+        }
+
+        return null;
     }
 }

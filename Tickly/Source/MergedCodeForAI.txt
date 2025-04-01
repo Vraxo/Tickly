@@ -1,9 +1,4 @@
-Here's the entire code base of Tickly.
-On top of each file, its name is written.
-You might see the name written twice. That's a mistake.
-It's a leftover of when file names were written in the file itself.
-Exclude the file names when rewriting files. Those are for reference only and should not be part of the actual file content!
-// File: MainPage.xaml
+<file path="MainPage.xaml">
 <?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
@@ -18,7 +13,6 @@ Exclude the file names when rewriting files. Those are for reference only and sh
         <vm:MainViewModel />
     </ContentPage.BindingContext>
 
-    <!-- Use Shell.TitleView to place Title and Picker side-by-side -->
     <Shell.TitleView>
         <Grid ColumnDefinitions="*, Auto" VerticalOptions="FillAndExpand" Margin="0,0,10,0">
             <Label Grid.Column="0"
@@ -30,12 +24,11 @@ Exclude the file names when rewriting files. Those are for reference only and sh
                    HorizontalOptions="Start"
                    Margin="10,0,0,0"/>
 
-            <!-- Picker placed directly in TitleView Grid -->
             <Picker Grid.Column="1"
                     ItemsSource="{Binding SortOptionsDisplay}"
                     SelectedItem="{Binding SelectedSortOption}"
                     BackgroundColor="Black"
-                TextColor="WhiteSmoke"
+                    TextColor="WhiteSmoke"
                     FontSize="Small"
                     HorizontalOptions="End"
                     VerticalOptions="Center"
@@ -50,6 +43,7 @@ Exclude the file names when rewriting files. Those are for reference only and sh
             <converters:PriorityToColorConverter x:Key="PriorityColorConverter" />
             <converters:TaskTimeToStringConverter x:Key="TaskTimeConverter" />
             <converters:InverseBooleanConverter x:Key="InverseBooleanConverter" />
+            <converters:FutureRepeatingTaskIsEnabledConverter x:Key="FutureRepeatingTaskIsEnabledConverter" />
 
             <Style TargetType="Frame" x:Key="PriorityIndicatorFrameStyle">
                 <Setter Property="HeightRequest" Value="12"/>
@@ -98,17 +92,11 @@ Exclude the file names when rewriting files. Those are for reference only and sh
                 <Setter Property="SemanticProperties.Hint" Value="Add a new task"/>
             </Style>
 
-            <!-- General Picker Style REMOVED -->
-
         </ResourceDictionary>
     </ContentPage.Resources>
 
-    <!-- Main Grid Layout - Single Row -->
     <Grid RowDefinitions="*" ColumnDefinitions="*">
 
-        <!-- Picker REMOVED from here -->
-
-        <!-- Task List - Row 0 -->
         <CollectionView Grid.Row="0" Grid.Column="0"
                         ItemsSource="{Binding Tasks}"
                         CanReorderItems="True"
@@ -117,8 +105,24 @@ Exclude the file names when rewriting files. Those are for reference only and sh
 
             <CollectionView.ItemTemplate>
                 <DataTemplate x:DataType="models:TaskItem">
-                    <Grid Padding="10, 8"
-                          Opacity="{Binding IsFadingOut, Converter={StaticResource InverseBooleanConverter}}">
+                    <Grid Padding="10, 8" Opacity="{Binding IsFadingOut, Converter={StaticResource InverseBooleanConverter}}">
+                        <Grid.Style>
+                            <Style TargetType="Grid">
+                                <Setter Property="Opacity" Value="1.0" />
+                                <Style.Triggers>
+                                    <DataTrigger TargetType="Grid" Value="False">
+                                        <DataTrigger.Binding>
+                                            <MultiBinding Converter="{StaticResource FutureRepeatingTaskIsEnabledConverter}">
+                                                <Binding Path="TimeType" />
+                                                <Binding Path="DueDate" />
+                                            </MultiBinding>
+                                        </DataTrigger.Binding>
+                                        <Setter Property="Opacity" Value="0.5" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Grid.Style>
+
                         <Grid ColumnSpacing="10">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
@@ -136,13 +140,17 @@ Exclude the file names when rewriting files. Those are for reference only and sh
                                 <Label Text="{Binding ., Converter={StaticResource TaskTimeConverter}}" Style="{StaticResource TaskTimeLabelStyle}" />
                             </VerticalStackLayout>
 
-                            <!-- Grid for the Check Circle (MARK TASK DONE AREA) -->
                             <Grid Grid.Column="2"
                                   VerticalOptions="Center"
                                   HorizontalOptions="Center"
                                   Margin="5,0,0,0"
                                   Padding="5">
-                                <!-- FIX: Add Transparent Background to Grid -->
+                                <Grid.IsEnabled>
+                                    <MultiBinding Converter="{StaticResource FutureRepeatingTaskIsEnabledConverter}">
+                                        <Binding Path="TimeType" />
+                                        <Binding Path="DueDate" />
+                                    </MultiBinding>
+                                </Grid.IsEnabled>
                                 <Grid.Background>
                                     <SolidColorBrush Color="Transparent"/>
                                 </Grid.Background>
@@ -151,7 +159,6 @@ Exclude the file names when rewriting files. Those are for reference only and sh
                                         Command="{Binding Source={RelativeSource AncestorType={x:Type vm:MainViewModel}}, Path=MarkTaskDoneCommand}"
                                         CommandParameter="{Binding .}"/>
                                 </Grid.GestureRecognizers>
-                                <!-- FIX: Make Border InputTransparent -->
                                 <Border Stroke="{AppThemeBinding Light=Gray, Dark=LightGray}"
                                         StrokeThickness="2"
                                         HeightRequest="24"
@@ -164,8 +171,6 @@ Exclude the file names when rewriting files. Those are for reference only and sh
                                     </Border.StrokeShape>
                                 </Border>
                             </Grid>
-                            <!-- End of Check Circle Grid -->
-
                         </Grid>
                     </Grid>
                 </DataTemplate>
@@ -180,7 +185,6 @@ Exclude the file names when rewriting files. Those are for reference only and sh
 
         </CollectionView>
 
-        <!-- Add Button - Row 0 -->
         <Button Grid.Row="0" Grid.Column="0"
                 Style="{StaticResource AddButtonStyle}"
                 Command="{Binding NavigateToAddPageCommand}"/>
@@ -188,10 +192,9 @@ Exclude the file names when rewriting files. Those are for reference only and sh
     </Grid>
 
 </ContentPage>
+</file>
 
---------------------------------------------------------------------------------
-
-// File: MainPage.xaml.cs
+<file path="MainPage.xaml.cs">
 // File: MainPage.xaml.cs
 namespace Tickly;
 
@@ -202,23 +205,54 @@ public partial class MainPage : ContentPage
         InitializeComponent();
     }
 }
+</file>
 
---------------------------------------------------------------------------------
+<file path="Converters\FutureRepeatingTaskIsEnabledConverter.cs">
+using System.Globalization;
+using Tickly.Models;
 
-// File: Converters\InverseBooleanConverter.cs
+namespace Tickly.Converters;
+
+public sealed class FutureRepeatingTaskIsEnabledConverter : IMultiValueConverter
+{
+    public object Convert(object[] values, Type targetType, object parameter, CultureInfo culture)
+    {
+        if (values is [TaskTimeType.Repeating, DateTime dueDate, ..]
+            && dueDate.Date > DateTime.Today)
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    public object[] ConvertBack(object value, Type[] targetTypes, object parameter, CultureInfo culture)
+    {
+        throw new NotImplementedException();
+    }
+}
+</file>
+
+<file path="Converters\InverseBooleanConverter.cs">
 using System.Globalization;
 
 namespace Tickly.Converters;
 
 public class InverseBooleanConverter : IValueConverter
 {
-    public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture) => value is bool b && !b;
-    public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => value is bool b && !b;
+    public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+    {
+        return value is bool b && !b;
+    }
+
+    public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
+    {
+        return value is bool b && !b;
+    }
 }
+</file>
 
---------------------------------------------------------------------------------
-
-// File: Converters\PriorityToColorConverter.cs
+<file path="Converters\PriorityToColorConverter.cs">
 using System.Globalization;
 using Tickly.Models;
 
@@ -247,10 +281,9 @@ public class PriorityToColorConverter : IValueConverter
         throw new NotImplementedException();
     }
 }
+</file>
 
---------------------------------------------------------------------------------
-
-// File: Converters\TaskTimeToStringConverter.cs
+<file path="Converters\TaskTimeToStringConverter.cs">
 using System.Diagnostics;
 using System.Globalization;
 using Tickly.Models;
@@ -455,10 +488,9 @@ public class TaskTimeToStringConverter : IValueConverter
         }
     }
 }
+</file>
 
---------------------------------------------------------------------------------
-
-// File: Messages\CalendarSettingsChangedMessage.cs
+<file path="Messages\CalendarSettingsChangedMessage.cs">
 // Messages/CalendarSettingChangedMessage.cs
 using CommunityToolkit.Mvvm.Messaging.Messages;
 
@@ -475,10 +507,9 @@ public class CalendarSettingChangedMessage : ValueChangedMessage<bool> // Value 
     {
     }
 }
+</file>
 
---------------------------------------------------------------------------------
-
-// File: Messages\TaskMessages.cs
+<file path="Messages\TaskMessages.cs">
 // File: Messages/TaskMessages.cs (Add to this existing file)
 using CommunityToolkit.Mvvm.Messaging.Messages;
 using Tickly.Models;
@@ -514,10 +545,9 @@ public class TasksReloadRequestedMessage : RequestMessage<bool> // Can just use 
     // No specific data needed, just the signal
 }
 // *** END NEW MESSAGE ***
+</file>
 
---------------------------------------------------------------------------------
-
-// File: Models\Enums.cs
+<file path="Models\Enums.cs">
 // File: Models\Enums.cs
 namespace Tickly.Models;
 
@@ -550,10 +580,9 @@ public enum SortOrderType
     PriorityLowFirst // Low -> High -> Title
 }
 // *** END ADDED ENUM ***
+</file>
 
---------------------------------------------------------------------------------
-
-// File: Models\Settings.cs
+<file path="Models\Settings.cs">
 // Models/Settings.cs (New File or add to existing Models)
 namespace Tickly.Models;
 
@@ -562,10 +591,9 @@ public enum CalendarSystemType
     Gregorian,
     Persian
 }
+</file>
 
---------------------------------------------------------------------------------
-
-// File: Models\TaskItem.cs
+<file path="Models\TaskItem.cs">
 // Models/TaskItem.cs
 using CommunityToolkit.Mvvm.ComponentModel;
 using System;
@@ -633,10 +661,9 @@ public partial class TaskItem : ObservableObject
         IsFadingOut = false; // Default state
     }
 }
+</file>
 
---------------------------------------------------------------------------------
-
-// File: Services\AppSettings.cs
+<file path="Services\AppSettings.cs">
 // Services/AppSettings.cs
 using Microsoft.Maui.Storage; // Required for Preferences
 using System.Diagnostics;
@@ -684,10 +711,9 @@ namespace Tickly.Services
         // public static event EventHandler SettingsChanged;
     }
 }
+</file>
 
---------------------------------------------------------------------------------
-
-// File: Utils\DateUtils.cs
+<file path="Utils\DateUtils.cs">
 // Utils/DateUtils.cs
 using System;
 
@@ -747,10 +773,9 @@ public static class DateUtils
         }
     }
 }
+</file>
 
---------------------------------------------------------------------------------
-
-// File: ViewModels\MainViewModel.cs
+<file path="ViewModels\MainViewModel.cs">
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
@@ -1281,11 +1306,9 @@ public partial class MainViewModel : ObservableObject
         await LoadTasksAsync();
     }
 }
+</file>
 
---------------------------------------------------------------------------------
-
-// File: ViewModels\SettingsViewModel.cs
-// File: ViewModels/SettingsViewModel.cs
+<file path="ViewModels\SettingsViewModel.cs">
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input; // Needed for RelayCommand
 using CommunityToolkit.Mvvm.Messaging;
@@ -1300,6 +1323,7 @@ using System.IO; // For Path, File
 using System.Text.Json; // For JsonSerializer validation
 using System.Threading.Tasks; // For Task
 using Microsoft.Maui.ApplicationModel; // For Permissions, Share, FilePicker
+using System; // For DateTime
 
 namespace Tickly.ViewModels
 {
@@ -1311,7 +1335,6 @@ namespace Tickly.ViewModels
         [ObservableProperty]
         private bool _isPersianSelected;
 
-        // Path to the app's internal tasks file
         private readonly string _appTasksFilePath;
 
         public SettingsViewModel()
@@ -1347,7 +1370,6 @@ namespace Tickly.ViewModels
             }
             else { return; } // Only handle changes to these specific boolean properties
 
-            // Check if the AppSetting actually needs changing
             if (AppSettings.SelectedCalendarSystem != newSystem)
             {
                 Debug.WriteLine($"SettingsViewModel: PropertyChanged detected user change to {newSystem}. Saving and notifying.");
@@ -1358,7 +1380,6 @@ namespace Tickly.ViewModels
             }
         }
 
-        // *** NEW Export Command ***
         [RelayCommand]
         private async Task ExportTasksAsync()
         {
@@ -1372,16 +1393,23 @@ namespace Tickly.ViewModels
                     return;
                 }
 
-                // Use MAUI Share API to let user choose destination
+                // --- Generate Filename ---
+                string formattedDate = DateTime.Now.ToString("yyyy--MM--dd");
+                string exportFilename = $"Tickly-Tasks-{formattedDate}.json";
+                Debug.WriteLine($"ExportTasksAsync: Generated export filename: {exportFilename}");
+                // --- End Filename Generation ---
+
                 await Share.RequestAsync(new ShareFileRequest
                 {
                     Title = "Export Tickly Tasks",
-                    File = new ShareFile(_appTasksFilePath, "application/json") // Specify MIME type
+                    // Use the generated filename for the ShareFile constructor
+                    File = new ShareFile(_appTasksFilePath, "application/json")
+                    {
+                        FileName = exportFilename // Suggest this filename to the share sheet
+                    }
                 });
 
                 Debug.WriteLine("ExportTasksAsync: Share request completed (user may have saved or cancelled).");
-                // Optionally show a confirmation, but Share doesn't give explicit success feedback
-                // await ShowAlert("Export", "Share/Save dialog opened.", "OK");
 
             }
             catch (Exception ex)
@@ -1390,9 +1418,7 @@ namespace Tickly.ViewModels
                 await ShowAlert("Export Error", $"An error occurred during export: {ex.Message}", "OK");
             }
         }
-        // *** END Export Command ***
 
-        // *** NEW Import Command ***
         [RelayCommand]
         private async Task ImportTasksAsync()
         {
@@ -1402,10 +1428,10 @@ namespace Tickly.ViewModels
                 var customFileType = new FilePickerFileType(
                     new Dictionary<DevicePlatform, IEnumerable<string>>
                     {
-                        { DevicePlatform.iOS, new[] { "public.json" } }, // UTType
-                        { DevicePlatform.Android, new[] { "application/json" } }, // MIME type
-                        { DevicePlatform.WinUI, new[] { ".json" } }, // file extension
-                        { DevicePlatform.MacCatalyst, new[] { "json" } }, // UTType
+                        { DevicePlatform.iOS, new[] { "public.json" } },
+                        { DevicePlatform.Android, new[] { "application/json" } },
+                        { DevicePlatform.WinUI, new[] { ".json" } },
+                        { DevicePlatform.MacCatalyst, new[] { "json" } },
                     });
 
                 var options = new PickOptions
@@ -1423,12 +1449,10 @@ namespace Tickly.ViewModels
 
                 Debug.WriteLine($"ImportTasksAsync: File picked: {result.FullPath}");
 
-                // --- Basic Validation ---
                 string fileContent;
                 try
                 {
                     fileContent = await File.ReadAllTextAsync(result.FullPath);
-                    // Attempt deserialization just to see if it's plausible JSON structure
                     _ = JsonSerializer.Deserialize<List<TaskItem>>(fileContent);
                     Debug.WriteLine("ImportTasksAsync: File content successfully deserialized (basic validation passed).");
                 }
@@ -1445,7 +1469,6 @@ namespace Tickly.ViewModels
                     return;
                 }
 
-                // --- Confirmation ---
                 bool confirmed = await ShowConfirmation("Confirm Import", "This will REPLACE your current tasks with the content of the selected file. This cannot be undone. Proceed?", "Replace", "Cancel");
 
                 if (!confirmed)
@@ -1454,13 +1477,11 @@ namespace Tickly.ViewModels
                     return;
                 }
 
-                // --- Replace File ---
                 try
                 {
-                    File.Copy(result.FullPath, _appTasksFilePath, true); // Overwrite existing file
+                    File.Copy(result.FullPath, _appTasksFilePath, true);
                     Debug.WriteLine($"ImportTasksAsync: Successfully copied selected file to {_appTasksFilePath}");
 
-                    // --- Trigger Reload ---
                     WeakReferenceMessenger.Default.Send(new TasksReloadRequestedMessage());
                     Debug.WriteLine("ImportTasksAsync: Sent TasksReloadRequestedMessage.");
 
@@ -1478,10 +1499,8 @@ namespace Tickly.ViewModels
                 await ShowAlert("Import Error", $"An unexpected error occurred during import: {ex.Message}", "OK");
             }
         }
-        // *** END Import Command ***
 
 
-        // Helper for showing alerts (slight MVVM violation for simplicity)
         private async Task ShowAlert(string title, string message, string cancel)
         {
             if (Application.Current?.MainPage != null)
@@ -1490,14 +1509,13 @@ namespace Tickly.ViewModels
             }
         }
 
-        // Helper for showing confirmation dialog
         private async Task<bool> ShowConfirmation(string title, string message, string accept, string cancel)
         {
             if (Application.Current?.MainPage != null)
             {
                 return await Application.Current.MainPage.DisplayAlert(title, message, accept, cancel);
             }
-            return false; // Cannot show dialog
+            return false;
         }
 
 
@@ -1510,10 +1528,9 @@ namespace Tickly.ViewModels
         }
     }
 }
+</file>
 
---------------------------------------------------------------------------------
-
-// File: Views\AddTaskPopupPage.xaml
+<file path="Views\AddTaskPopupPage.xaml">
 <?xml version="1.0" encoding="utf-8" ?>
 <!-- Views/AddTaskPopupPage.xaml -->
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
@@ -1634,10 +1651,9 @@ namespace Tickly.ViewModels
         </VerticalStackLayout>
     </ScrollView>
 </ContentPage>
+</file>
 
---------------------------------------------------------------------------------
-
-// File: Views\AddTaskPopupPage.xaml.cs
+<file path="Views\AddTaskPopupPage.xaml.cs">
 // File: Views\AddTaskPopupPage.xaml.cs
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Messaging;
@@ -2045,10 +2061,9 @@ namespace Tickly.Views
 
     } // End of AddTaskPopupPage class
 } // End of namespace
+</file>
 
---------------------------------------------------------------------------------
-
-// File: Views\SettingsPage.xaml
+<file path="Views\SettingsPage.xaml">
 <?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
@@ -2115,11 +2130,9 @@ namespace Tickly.Views
     </ScrollView>
 
 </ContentPage>
+</file>
 
---------------------------------------------------------------------------------
-
-// File: Views\SettingsPage.xaml.cs
-// Views/SettingsPage.xaml.cs (New File)
+<file path="Views\SettingsPage.xaml.cs">
 namespace Tickly.Views;
 
 public partial class SettingsPage : ContentPage
@@ -2127,9 +2140,7 @@ public partial class SettingsPage : ContentPage
     public SettingsPage()
     {
         InitializeComponent();
-        // BindingContext is set in XAML or via DI
     }
 }
-
---------------------------------------------------------------------------------
+</file>
 
