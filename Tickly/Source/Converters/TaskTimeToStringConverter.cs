@@ -57,7 +57,7 @@ public class TaskTimeToStringConverter : IValueConverter
     private static CultureInfo GetFormatCulture(CalendarSystemType calendarSystem)
     {
         return calendarSystem == CalendarSystemType.Persian
-            ? new CultureInfo("fa-IR")
+            ? new("fa-IR")
             : CultureInfo.InvariantCulture;
     }
 

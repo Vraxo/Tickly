@@ -7,8 +7,7 @@ public sealed class FutureRepeatingTaskIsEnabledConverter : IMultiValueConverter
 {
     public object Convert(object[] values, Type targetType, object parameter, CultureInfo culture)
     {
-        if (values is [TaskTimeType.Repeating, DateTime dueDate, ..]
-            && dueDate.Date > DateTime.Today)
+        if (values is [TaskTimeType.Repeating, DateTime dueDate, ..] && dueDate.Date > DateTime.Today)
         {
             return false;
         }
