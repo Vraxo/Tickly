@@ -1,3 +1,20 @@
+<file path="App.xaml">
+<?xml version = "1.0" encoding = "UTF-8" ?>
+<Application xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:local="clr-namespace:Tickly"
+             x:Class="Tickly.App">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Resources/Styles/Colors.xaml" />
+                <ResourceDictionary Source="Resources/Styles/Styles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>
+</file>
+
 <file path="App.xaml.cs">
 // App.xaml.cs
 using Microsoft.Maui.LifecycleEvents; // Might be needed depending on exact MAUI version/setup
@@ -90,6 +107,51 @@ public partial class App : Application
 }
 </file>
 
+<file path="AppShell.xaml">
+<?xml version="1.0" encoding="UTF-8" ?>
+<Shell
+    x:Class="Tickly.AppShell"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:local="clr-namespace:Tickly"
+    xmlns:views="clr-namespace:Tickly.Views"
+    Shell.FlyoutBehavior="Flyout"
+    Shell.BackgroundColor="Black"
+    Shell.TitleColor="{AppThemeBinding Light=Black, Dark=White}"
+    Shell.DisabledColor="#B4FFFFFF"
+    Shell.UnselectedColor="#95FFFFFF"
+    Shell.FlyoutBackgroundColor="Black">
+
+    <Shell.FlyoutHeader>
+        <ContentView>
+            <ContentView.Padding>
+                <OnPlatform x:TypeArguments="Thickness">
+                    <On Platform="Android" Value="0,40,0,0"/>
+                    <On Platform="iOS" Value="0,20,0,0"/>
+                    <On Platform="WinUI" Value="0,0,0,0"/>
+                    <On Platform="MacCatalyst" Value="0,0,0,0"/>
+                </OnPlatform>
+            </ContentView.Padding>
+        </ContentView>
+    </Shell.FlyoutHeader>
+
+    <FlyoutItem Title="Tasks" Icon="icon_list.png">
+        <ShellContent
+            Title="Tasks"
+            ContentTemplate="{DataTemplate local:MainPage}"
+            Route="MainPage" />
+    </FlyoutItem>
+
+    <FlyoutItem Title="Settings" Icon="icon_settings.png">
+        <ShellContent
+            Title="Settings"
+            ContentTemplate="{DataTemplate views:SettingsPage}"
+            Route="SettingsPage" />
+    </FlyoutItem>
+
+</Shell>
+</file>
+
 <file path="AppShell.xaml.cs">
 // AppShell.xaml.cs
 using Tickly.Views; // Add this using
@@ -147,6 +209,206 @@ public static class MauiProgram
         return builder.Build();
     }
 }
+</file>
+
+<file path="Source\MainPage.xaml">
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+         xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+         xmlns:vm="clr-namespace:Tickly.ViewModels"
+         xmlns:models="clr-namespace:Tickly.Models"
+         xmlns:converters="clr-namespace:Tickly.Converters"
+         x:Class="Tickly.MainPage"
+         BackgroundColor="Black"
+         Title="Tickly Tasks">
+
+    <ContentPage.BindingContext>
+        <vm:MainViewModel />
+    </ContentPage.BindingContext>
+
+    <Shell.TitleView>
+        <Grid ColumnDefinitions="*, Auto" VerticalOptions="FillAndExpand" Margin="0,0,10,0">
+            <Label Grid.Column="0"
+               Text="Tickly Tasks"
+               TextColor="{AppThemeBinding Light=Black, Dark=White}"
+               FontSize="18"
+               FontAttributes="Bold"
+               VerticalOptions="Center"
+               HorizontalOptions="Start"
+               Margin="10,0,0,0"/>
+
+            <Picker Grid.Column="1"
+                ItemsSource="{Binding SortOptionsDisplay}"
+                SelectedItem="{Binding SelectedSortOption}"
+                BackgroundColor="Black"
+                TextColor="WhiteSmoke"
+                FontSize="Small"
+                HorizontalOptions="End"
+                VerticalOptions="Center"
+                MinimumWidthRequest="180"
+                Margin="0,0,5,0"/>
+        </Grid>
+    </Shell.TitleView>
+
+
+    <ContentPage.Resources>
+        <ResourceDictionary>
+            <converters:PriorityToColorConverter x:Key="PriorityColorConverter" />
+            <converters:TaskTimeToStringConverter x:Key="TaskTimeConverter" />
+            <converters:InverseBooleanConverter x:Key="InverseBooleanConverter" />
+            <converters:FutureRepeatingTaskIsEnabledConverter x:Key="FutureRepeatingTaskIsEnabledConverter" />
+
+            <Style TargetType="Frame" x:Key="PriorityIndicatorFrameStyle">
+                <Setter Property="HeightRequest" Value="12"/>
+                <Setter Property="WidthRequest" Value="12"/>
+                <Setter Property="CornerRadius" Value="6"/>
+                <Setter Property="BackgroundColor" Value="{Binding Priority, Converter={StaticResource PriorityColorConverter}}"/>
+                <Setter Property="VerticalOptions" Value="Center"/>
+                <Setter Property="HorizontalOptions" Value="Center"/>
+                <Setter Property="BorderColor" Value="Transparent"/>
+                <Setter Property="Padding" Value="0"/>
+                <Setter Property="Margin" Value="0,5,0,0"/>
+            </Style>
+            <Style TargetType="Label" x:Key="TaskTitleLabelStyle">
+                <Setter Property="TextColor" Value="{AppThemeBinding Light=Black, Dark=White}"/>
+                <Setter Property="FontSize" Value="16"/>
+                <Setter Property="FontAttributes" Value="Bold"/>
+                <Setter Property="VerticalOptions" Value="Center"/>
+            </Style>
+            <Style TargetType="Label" x:Key="TaskTimeLabelStyle">
+                <Setter Property="TextColor" Value="Gray"/>
+                <Setter Property="FontSize" Value="12"/>
+                <Setter Property="VerticalOptions" Value="Center"/>
+            </Style>
+            <Style TargetType="StackLayout" x:Key="EmptyViewLayoutStyle">
+                <Setter Property="VerticalOptions" Value="Center"/>
+                <Setter Property="HorizontalOptions" Value="Center"/>
+                <Setter Property="Padding" Value="20"/>
+                <Setter Property="Spacing" Value="5"/>
+            </Style>
+            <Style TargetType="Label" x:Key="EmptyViewLabelStyle">
+                <Setter Property="TextColor" Value="Gray"/>
+                <Setter Property="HorizontalTextAlignment" Value="Center"/>
+            </Style>
+            <Style TargetType="Button" x:Key="AddButtonStyle">
+                <Setter Property="Text" Value="+"/>
+                <Setter Property="FontSize" Value="24"/>
+                <Setter Property="FontAttributes" Value="Bold"/>
+                <Setter Property="TextColor" Value="{AppThemeBinding Light=White, Dark=Black}"/>
+                <Setter Property="BackgroundColor" Value="{StaticResource Primary}"/>
+                <Setter Property="CornerRadius" Value="28"/>
+                <Setter Property="HeightRequest" Value="56"/>
+                <Setter Property="WidthRequest" Value="56"/>
+                <Setter Property="HorizontalOptions" Value="End"/>
+                <Setter Property="VerticalOptions" Value="End"/>
+                <Setter Property="Margin" Value="20"/>
+                <Setter Property="SemanticProperties.Hint" Value="Add a new task"/>
+            </Style>
+
+        </ResourceDictionary>
+    </ContentPage.Resources>
+
+    <Grid RowDefinitions="*" ColumnDefinitions="*">
+
+        <CollectionView Grid.Row="0" Grid.Column="0"
+                    ItemsSource="{Binding Tasks}"
+                    CanReorderItems="True"
+                    Margin="15,10,15,0"
+                    SelectionMode="None">
+
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="models:TaskItem">
+                    <Grid Padding="10, 8" Opacity="{Binding IsFadingOut, Converter={StaticResource InverseBooleanConverter}}">
+                        <Grid.Style>
+                            <Style TargetType="Grid">
+                                <Setter Property="Opacity" Value="1.0" />
+                                <Style.Triggers>
+                                    <DataTrigger TargetType="Grid" Value="False">
+                                        <DataTrigger.Binding>
+                                            <MultiBinding Converter="{StaticResource FutureRepeatingTaskIsEnabledConverter}">
+                                                <Binding Path="TimeType" />
+                                                <Binding Path="DueDate" />
+                                            </MultiBinding>
+                                        </DataTrigger.Binding>
+                                        <Setter Property="Opacity" Value="0.5" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Grid.Style>
+
+                        <Grid ColumnSpacing="10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <Frame Grid.Column="0" Style="{StaticResource PriorityIndicatorFrameStyle}"/>
+                            <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
+                                <VerticalStackLayout.GestureRecognizers>
+                                    <TapGestureRecognizer
+                                    Command="{Binding Source={RelativeSource AncestorType={x:Type vm:MainViewModel}}, Path=NavigateToEditPageCommand}"
+                                    CommandParameter="{Binding .}" />
+                                </VerticalStackLayout.GestureRecognizers>
+                                <Label Text="{Binding Title}" Style="{StaticResource TaskTitleLabelStyle}" />
+                                <Label Text="{Binding ., Converter={StaticResource TaskTimeConverter}}" Style="{StaticResource TaskTimeLabelStyle}" />
+                            </VerticalStackLayout>
+
+                            <Grid Grid.Column="2"
+                              VerticalOptions="Center"
+                              HorizontalOptions="Center"
+                              Margin="5,0,0,0"
+                              Padding="5">
+                                <Grid.IsEnabled>
+                                    <MultiBinding Converter="{StaticResource FutureRepeatingTaskIsEnabledConverter}">
+                                        <Binding Path="TimeType" />
+                                        <Binding Path="DueDate" />
+                                    </MultiBinding>
+                                </Grid.IsEnabled>
+                                <Grid.Background>
+                                    <SolidColorBrush Color="Transparent"/>
+                                </Grid.Background>
+                                <Grid.GestureRecognizers>
+                                    <TapGestureRecognizer
+                                    Command="{Binding Source={RelativeSource AncestorType={x:Type vm:MainViewModel}}, Path=MarkTaskDoneCommand}"
+                                    CommandParameter="{Binding .}"/>
+                                </Grid.GestureRecognizers>
+                                <Border Stroke="{AppThemeBinding Light=Gray, Dark=LightGray}"
+                                    StrokeThickness="2"
+                                    HeightRequest="24"
+                                    WidthRequest="24"
+                                    VerticalOptions="Center"
+                                    HorizontalOptions="Center"
+                                    InputTransparent="True">
+                                    <Border.StrokeShape>
+                                        <Ellipse/>
+                                    </Border.StrokeShape>
+                                </Border>
+                            </Grid>
+                        </Grid>
+                    </Grid>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+
+            <CollectionView.EmptyView>
+                <StackLayout Style="{StaticResource EmptyViewLayoutStyle}">
+                    <Label Text="No tasks yet!" Style="{StaticResource EmptyViewLabelStyle}" FontSize="16"/>
+                    <Label Text="Click the '+' button to add one." Style="{StaticResource EmptyViewLabelStyle}" FontSize="14"/>
+                </StackLayout>
+            </CollectionView.EmptyView>
+
+            <CollectionView.Footer>
+                <ContentView HeightRequest="90" BackgroundColor="Transparent"/>
+            </CollectionView.Footer>
+
+        </CollectionView>
+
+        <Button Grid.Row="0" Grid.Column="0"
+            Style="{StaticResource AddButtonStyle}"
+            Command="{Binding NavigateToAddPageCommand}"/>
+
+    </Grid>
+
+</ContentPage>
 </file>
 
 <file path="Source\MainPage.xaml.cs">
@@ -277,6 +539,17 @@ namespace Tickly
         }
     }
 }
+</file>
+
+<file path="Platforms\Windows\App.xaml">
+<maui:MauiWinUIApplication
+    x:Class="Tickly.WinUI.App"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:maui="using:Microsoft.Maui"
+    xmlns:local="using:Tickly.WinUI">
+
+</maui:MauiWinUIApplication>
 </file>
 
 <file path="Platforms\Windows\App.xaml.cs">
@@ -8231,6 +8504,521 @@ namespace Fonts
 }
 </file>
 
+<file path="Resources\Styles\Colors.xaml">
+<?xml version="1.0" encoding="UTF-8" ?>
+<?xaml-comp compile="true" ?>
+<ResourceDictionary 
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml">
+
+    <!-- Note: For Android please see also Platforms\Android\Resources\values\colors.xml -->
+
+    <Color x:Key="Primary">#512BD4</Color>
+    <Color x:Key="PrimaryDark">#ac99ea</Color>
+    <Color x:Key="PrimaryDarkText">#242424</Color>
+    <Color x:Key="Secondary">#DFD8F7</Color>
+    <Color x:Key="SecondaryDarkText">#9880e5</Color>
+    <Color x:Key="Tertiary">#2B0B98</Color>
+
+    <Color x:Key="White">White</Color>
+    <Color x:Key="Black">Black</Color>
+    <Color x:Key="Magenta">#D600AA</Color>
+    <Color x:Key="MidnightBlue">#190649</Color>
+    <Color x:Key="OffBlack">#1f1f1f</Color>
+
+    <Color x:Key="Gray100">#E1E1E1</Color>
+    <Color x:Key="Gray200">#C8C8C8</Color>
+    <Color x:Key="Gray300">#ACACAC</Color>
+    <Color x:Key="Gray400">#919191</Color>
+    <Color x:Key="Gray500">#6E6E6E</Color>
+    <Color x:Key="Gray600">#404040</Color>
+    <Color x:Key="Gray900">#212121</Color>
+    <Color x:Key="Gray950">#141414</Color>
+
+    <SolidColorBrush x:Key="PrimaryBrush" Color="{StaticResource Primary}"/>
+    <SolidColorBrush x:Key="SecondaryBrush" Color="{StaticResource Secondary}"/>
+    <SolidColorBrush x:Key="TertiaryBrush" Color="{StaticResource Tertiary}"/>
+    <SolidColorBrush x:Key="WhiteBrush" Color="{StaticResource White}"/>
+    <SolidColorBrush x:Key="BlackBrush" Color="{StaticResource Black}"/>
+
+    <SolidColorBrush x:Key="Gray100Brush" Color="{StaticResource Gray100}"/>
+    <SolidColorBrush x:Key="Gray200Brush" Color="{StaticResource Gray200}"/>
+    <SolidColorBrush x:Key="Gray300Brush" Color="{StaticResource Gray300}"/>
+    <SolidColorBrush x:Key="Gray400Brush" Color="{StaticResource Gray400}"/>
+    <SolidColorBrush x:Key="Gray500Brush" Color="{StaticResource Gray500}"/>
+    <SolidColorBrush x:Key="Gray600Brush" Color="{StaticResource Gray600}"/>
+    <SolidColorBrush x:Key="Gray900Brush" Color="{StaticResource Gray900}"/>
+    <SolidColorBrush x:Key="Gray950Brush" Color="{StaticResource Gray950}"/>
+</ResourceDictionary>
+</file>
+
+<file path="Resources\Styles\Styles.xaml">
+<?xml version="1.0" encoding="UTF-8" ?>
+<?xaml-comp compile="true" ?>
+<ResourceDictionary 
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml">
+
+    <Style TargetType="ActivityIndicator">
+        <Setter Property="Color" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource White}}" />
+    </Style>
+
+    <Style TargetType="IndicatorView">
+        <Setter Property="IndicatorColor" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray500}}"/>
+        <Setter Property="SelectedIndicatorColor" Value="{AppThemeBinding Light={StaticResource Gray950}, Dark={StaticResource Gray100}}"/>
+    </Style>
+
+    <Style TargetType="Border">
+        <Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray500}}" />
+        <Setter Property="StrokeShape" Value="Rectangle"/>
+        <Setter Property="StrokeThickness" Value="1"/>
+    </Style>
+
+    <Style TargetType="BoxView">
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource Gray950}, Dark={StaticResource Gray200}}" />
+    </Style>
+
+    <Style TargetType="CheckBox">
+        <Setter Property="Color" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource White}}" />
+        <Setter Property="MinimumHeightRequest" Value="44"/>
+        <Setter Property="MinimumWidthRequest" Value="44"/>
+        <Setter Property="VisualStateManager.VisualStateGroups">
+            <VisualStateGroupList>
+                <VisualStateGroup x:Name="CommonStates">
+                    <VisualState x:Name="Normal" />
+                    <VisualState x:Name="Disabled">
+                        <VisualState.Setters>
+                            <Setter Property="Color" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}" />
+                        </VisualState.Setters>
+                    </VisualState>
+                </VisualStateGroup>
+            </VisualStateGroupList>
+        </Setter>
+    </Style>
+
+    <Style TargetType="DatePicker">
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource White}}" />
+        <Setter Property="BackgroundColor" Value="Transparent" />
+        <Setter Property="FontFamily" Value="OpenSansRegular"/>
+        <Setter Property="FontSize" Value="14"/>
+        <Setter Property="MinimumHeightRequest" Value="44"/>
+        <Setter Property="MinimumWidthRequest" Value="44"/>
+        <Setter Property="VisualStateManager.VisualStateGroups">
+            <VisualStateGroupList>
+                <VisualStateGroup x:Name="CommonStates">
+                    <VisualState x:Name="Normal" />
+                    <VisualState x:Name="Disabled">
+                        <VisualState.Setters>
+                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray500}}" />
+                        </VisualState.Setters>
+                    </VisualState>
+                </VisualStateGroup>
+            </VisualStateGroupList>
+        </Setter>
+    </Style>
+
+    <Style TargetType="Editor">
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource White}}" />
+        <Setter Property="BackgroundColor" Value="Transparent" />
+        <Setter Property="FontFamily" Value="OpenSansRegular"/>
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="PlaceholderColor" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray500}}" />
+        <Setter Property="MinimumHeightRequest" Value="44"/>
+        <Setter Property="MinimumWidthRequest" Value="44"/>
+        <Setter Property="VisualStateManager.VisualStateGroups">
+            <VisualStateGroupList>
+                <VisualStateGroup x:Name="CommonStates">
+                    <VisualState x:Name="Normal" />
+                    <VisualState x:Name="Disabled">
+                        <VisualState.Setters>
+                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}" />
+                        </VisualState.Setters>
+                    </VisualState>
+                </VisualStateGroup>
+            </VisualStateGroupList>
+        </Setter>
+    </Style>
+
+    <Style TargetType="Entry">
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource White}}" />
+        <Setter Property="BackgroundColor" Value="Transparent" />
+        <Setter Property="FontFamily" Value="OpenSansRegular"/>
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="PlaceholderColor" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray500}}" />
+        <Setter Property="MinimumHeightRequest" Value="44"/>
+        <Setter Property="MinimumWidthRequest" Value="44"/>
+        <Setter Property="VisualStateManager.VisualStateGroups">
+            <VisualStateGroupList>
+                <VisualStateGroup x:Name="CommonStates">
+                    <VisualState x:Name="Normal" />
+                    <VisualState x:Name="Disabled">
+                        <VisualState.Setters>
+                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}" />
+                        </VisualState.Setters>
+                    </VisualState>
+                </VisualStateGroup>
+            </VisualStateGroupList>
+        </Setter>
+    </Style>
+
+    <Style TargetType="Frame">
+        <Setter Property="HasShadow" Value="False" />
+        <Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray950}}" />
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}" />
+    </Style>
+
+    <Style TargetType="ImageButton">
+        <Setter Property="Opacity" Value="1" />
+        <Setter Property="BorderColor" Value="Transparent"/>
+        <Setter Property="BorderWidth" Value="0"/>
+        <Setter Property="CornerRadius" Value="0"/>
+        <Setter Property="MinimumHeightRequest" Value="44"/>
+        <Setter Property="MinimumWidthRequest" Value="44"/>
+        <Setter Property="VisualStateManager.VisualStateGroups">
+            <VisualStateGroupList>
+                <VisualStateGroup x:Name="CommonStates">
+                    <VisualState x:Name="Normal" />
+                    <VisualState x:Name="Disabled">
+                        <VisualState.Setters>
+                            <Setter Property="Opacity" Value="0.5" />
+                        </VisualState.Setters>
+                    </VisualState>
+                    <VisualState x:Name="PointerOver" />
+                </VisualStateGroup>
+            </VisualStateGroupList>
+        </Setter>
+    </Style>
+
+    <Style TargetType="Label">
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource White}}" />
+        <Setter Property="BackgroundColor" Value="Transparent" />
+        <Setter Property="FontFamily" Value="OpenSansRegular" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="VisualStateManager.VisualStateGroups">
+            <VisualStateGroupList>
+                <VisualStateGroup x:Name="CommonStates">
+                    <VisualState x:Name="Normal" />
+                    <VisualState x:Name="Disabled">
+                        <VisualState.Setters>
+                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}" />
+                        </VisualState.Setters>
+                    </VisualState>
+                </VisualStateGroup>
+            </VisualStateGroupList>
+        </Setter>
+    </Style>
+
+    <Style TargetType="Span">
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource White}}" />
+    </Style>
+
+    <Style TargetType="Label" x:Key="Headline">
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource MidnightBlue}, Dark={StaticResource White}}" />
+        <Setter Property="FontSize" Value="32" />
+        <Setter Property="HorizontalOptions" Value="Center" />
+        <Setter Property="HorizontalTextAlignment" Value="Center" />
+    </Style>
+
+    <Style TargetType="Label" x:Key="SubHeadline">
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource MidnightBlue}, Dark={StaticResource White}}" />
+        <Setter Property="FontSize" Value="24" />
+        <Setter Property="HorizontalOptions" Value="Center" />
+        <Setter Property="HorizontalTextAlignment" Value="Center" />
+    </Style>
+
+    <Style TargetType="ListView">
+        <Setter Property="SeparatorColor" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray500}}" />
+        <Setter Property="RefreshControlColor" Value="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray200}}" />
+    </Style>
+
+    <Style TargetType="Picker">
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource White}}" />
+        <Setter Property="TitleColor" Value="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray200}}" />
+        <Setter Property="BackgroundColor" Value="Transparent" />
+        <Setter Property="FontFamily" Value="OpenSansRegular"/>
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="MinimumHeightRequest" Value="44"/>
+        <Setter Property="MinimumWidthRequest" Value="44"/>
+        <Setter Property="VisualStateManager.VisualStateGroups">
+            <VisualStateGroupList>
+                <VisualStateGroup x:Name="CommonStates">
+                    <VisualState x:Name="Normal" />
+                    <VisualState x:Name="Disabled">
+                        <VisualState.Setters>
+                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}" />
+                            <Setter Property="TitleColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}" />
+                        </VisualState.Setters>
+                    </VisualState>
+                </VisualStateGroup>
+            </VisualStateGroupList>
+        </Setter>
+    </Style>
+
+    <Style TargetType="ProgressBar">
+        <Setter Property="ProgressColor" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource White}}" />
+        <Setter Property="VisualStateManager.VisualStateGroups">
+            <VisualStateGroupList>
+                <VisualStateGroup x:Name="CommonStates">
+                    <VisualState x:Name="Normal" />
+                    <VisualState x:Name="Disabled">
+                        <VisualState.Setters>
+                            <Setter Property="ProgressColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}" />
+                        </VisualState.Setters>
+                    </VisualState>
+                </VisualStateGroup>
+            </VisualStateGroupList>
+        </Setter>
+    </Style>
+
+    <Style TargetType="RadioButton">
+        <Setter Property="BackgroundColor" Value="Transparent"/>
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource White}}" />
+        <Setter Property="FontFamily" Value="OpenSansRegular"/>
+        <Setter Property="FontSize" Value="14"/>
+        <Setter Property="MinimumHeightRequest" Value="44"/>
+        <Setter Property="MinimumWidthRequest" Value="44"/>
+        <Setter Property="VisualStateManager.VisualStateGroups">
+            <VisualStateGroupList>
+                <VisualStateGroup x:Name="CommonStates">
+                    <VisualState x:Name="Normal" />
+                    <VisualState x:Name="Disabled">
+                        <VisualState.Setters>
+                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}" />
+                        </VisualState.Setters>
+                    </VisualState>
+                </VisualStateGroup>
+            </VisualStateGroupList>
+        </Setter>
+    </Style>
+
+    <Style TargetType="RefreshView">
+        <Setter Property="RefreshColor" Value="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray200}}" />
+    </Style>
+
+    <Style TargetType="SearchBar">
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource White}}" />
+        <Setter Property="PlaceholderColor" Value="{StaticResource Gray500}" />
+        <Setter Property="CancelButtonColor" Value="{StaticResource Gray500}" />
+        <Setter Property="BackgroundColor" Value="Transparent" />
+        <Setter Property="FontFamily" Value="OpenSansRegular" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="MinimumHeightRequest" Value="44"/>
+        <Setter Property="MinimumWidthRequest" Value="44"/>
+        <Setter Property="VisualStateManager.VisualStateGroups">
+            <VisualStateGroupList>
+                <VisualStateGroup x:Name="CommonStates">
+                    <VisualState x:Name="Normal" />
+                    <VisualState x:Name="Disabled">
+                        <VisualState.Setters>
+                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}" />
+                            <Setter Property="PlaceholderColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}" />
+                        </VisualState.Setters>
+                    </VisualState>
+                </VisualStateGroup>
+            </VisualStateGroupList>
+        </Setter>
+    </Style>
+
+    <Style TargetType="SearchHandler">
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource White}}" />
+        <Setter Property="PlaceholderColor" Value="{StaticResource Gray500}" />
+        <Setter Property="BackgroundColor" Value="Transparent" />
+        <Setter Property="FontFamily" Value="OpenSansRegular" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="VisualStateManager.VisualStateGroups">
+            <VisualStateGroupList>
+                <VisualStateGroup x:Name="CommonStates">
+                    <VisualState x:Name="Normal" />
+                    <VisualState x:Name="Disabled">
+                        <VisualState.Setters>
+                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}" />
+                            <Setter Property="PlaceholderColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}" />
+                        </VisualState.Setters>
+                    </VisualState>
+                </VisualStateGroup>
+            </VisualStateGroupList>
+        </Setter>
+    </Style>
+
+    <Style TargetType="Shadow">
+        <Setter Property="Radius" Value="15" />
+        <Setter Property="Opacity" Value="0.5" />
+        <Setter Property="Brush" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource White}}" />
+        <Setter Property="Offset" Value="10,10" />
+    </Style>
+
+    <Style TargetType="Slider">
+        <Setter Property="MinimumTrackColor" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource White}}" />
+        <Setter Property="MaximumTrackColor" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray600}}" />
+        <Setter Property="ThumbColor" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource White}}" />
+        <Setter Property="VisualStateManager.VisualStateGroups">
+            <VisualStateGroupList>
+                <VisualStateGroup x:Name="CommonStates">
+                    <VisualState x:Name="Normal" />
+                    <VisualState x:Name="Disabled">
+                        <VisualState.Setters>
+                            <Setter Property="MinimumTrackColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}"/>
+                            <Setter Property="MaximumTrackColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}"/>
+                            <Setter Property="ThumbColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}"/>
+                        </VisualState.Setters>
+                    </VisualState>
+                </VisualStateGroup>
+            </VisualStateGroupList>
+        </Setter>
+    </Style>
+
+    <Style TargetType="SwipeItem">
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}" />
+    </Style>
+
+    <Style TargetType="Switch">
+        <Setter Property="OnColor" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource White}}" />
+        <Setter Property="ThumbColor" Value="{StaticResource White}" />
+        <Setter Property="VisualStateManager.VisualStateGroups">
+            <VisualStateGroupList>
+                <VisualStateGroup x:Name="CommonStates">
+                    <VisualState x:Name="Normal" />
+                    <VisualState x:Name="Disabled">
+                        <VisualState.Setters>
+                            <Setter Property="OnColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}" />
+                            <Setter Property="ThumbColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}" />
+                        </VisualState.Setters>
+                    </VisualState>
+                    <VisualState x:Name="On">
+                        <VisualState.Setters>
+                            <Setter Property="OnColor" Value="{AppThemeBinding Light={StaticResource Secondary}, Dark={StaticResource Gray200}}" />
+                            <Setter Property="ThumbColor" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource White}}" />
+                        </VisualState.Setters>
+                    </VisualState>
+                    <VisualState x:Name="Off">
+                        <VisualState.Setters>
+                            <Setter Property="ThumbColor" Value="{AppThemeBinding Light={StaticResource Gray400}, Dark={StaticResource Gray500}}" />
+                        </VisualState.Setters>
+                    </VisualState>
+                </VisualStateGroup>
+            </VisualStateGroupList>
+        </Setter>
+    </Style>
+
+    <Style TargetType="TimePicker">
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource White}}" />
+        <Setter Property="BackgroundColor" Value="Transparent"/>
+        <Setter Property="FontFamily" Value="OpenSansRegular"/>
+        <Setter Property="FontSize" Value="14"/>
+        <Setter Property="MinimumHeightRequest" Value="44"/>
+        <Setter Property="MinimumWidthRequest" Value="44"/>
+        <Setter Property="VisualStateManager.VisualStateGroups">
+            <VisualStateGroupList>
+                <VisualStateGroup x:Name="CommonStates">
+                    <VisualState x:Name="Normal" />
+                    <VisualState x:Name="Disabled">
+                        <VisualState.Setters>
+                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}" />
+                        </VisualState.Setters>
+                    </VisualState>
+                </VisualStateGroup>
+            </VisualStateGroupList>
+        </Setter>
+    </Style>
+  
+    <!--
+    <Style TargetType="TitleBar">
+        <Setter Property="MinimumHeightRequest" Value="32"/>
+        <Setter Property="VisualStateManager.VisualStateGroups">
+            <VisualStateGroupList>
+                <VisualStateGroup x:Name="TitleActiveStates">
+                    <VisualState x:Name="TitleBarTitleActive">
+                        <VisualState.Setters>
+                            <Setter Property="BackgroundColor" Value="Transparent" />
+                            <Setter Property="ForegroundColor" Value="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource White}}" />
+                        </VisualState.Setters>
+                    </VisualState>
+                    <VisualState x:Name="TitleBarTitleInactive">
+                        <VisualState.Setters>
+                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}" />
+                            <Setter Property="ForegroundColor" Value="{AppThemeBinding Light={StaticResource Gray400}, Dark={StaticResource Gray500}}" />
+                        </VisualState.Setters>
+                    </VisualState>
+                </VisualStateGroup>
+            </VisualStateGroupList>
+        </Setter>
+    </Style>
+    -->
+
+    <Style TargetType="Page" ApplyToDerivedTypes="True">
+        <Setter Property="Padding" Value="0"/>
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource OffBlack}}" />
+    </Style>
+
+    <Style TargetType="Shell" ApplyToDerivedTypes="True">
+        <Setter Property="Shell.BackgroundColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource OffBlack}}" />
+        <Setter Property="Shell.ForegroundColor" Value="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource SecondaryDarkText}}" />
+        <Setter Property="Shell.TitleColor" Value="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource SecondaryDarkText}}" />
+        <Setter Property="Shell.DisabledColor" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray950}}" />
+        <Setter Property="Shell.UnselectedColor" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray200}}" />
+        <Setter Property="Shell.NavBarHasShadow" Value="False" />
+        <Setter Property="Shell.TabBarBackgroundColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}" />
+        <Setter Property="Shell.TabBarForegroundColor" Value="{AppThemeBinding Light={StaticResource Magenta}, Dark={StaticResource White}}" />
+        <Setter Property="Shell.TabBarTitleColor" Value="{AppThemeBinding Light={StaticResource Magenta}, Dark={StaticResource White}}" />
+        <Setter Property="Shell.TabBarUnselectedColor" Value="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray200}}" />
+    </Style>
+
+    <Style TargetType="NavigationPage">
+        <Setter Property="BarBackgroundColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource OffBlack}}" />
+        <Setter Property="BarTextColor" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource White}}" />
+        <Setter Property="IconColor" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource White}}" />
+    </Style>
+
+    <Style TargetType="TabbedPage">
+        <Setter Property="BarBackgroundColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Gray950}}" />
+        <Setter Property="BarTextColor" Value="{AppThemeBinding Light={StaticResource Magenta}, Dark={StaticResource White}}" />
+        <Setter Property="UnselectedTabColor" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray950}}" />
+        <Setter Property="SelectedTabColor" Value="{AppThemeBinding Light={StaticResource Gray950}, Dark={StaticResource Gray200}}" />
+    </Style>
+
+    <Style TargetType="Button">
+        <!-- Existing setters might be here -->
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Primary}}" />
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource White}}" />
+        <!-- ... etc ... -->
+
+        <Setter Property="VisualStateManager.VisualStateGroups">
+            <VisualStateGroupList>
+                <VisualStateGroup x:Name="CommonStates">
+                    <VisualState x:Name="Normal">
+                        <VisualState.Setters>
+                            <Setter Property="Scale" Value="1.0" />
+                            <!-- Optional: Reset background if needed, often handled by base setter -->
+                            <!-- <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource White}}" /> -->
+                        </VisualState.Setters>
+                    </VisualState>
+
+                    <!-- ADD OR MODIFY THIS -->
+                    <VisualState x:Name="Pressed">
+                        <VisualState.Setters>
+                            <Setter Property="Scale" Value="0.95" />
+                            <!-- Optional: Define a pressed background color -->
+                            <!-- Note: Might need separate Light/Dark values -->
+                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light='#3E1F9F', Dark='#DDDDDD'}" />
+                        </VisualState.Setters>
+                    </VisualState>
+
+                    <VisualState x:Name="Disabled">
+                        <VisualState.Setters>
+                            <Setter Property="TextColor" Value="#A0A0A0" />
+                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light='#C0C0C0', Dark='#444444'}" />
+                        </VisualState.Setters>
+                    </VisualState>
+                </VisualStateGroup>
+            </VisualStateGroupList>
+        </Setter>
+    </Style>
+
+</ResourceDictionary>
+</file>
+
 <file path="Source\Converters\FutureRepeatingTaskIsEnabledConverter.cs">
 using System.Globalization;
 using Tickly.Models;
@@ -8578,41 +9366,6 @@ public class UpdateTaskMessage(TaskItem value) : ValueChangedMessage<TaskItem>(v
 }
 </file>
 
-<file path="Source\Models\Enums.cs">
-// File: Models\Enums.cs
-namespace Tickly.Models;
-
-public enum TaskPriority
-{
-    High,   // Red
-    Medium, // Orange
-    Low     // Green
-}
-
-public enum TaskTimeType
-{
-    None,         // One-time, any time
-    SpecificDate, // Specific date
-    Repeating     // Daily, Alternate, Weekly
-}
-
-public enum TaskRepetitionType
-{
-    Daily,
-    AlternateDay, // Every other day from the start date
-    Weekly
-}
-
-// *** ADDED ENUM ***
-public enum SortOrderType
-{
-    Manual, // Default order as saved/reordered by user
-    PriorityHighFirst, // High -> Low -> Title
-    PriorityLowFirst // Low -> High -> Title
-}
-// *** END ADDED ENUM ***
-</file>
-
 <file path="Source\Models\Settings.cs">
 // Models/Settings.cs (New File or add to existing Models)
 namespace Tickly.Models;
@@ -8621,6 +9374,17 @@ public enum CalendarSystemType
 {
     Gregorian,
     Persian
+}
+</file>
+
+<file path="Source\Models\SortOrderType.cs">
+namespace Tickly.Models;
+
+public enum SortOrderType
+{
+    Manual,
+    PriorityHighFirst,
+    PriorityLowFirst
 }
 </file>
 
@@ -8694,53 +9458,108 @@ public partial class TaskItem : ObservableObject
 }
 </file>
 
+<file path="Source\Models\TaskPriority.cs">
+namespace Tickly.Models;
+
+public enum TaskPriority
+{
+    High,   // Red
+    Medium, // Orange
+    Low     // Green
+}
+</file>
+
+<file path="Source\Models\TaskRepetitionType.cs">
+namespace Tickly.Models;
+
+public enum TaskRepetitionType
+{
+    Daily,
+    AlternateDay,
+    Weekly
+}
+</file>
+
+<file path="Source\Models\TaskTimeType.cs">
+namespace Tickly.Models;
+
+public enum TaskTimeType
+{
+    None,
+    SpecificDate,
+    Repeating
+}
+</file>
+
 <file path="Source\Services\AppSettings.cs">
-// Services/AppSettings.cs
-using Microsoft.Maui.Storage; // Required for Preferences
 using System.Diagnostics;
 using Tickly.Models;
 
-namespace Tickly.Services
+namespace Tickly.Services;
+
+public static class AppSettings
 {
-    public static class AppSettings
+    // Key for storing the setting
+    public const string CalendarSystemKey = "CalendarSystemPreference";
+    public const string SortOrderKey = "SortOrderPreference"; // Key for sort order
+
+    // Backing field - Now initialized by static constructor
+    private static CalendarSystemType _selectedCalendarSystem;
+    private static SortOrderType _selectedSortOrder; // Backing field for sort order
+
+    // --- Static Constructor ---
+    // This runs automatically the first time the AppSettings class is accessed.
+    static AppSettings()
     {
-        // Key for storing the setting
-        public const string CalendarSystemKey = "CalendarSystemPreference";
+        // Load Calendar from Preferences, default to Gregorian (0) if not found
+        int storedCalendarValue = Preferences.Get(CalendarSystemKey, (int)CalendarSystemType.Gregorian);
+        _selectedCalendarSystem = (CalendarSystemType)storedCalendarValue; // Set the backing field directly
+        Debug.WriteLine($"AppSettings (Static Constructor): Initialized CalendarSystem to {_selectedCalendarSystem} from Preferences.");
 
-        // Backing field - Now initialized by static constructor
-        private static CalendarSystemType _selectedCalendarSystem;
+        // Load Sort Order from Preferences, default to PriorityHighFirst (1) if not found
+        int storedSortValue = Preferences.Get(SortOrderKey, (int)SortOrderType.PriorityHighFirst);
+        _selectedSortOrder = (SortOrderType)storedSortValue; // Set the backing field directly
+        Debug.WriteLine($"AppSettings (Static Constructor): Initialized SortOrder to {_selectedSortOrder} from Preferences.");
+    }
+    // --- End Static Constructor ---
 
-        // --- Static Constructor ---
-        // This runs automatically the first time the AppSettings class is accessed.
-        static AppSettings()
+    // Public property to access the Calendar setting
+    public static CalendarSystemType SelectedCalendarSystem
+    {
+        get => _selectedCalendarSystem;
+        set
         {
-            // Load from Preferences, default to Gregorian (0) if not found
-            int storedValue = Preferences.Get(CalendarSystemKey, (int)CalendarSystemType.Gregorian);
-            _selectedCalendarSystem = (CalendarSystemType)storedValue; // Set the backing field directly
-            Debug.WriteLine($"AppSettings (Static Constructor): Initialized CalendarSystem to {_selectedCalendarSystem} from Preferences.");
-        }
-        // --- End Static Constructor ---
-
-        // Public property to access the setting
-        public static CalendarSystemType SelectedCalendarSystem
-        {
-            get => _selectedCalendarSystem;
-            set
+            if (_selectedCalendarSystem != value)
             {
-                if (_selectedCalendarSystem != value)
-                {
-                    _selectedCalendarSystem = value; // Update backing field
-                    // Preferences are saved by SettingsViewModel when user makes changes
-                    Debug.WriteLine($"AppSettings: CalendarSystem changed to {value} (will be saved by SettingsViewModel).");
-                    // Optionally raise an event if needed for non-UI immediate updates
-                    // SettingsChanged?.Invoke(null, EventArgs.Empty);
-                }
+                _selectedCalendarSystem = value; // Update backing field
+                // Preferences are saved by SettingsViewModel when user makes changes
+                Debug.WriteLine($"AppSettings: CalendarSystem changed to {value} (will be saved by SettingsViewModel).");
+                // Optionally raise an event if needed for non-UI immediate updates
+                // SettingsChanged?.Invoke(null, EventArgs.Empty);
             }
         }
-
-        // Optional: Event for real-time updates elsewhere if needed
-        // public static event EventHandler SettingsChanged;
     }
+
+    // Public property to access the Sort Order setting
+    public static SortOrderType SelectedSortOrder
+    {
+        get => _selectedSortOrder;
+        set
+        {
+            if (_selectedSortOrder != value)
+            {
+                _selectedSortOrder = value; // Update backing field
+                Preferences.Set(SortOrderKey, (int)value); // Save immediately when set
+                Debug.WriteLine($"AppSettings: SortOrder changed and saved to {value}.");
+                // Optionally raise an event if needed for non-UI immediate updates
+                // SortOrderChanged?.Invoke(null, EventArgs.Empty);
+            }
+        }
+    }
+
+    // Optional: Event for real-time updates elsewhere if needed
+    // public static event EventHandler SettingsChanged;
+    // public static event EventHandler SortOrderChanged;
 }
 </file>
 
@@ -8824,6 +9643,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Tickly.Messages;
 using Tickly.Models;
+using Tickly.Services; // Needed for AppSettings
 using Tickly.Utils;
 using Tickly.Views;
 
@@ -8843,7 +9663,8 @@ public sealed partial class MainViewModel : ObservableObject
     private readonly object _saveLock = new();
     private Timer? _debounceTimer;
 
-    private SortOrderType _currentSortOrder = SortOrderType.PriorityHighFirst;
+    // Remove local _currentSortOrder, use AppSettings directly
+    // private SortOrderType _currentSortOrder = SortOrderType.PriorityHighFirst;
 
     private List<string> _sortOptionsDisplay;
     public List<string> SortOptionsDisplay
@@ -8867,10 +9688,17 @@ public sealed partial class MainViewModel : ObservableObject
                     _ => SortOrderType.Manual
                 };
 
-                if (newSortOrder != _currentSortOrder || value == _selectedSortOption)
+                // Update AppSettings only if it's not 'Manual'
+                // 'Manual' state is implicit when reordering, not a persisted preference.
+                if (newSortOrder != SortOrderType.Manual)
                 {
-                    ApplySortOrderCommand.Execute(null);
+                    AppSettings.SelectedSortOrder = newSortOrder;
                 }
+
+                // Trigger the sort if the *runtime* sort order needs to change
+                // (e.g., switching from Manual to Priority, or Priority High to Low)
+                // Or if the value is being set initially or re-selected.
+                ApplySortOrderCommand.Execute(null);
             }
         }
     }
@@ -8887,7 +9715,8 @@ public sealed partial class MainViewModel : ObservableObject
             "Priority (Low First)"
         ];
 
-        _selectedSortOption = _sortOptionsDisplay[1];
+        // Initialize SelectedSortOption based on loaded preference
+        _selectedSortOption = GetSortOptionDisplayString(AppSettings.SelectedSortOrder);
 
         _ = LoadTasksAsync();
 
@@ -9008,6 +9837,7 @@ public sealed partial class MainViewModel : ObservableObject
                 task.IsFadingOut = false;
             }
 
+            // Apply manual sort order initially from loaded data
             List<TaskItem> tasksToAdd = loadedTasks.OrderBy(task => task.Order).ToList();
 
             await MainThread.InvokeOnMainThreadAsync(() =>
@@ -9019,7 +9849,17 @@ public sealed partial class MainViewModel : ObservableObject
                 }
             });
 
-            ApplySortOrderCommand.Execute(null);
+            // Now apply the *persisted* sort order if it's not manual
+            if (AppSettings.SelectedSortOrder != SortOrderType.Manual)
+            {
+                ApplySortOrderCommand.Execute(null); // This will read from AppSettings
+            }
+            else
+            {
+                // Ensure UI reflects the loaded manual sort state
+                UpdateSelectedSortOptionDisplay(SortOrderType.Manual);
+            }
+
 
             if (changesMade)
             {
@@ -9036,8 +9876,9 @@ public sealed partial class MainViewModel : ObservableObject
                 await MainThread.InvokeOnMainThreadAsync(Tasks.Clear);
             }
 
-            _currentSortOrder = SortOrderType.PriorityHighFirst;
-            UpdateSelectedSortOptionDisplay(_currentSortOrder);
+            // Reset to default sort if loading failed badly
+            AppSettings.SelectedSortOrder = SortOrderType.PriorityHighFirst;
+            UpdateSelectedSortOptionDisplay(AppSettings.SelectedSortOrder);
         }
         finally
         {
@@ -9118,7 +9959,7 @@ public sealed partial class MainViewModel : ObservableObject
                 }
             });
 
-            if (removedSuccessfully && _currentSortOrder != SortOrderType.Manual)
+            if (removedSuccessfully && AppSettings.SelectedSortOrder != SortOrderType.Manual)
             {
                 ApplySortOrderCommand.Execute(null);
             }
@@ -9132,7 +9973,7 @@ public sealed partial class MainViewModel : ObservableObject
                 task.DueDate = nextDueDate;
                 TriggerSave();
 
-                if (_currentSortOrder != SortOrderType.Manual)
+                if (AppSettings.SelectedSortOrder != SortOrderType.Manual)
                 {
                     ApplySortOrderCommand.Execute(null);
                 }
@@ -9171,7 +10012,7 @@ public sealed partial class MainViewModel : ObservableObject
                     }
                 });
 
-                if (removedSuccessfully && _currentSortOrder != SortOrderType.Manual)
+                if (removedSuccessfully && AppSettings.SelectedSortOrder != SortOrderType.Manual)
                 {
                     ApplySortOrderCommand.Execute(null);
                 }
@@ -9221,26 +10062,25 @@ public sealed partial class MainViewModel : ObservableObject
             _ => SortOrderType.Manual
         };
 
-        if (requestedSortOrder == SortOrderType.Manual)
+        // Determine the sort order to apply. Use persisted setting if not Manual.
+        SortOrderType sortToApply = requestedSortOrder == SortOrderType.Manual
+            ? SortOrderType.Manual // Special case: if user selects Manual, reload from saved order.
+            : AppSettings.SelectedSortOrder; // Otherwise, use the (potentially just updated) setting.
+
+
+        if (sortToApply == SortOrderType.Manual)
         {
-            if (_currentSortOrder != SortOrderType.Manual)
-            {
-                _currentSortOrder = SortOrderType.Manual;
-                UpdateSelectedSortOptionDisplay(_currentSortOrder);
-                await LoadTasksAsync();
-            }
-            else
-            {
-                _currentSortOrder = SortOrderType.Manual;
-                UpdateSelectedSortOptionDisplay(_currentSortOrder);
-            }
+            // If switching TO manual or re-selecting manual, load based on saved Order property.
+            await LoadTasksAsync(); // Reloads tasks ordered by the saved `Order` property.
+            UpdateSelectedSortOptionDisplay(SortOrderType.Manual); // Ensure UI reflects manual state.
             return;
         }
 
+        // Apply Priority-based sorting
         List<TaskItem> currentTasks = [];
         await MainThread.InvokeOnMainThreadAsync(() => { currentTasks = new List<TaskItem>(Tasks); });
 
-        List<TaskItem> sortedTasks = requestedSortOrder switch
+        List<TaskItem> sortedTasks = sortToApply switch
         {
             SortOrderType.PriorityHighFirst => currentTasks
                 .OrderByDescending(IsTaskEnabled)
@@ -9252,7 +10092,8 @@ public sealed partial class MainViewModel : ObservableObject
                 .ThenByDescending(task => task.Priority)
                 .ThenBy(task => GetSortableTitle(task.Title), StringComparer.OrdinalIgnoreCase)
                 .ToList(),
-            _ => currentTasks
+            // Should not happen due to the initial check, but include for completeness
+            _ => currentTasks.OrderBy(task => task.Order).ToList()
         };
 
         bool orderChanged = !currentTasks.SequenceEqual(sortedTasks);
@@ -9285,9 +10126,10 @@ public sealed partial class MainViewModel : ObservableObject
             }
         }
 
-        _currentSortOrder = requestedSortOrder;
-        UpdateSelectedSortOptionDisplay(_currentSortOrder);
+        // Ensure the UI reflects the applied sort order
+        UpdateSelectedSortOptionDisplay(sortToApply);
     }
+
 
     private async Task HandleCalendarSettingChanged()
     {
@@ -9307,7 +10149,7 @@ public sealed partial class MainViewModel : ObservableObject
             Tasks.Add(newTask);
             TriggerSave();
 
-            if (_currentSortOrder != SortOrderType.Manual)
+            if (AppSettings.SelectedSortOrder != SortOrderType.Manual)
             {
                 ApplySortOrderCommand.Execute(null);
             }
@@ -9331,7 +10173,7 @@ public sealed partial class MainViewModel : ObservableObject
                 Tasks[index] = updatedTask;
                 TriggerSave();
 
-                if (_currentSortOrder != SortOrderType.Manual)
+                if (AppSettings.SelectedSortOrder != SortOrderType.Manual)
                 {
                     ApplySortOrderCommand.Execute(null);
                 }
@@ -9363,7 +10205,7 @@ public sealed partial class MainViewModel : ObservableObject
             }
         });
 
-        if (removedSuccessfully && _currentSortOrder != SortOrderType.Manual)
+        if (removedSuccessfully && AppSettings.SelectedSortOrder != SortOrderType.Manual)
         {
             ApplySortOrderCommand.Execute(null);
         }
@@ -9371,12 +10213,18 @@ public sealed partial class MainViewModel : ObservableObject
 
     private void Tasks_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs eventArgs)
     {
+        // Only trigger manual sort reset and save on user reorder (Move)
         if (eventArgs.Action == NotifyCollectionChangedAction.Move)
         {
             UpdateTaskOrderProperty();
             TriggerSave();
-            ResetSortToManual();
+            ResetSortToManual(); // This now only updates the UI display
         }
+        // Optional: Trigger save on Add/Remove as well, though handled by message handlers currently
+        // else if (e.Action == NotifyCollectionChangedAction.Add || e.Action == NotifyCollectionChangedAction.Remove)
+        // {
+        //     TriggerSave();
+        // }
     }
 
     private void UpdateTaskOrderProperty()
@@ -9423,17 +10271,16 @@ public sealed partial class MainViewModel : ObservableObject
 
             await MainThread.InvokeOnMainThreadAsync(() =>
             {
-                if (_currentSortOrder == SortOrderType.Manual)
-                {
-                    UpdateTaskOrderPropertyInternal();
-                }
+                // Always update internal Order property based on current list position before saving
+                UpdateTaskOrderPropertyInternal();
                 tasksToSave = new List<TaskItem>(Tasks);
             });
 
 
             if (tasksToSave is not null && tasksToSave.Count > 0)
             {
-                tasksToSave = tasksToSave.OrderBy(task => task.Order).ToList();
+                // No need to re-sort here, Order property is already updated
+                // tasksToSave = tasksToSave.OrderBy(task => task.Order).ToList();
 
                 JsonSerializerOptions options = new() { WriteIndented = true };
                 string json = JsonSerializer.Serialize(tasksToSave, options);
@@ -9442,8 +10289,16 @@ public sealed partial class MainViewModel : ObservableObject
             }
             else if (tasksToSave is not null && tasksToSave.Count == 0)
             {
-                await File.WriteAllTextAsync(_filePath, "[]");
-                Debug.WriteLine($"SaveTasks: Saved empty task list to {_filePath}");
+                // Handle saving an empty list
+                if (File.Exists(_filePath))
+                {
+                    File.Delete(_filePath); // Or write "[]"
+                    Debug.WriteLine($"SaveTasks: Deleted tasks file as the list is empty: {_filePath}");
+                }
+                else
+                {
+                    Debug.WriteLine($"SaveTasks: Task list is empty, no file to save or delete at {_filePath}");
+                }
             }
         }
         catch (Exception exception)
@@ -9477,29 +10332,34 @@ public sealed partial class MainViewModel : ObservableObject
         Timeout.InfiniteTimeSpan);
     }
 
+    // This method now ONLY updates the UI display to "Manual Order".
+    // It DOES NOT change the persisted AppSettings.SelectedSortOrder.
     private void ResetSortToManual()
     {
-        if (_currentSortOrder == SortOrderType.Manual)
-        {
-            return;
-        }
-        _currentSortOrder = SortOrderType.Manual;
         UpdateSelectedSortOptionDisplay(SortOrderType.Manual);
     }
 
+    // Helper to get the display string for a given SortOrderType
+    private string GetSortOptionDisplayString(SortOrderType sortOrder)
+    {
+        return sortOrder switch
+        {
+            SortOrderType.PriorityHighFirst => SortOptionsDisplay[1], // "Priority (High First)"
+            SortOrderType.PriorityLowFirst => SortOptionsDisplay[2],  // "Priority (Low First)"
+            _ => SortOptionsDisplay[0]                                // "Manual Order"
+        };
+    }
+
+
     private void UpdateSelectedSortOptionDisplay(SortOrderType sortOrder)
     {
-        string newDisplayValue = sortOrder switch
-        {
-            SortOrderType.PriorityHighFirst => SortOptionsDisplay[1],
-            SortOrderType.PriorityLowFirst => SortOptionsDisplay[2],
-            _ => SortOptionsDisplay[0]
-        };
+        string newDisplayValue = GetSortOptionDisplayString(sortOrder);
 
+        // Use SetProperty to ensure INotifyPropertyChanged is raised correctly for the UI picker
         if (_selectedSortOption != newDisplayValue)
         {
             SetProperty(ref _selectedSortOption, newDisplayValue, nameof(SelectedSortOption));
-            Debug.WriteLine($"UpdateSelectedSortOptionDisplay: Picker set to '{newDisplayValue}'");
+            Debug.WriteLine($"UpdateSelectedSortOptionDisplay: Picker display updated to '{newDisplayValue}'");
         }
     }
 
@@ -9528,6 +10388,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     private bool _isGregorianSelected;
     private bool _isPersianSelected;
     private readonly string _applicationTasksFilePath;
+    private const string ExportFilePrefix = "Tickly-Tasks-"; // Define prefix for cleanup
 
     public bool IsGregorianSelected
     {
@@ -9556,6 +10417,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     public SettingsViewModel()
     {
         _applicationTasksFilePath = Path.Combine(FileSystem.AppDataDirectory, "tasks.json");
+        Debug.WriteLine($"SettingsViewModel: Tasks file path is set to: {_applicationTasksFilePath}");
         LoadSettings();
     }
 
@@ -9606,48 +10468,142 @@ public sealed partial class SettingsViewModel : ObservableObject
     [RelayCommand]
     private async Task ExportTasksAsync()
     {
-        string temporaryExportPath = string.Empty;
+        string temporaryExportPath = string.Empty; // Keep track for potential logging if needed
+        Debug.WriteLine("ExportTasksAsync: Starting export process.");
 
         try
         {
+            Debug.WriteLine($"ExportTasksAsync: Checking existence of source file: {_applicationTasksFilePath}");
             if (!File.Exists(_applicationTasksFilePath))
             {
+                Debug.WriteLine("ExportTasksAsync: Source tasks file does not exist.");
                 await SettingsViewModel.ShowAlertAsync("Export Failed", "No tasks file exists to export.", "OK");
                 return;
             }
+            Debug.WriteLine("ExportTasksAsync: Source tasks file found.");
 
-            string exportFilename = $"Tickly-Tasks-{DateTime.Now:yyyy--MM--dd}.json";
+            // *** Step 1: Clean up OLD export files ***
+            CleanUpOldExportFiles();
+
+            // Log source file size
+            try
+            {
+                FileInfo sourceInfo = new(_applicationTasksFilePath);
+                Debug.WriteLine($"ExportTasksAsync: Source file size: {sourceInfo.Length} bytes.");
+                if (sourceInfo.Length == 0)
+                {
+                    Debug.WriteLine("ExportTasksAsync: WARNING - Source file is 0 bytes.");
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"ExportTasksAsync: Could not get source file info: {ex.Message}");
+            }
+
+            // *** Step 2: Create the NEW temporary file ***
+            string exportFilename = $"{ExportFilePrefix}{DateTime.Now:yyyy-MM-dd_HH-mm-ss}.json";
             temporaryExportPath = Path.Combine(FileSystem.CacheDirectory, exportFilename);
+            Debug.WriteLine($"ExportTasksAsync: Temporary export path set to: {temporaryExportPath}");
 
+            string? cacheDir = Path.GetDirectoryName(temporaryExportPath);
+            if (cacheDir is not null && !Directory.Exists(cacheDir))
+            {
+                Directory.CreateDirectory(cacheDir);
+                Debug.WriteLine($"ExportTasksAsync: Created cache directory: {cacheDir}");
+            }
+
+            Debug.WriteLine($"ExportTasksAsync: Attempting to copy file from '{_applicationTasksFilePath}' to '{temporaryExportPath}'");
             File.Copy(_applicationTasksFilePath, temporaryExportPath, true);
+            Debug.WriteLine("ExportTasksAsync: File copy successful.");
 
+            if (!File.Exists(temporaryExportPath))
+            {
+                Debug.WriteLine($"ExportTasksAsync: ERROR - Temporary file does not exist after copy attempt: {temporaryExportPath}");
+                await SettingsViewModel.ShowAlertAsync("Export Error", "Failed to create temporary export file.", "OK");
+                return;
+            }
+            Debug.WriteLine($"ExportTasksAsync: Temporary file confirmed to exist: {temporaryExportPath}");
+
+            // Log temporary file size
+            try
+            {
+                FileInfo tempInfo = new(temporaryExportPath);
+                Debug.WriteLine($"ExportTasksAsync: Temporary file size AFTER copy: {tempInfo.Length} bytes.");
+                if (tempInfo.Length == 0)
+                {
+                    Debug.WriteLine($"ExportTasksAsync: ERROR - Temporary file is 0 bytes after copy!");
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"ExportTasksAsync: Could not get temporary file info: {ex.Message}");
+            }
+
+            // *** Step 3: Share the NEW file ***
             ShareFileRequest request = new()
             {
                 Title = "Export Tickly Tasks",
-                File = new(temporaryExportPath, "application/json")
+                File = new ShareFile(temporaryExportPath, "application/json")
             };
+            Debug.WriteLine("ExportTasksAsync: ShareFileRequest created. Title: " + request.Title + ", File Path: " + request.File.FullPath);
 
+            Debug.WriteLine("ExportTasksAsync: Calling Share.RequestAsync...");
             await Share.RequestAsync(request);
+            Debug.WriteLine("ExportTasksAsync: Share.RequestAsync completed.");
+
+            // *** Step 4: NO IMMEDIATE DELETION ***
+            // The file remains in the cache directory. It will be cleaned up
+            // the *next* time the user exports.
+
         }
         catch (Exception exception)
         {
+            Debug.WriteLine($"ExportTasksAsync: Exception caught: {exception.GetType().Name} - {exception.Message}\nStackTrace: {exception.StackTrace}");
             await SettingsViewModel.ShowAlertAsync("Export Error", $"An error occurred during export: {exception.Message}", "OK");
         }
-        finally
+        // The finally block is now removed as we don't delete the current file.
+    }
+
+    // *** NEW METHOD for cleanup ***
+    private void CleanUpOldExportFiles()
+    {
+        try
         {
-            if (!string.IsNullOrEmpty(temporaryExportPath) && File.Exists(temporaryExportPath))
+            string cacheDir = FileSystem.CacheDirectory;
+            string searchPattern = $"{ExportFilePrefix}*.json";
+            Debug.WriteLine($"CleanUpOldExportFiles: Searching for old files in '{cacheDir}' with pattern '{searchPattern}'");
+
+            if (!Directory.Exists(cacheDir))
+            {
+                Debug.WriteLine($"CleanUpOldExportFiles: Cache directory not found.");
+                return;
+            }
+
+            IEnumerable<string> oldFiles = Directory.EnumerateFiles(cacheDir, searchPattern);
+            int count = 0;
+            foreach (string file in oldFiles)
             {
                 try
                 {
-                    File.Delete(temporaryExportPath);
+                    File.Delete(file);
+                    Debug.WriteLine($"CleanUpOldExportFiles: Deleted old file: {file}");
+                    count++;
                 }
-                catch (Exception cleanupException)
+                catch (Exception ex)
                 {
-                    Debug.WriteLine($"Error cleaning up temporary file: {cleanupException.Message}");
+                    Debug.WriteLine($"CleanUpOldExportFiles: Error deleting old file '{file}': {ex.Message}");
+                    // Log but continue trying to delete others
                 }
             }
+            Debug.WriteLine($"CleanUpOldExportFiles: Deleted {count} old export files.");
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"CleanUpOldExportFiles: Error during cleanup: {ex.Message}");
+            // Log the error but don't let cleanup failure prevent the export
         }
     }
+
 
     [RelayCommand]
     private async Task ImportTasksAsync()
@@ -9657,10 +10613,10 @@ public sealed partial class SettingsViewModel : ObservableObject
             FilePickerFileType customFileType = new(
                 new Dictionary<DevicePlatform, IEnumerable<string>>
                 {
-                    [DevicePlatform.iOS] = ["public.json"],
-                    [DevicePlatform.Android] = ["application/json"],
-                    [DevicePlatform.WinUI] = [".json"],
-                    [DevicePlatform.MacCatalyst] = ["json"]
+                    [DevicePlatform.iOS] = ["public.json", "public.text"],
+                    [DevicePlatform.Android] = ["application/json", "text/plain"],
+                    [DevicePlatform.WinUI] = [".json", ".txt"],
+                    [DevicePlatform.MacCatalyst] = ["json", "txt"]
                 });
 
             PickOptions options = new()
@@ -9669,30 +10625,36 @@ public sealed partial class SettingsViewModel : ObservableObject
                 FileTypes = customFileType,
             };
 
+            Debug.WriteLine("ImportTasksAsync: Calling FilePicker.PickAsync...");
             FileResult? result = await FilePicker.PickAsync(options);
 
             if (result is null)
             {
+                Debug.WriteLine("ImportTasksAsync: FilePicker returned null (user cancelled?).");
                 return;
             }
 
+            Debug.WriteLine($"ImportTasksAsync: File picked: {result.FullPath}");
             string fileContent;
 
             try
             {
+                Debug.WriteLine($"ImportTasksAsync: Reading file content from: {result.FullPath}");
                 fileContent = await File.ReadAllTextAsync(result.FullPath);
+                Debug.WriteLine("ImportTasksAsync: File content read successfully. Validating JSON...");
                 _ = JsonSerializer.Deserialize<List<TaskItem>>(fileContent);
+                Debug.WriteLine("ImportTasksAsync: JSON validation successful.");
             }
             catch (JsonException jsonException)
             {
+                Debug.WriteLine($"ImportTasksAsync: Invalid JSON format during import: {jsonException.Message}");
                 await SettingsViewModel.ShowAlertAsync("Import Failed", "The selected file is not a valid JSON task file.", "OK");
-                Debug.WriteLine($"Invalid JSON format during import: {jsonException.Message}");
                 return;
             }
             catch (Exception readException)
             {
+                Debug.WriteLine($"ImportTasksAsync: Error reading selected file: {readException.GetType().Name} - {readException.Message}");
                 await SettingsViewModel.ShowAlertAsync("Import Failed", $"Could not read the selected file: {readException.Message}", "OK");
-                Debug.WriteLine($"Error reading selected file for import: {readException.Message}");
                 return;
             }
 
@@ -9704,32 +10666,42 @@ public sealed partial class SettingsViewModel : ObservableObject
 
             if (!confirmed)
             {
+                Debug.WriteLine("ImportTasksAsync: User cancelled confirmation.");
                 return;
             }
 
             try
             {
+                Debug.WriteLine($"ImportTasksAsync: Copying file from '{result.FullPath}' to '{_applicationTasksFilePath}'");
                 File.Copy(result.FullPath, _applicationTasksFilePath, true);
+                Debug.WriteLine("ImportTasksAsync: File copy successful. Sending reload message.");
                 WeakReferenceMessenger.Default.Send(new TasksReloadRequestedMessage());
                 await SettingsViewModel.ShowAlertAsync("Import Successful", "Tasks imported successfully. The task list has been updated.", "OK");
             }
             catch (Exception copyException)
             {
+                Debug.WriteLine($"ImportTasksAsync: Error copying imported file: {copyException.GetType().Name} - {copyException.Message}");
                 await SettingsViewModel.ShowAlertAsync("Import Failed", $"Could not replace the tasks file: {copyException.Message}", "OK");
-                Debug.WriteLine($"Error copying imported file: {copyException.Message}");
             }
         }
         catch (Exception exception)
         {
+            Debug.WriteLine($"ImportTasksAsync: General error during import: {exception.GetType().Name} - {exception.Message}\nStackTrace: {exception.StackTrace}");
             await SettingsViewModel.ShowAlertAsync("Import Error", $"An unexpected error occurred during import: {exception.Message}", "OK");
-            Debug.WriteLine($"General error during import: {exception.Message}");
         }
     }
 
+
+    // Static helper to display alerts using the current page context
     private static async Task ShowAlertAsync(string title, string message, string cancelAction)
     {
-        Page? currentPage = GetCurrentPage();
+        if (!MainThread.IsMainThread)
+        {
+            await MainThread.InvokeOnMainThreadAsync(() => ShowAlertAsync(title, message, cancelAction));
+            return;
+        }
 
+        Page? currentPage = GetCurrentPage();
         if (currentPage is not null)
         {
             await currentPage.DisplayAlert(title, message, cancelAction);
@@ -9740,10 +10712,15 @@ public sealed partial class SettingsViewModel : ObservableObject
         }
     }
 
+    // Static helper to display confirmations using the current page context
     private static async Task<bool> ShowConfirmationAsync(string title, string message, string acceptAction, string cancelAction)
     {
-        Page? currentPage = GetCurrentPage();
+        if (!MainThread.IsMainThread)
+        {
+            return await MainThread.InvokeOnMainThreadAsync(() => ShowConfirmationAsync(title, message, acceptAction, cancelAction));
+        }
 
+        Page? currentPage = GetCurrentPage();
         if (currentPage is not null)
         {
             return await currentPage.DisplayAlert(title, message, acceptAction, cancelAction);
@@ -9751,32 +10728,26 @@ public sealed partial class SettingsViewModel : ObservableObject
         else
         {
             Debug.WriteLine($"ShowConfirmation: Could not find current page to display confirmation: {title}");
-            return false;
+            return false; // Assume cancellation if page not found
         }
     }
 
+
     private static Page? GetCurrentPage()
     {
-        if (Shell.Current is not null)
+        if (Application.Current?.MainPage is Shell shell && shell.CurrentPage is not null)
         {
-            return Shell.Current.CurrentPage;
+            return shell.CurrentPage;
         }
-
-        if (Application.Current?.Windows is not { Count: > 0 } windows)
+        if (Application.Current?.MainPage is Page mainPage)
         {
-            return null;
+            return mainPage;
         }
-
-        foreach (Window window in windows)
+        if (Application.Current?.Windows is { Count: > 0 } windows && windows[0].Page is not null)
         {
-            if (window.Page is null)
-            {
-                continue;
-            }
-
-            return window.Page;
+            return windows[0].Page;
         }
-
+        Debug.WriteLine("GetCurrentPage: Could not determine the current page.");
         return null;
     }
 }
@@ -9792,6 +10763,129 @@ namespace Tickly.Messages
         }
     }
 }
+</file>
+
+<file path="Source\Views\AddTaskPopupPage.xaml">
+<?xml version="1.0" encoding="utf-8" ?>
+<!-- Views/AddTaskPopupPage.xaml -->
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:models="clr-namespace:Tickly.Models"
+             xmlns:converters="clr-namespace:Tickly.Converters"
+             xmlns:vm="clr-namespace:Tickly.Views"
+             x:Class="Tickly.Views.AddTaskPopupPage"
+             x:DataType="vm:AddTaskPopupPageViewModel"
+             BackgroundColor="Black"
+             Title="{Binding PageTitle}">
+    <!-- Dynamic Page Title (Add New Task / Edit Task) -->
+    <!-- Set DataType for compile-time checking and intellisense -->
+
+    <ContentPage.Resources>
+        <ResourceDictionary>
+            <converters:InverseBooleanConverter x:Key="InverseBooleanConverter" />
+            <!-- Styles -->
+            <Style TargetType="Entry" x:Key="MinimalEntry">
+                <Setter Property="TextColor" Value="White" />
+                <Setter Property="PlaceholderColor" Value="Gray" />
+                <Setter Property="BackgroundColor" Value="Transparent" />
+                <Setter Property="Margin" Value="0,0,0,5" />
+            </Style>
+            <!-- Ensure Primary color is defined globally -->
+            <!-- <Color x:Key="Primary">#512BD4</Color> -->
+        </ResourceDictionary>
+    </ContentPage.Resources>
+
+    <ScrollView>
+        <VerticalStackLayout Padding="20" Spacing="15">
+
+            <!-- Task Title Input -->
+            <Label Text="Task Title" TextColor="WhiteSmoke"/>
+            <Entry x:Name="TitleEntry"
+                   Placeholder="Enter task title"
+                   Text="{Binding Title}"
+                   Style="{StaticResource MinimalEntry}" />
+
+            <!-- Priority Selection -->
+            <Label Text="Priority" TextColor="WhiteSmoke"/>
+            <HorizontalStackLayout Spacing="10" BindableLayout.ItemsSource="{Binding PriorityOptions}">
+                <BindableLayout.ItemTemplate>
+                    <DataTemplate x:DataType="vm:SelectableOption(models:TaskPriority)">
+                        <RadioButton GroupName="PriorityGroup"
+                                     IsChecked="{Binding IsSelected}"
+                                     Content="{Binding Name}"
+                                     TextColor="WhiteSmoke" />
+                    </DataTemplate>
+                </BindableLayout.ItemTemplate>
+            </HorizontalStackLayout>
+
+            <!-- Time / Repetition Type Selection -->
+            <Label Text="Time / Repetition" TextColor="WhiteSmoke"/>
+            <VerticalStackLayout Spacing="5">
+                <RadioButton GroupName="TimeTypeGroup" Content="None (Any time)" TextColor="WhiteSmoke"
+                             IsChecked="{Binding IsTimeTypeNone}" />
+                <RadioButton GroupName="TimeTypeGroup" Content="Specific Date" TextColor="WhiteSmoke"
+                             IsChecked="{Binding IsTimeTypeSpecificDate}" />
+                <RadioButton GroupName="TimeTypeGroup" Content="Repeating" TextColor="WhiteSmoke"
+                              IsChecked="{Binding IsTimeTypeRepeating}" />
+            </VerticalStackLayout>
+
+            <!-- Specific Date Picker (Visible only when SpecificDate is selected) -->
+            <DatePicker x:Name="DueDatePicker"
+                        Date="{Binding DueDate}"
+                        TextColor="WhiteSmoke"
+                        BackgroundColor="#1E1E1E"
+                        IsVisible="{Binding IsTimeTypeSpecificDate}"
+                        Margin="20,0,0,0" />
+
+            <!-- Repetition Options Section (Visible only when Repeating is selected) -->
+            <VerticalStackLayout Spacing="10" Margin="20,5,0,0"
+                                 IsVisible="{Binding IsTimeTypeRepeating}">
+
+                <Label Text="Repeat:" TextColor="LightGray"/>
+                <HorizontalStackLayout Spacing="10" BindableLayout.ItemsSource="{Binding RepetitionTypeOptions}">
+                    <BindableLayout.ItemTemplate>
+                        <DataTemplate x:DataType="vm:SelectableOption(models:TaskRepetitionType)">
+                            <RadioButton GroupName="RepetitionTypeGroup"
+                                         IsChecked="{Binding IsSelected}"
+                                         Content="{Binding Name}"
+                                         TextColor="WhiteSmoke" />
+                        </DataTemplate>
+                    </BindableLayout.ItemTemplate>
+                </HorizontalStackLayout>
+
+                <!-- *** Start Date for Repetition Picker REMOVED *** -->
+                <!-- <StackLayout Orientation="Horizontal" Spacing="5" Margin="0,5,0,0"> -->
+                <!--     <Label Text="Starting:" VerticalOptions="Center" TextColor="LightGray"/> -->
+                <!--     <DatePicker x:Name="RepeatStartDatePicker" -->
+                <!--                 Date="{Binding DueDate}" -->
+                <!--                 TextColor="WhiteSmoke" -->
+                <!--                 BackgroundColor="#1E1E1E" /> -->
+                <!-- </StackLayout> -->
+
+                <!-- Day of Week Picker (Visible only for Weekly repetition) -->
+                <StackLayout Orientation="Horizontal" Spacing="5" Margin="0,5,0,0"
+                             IsVisible="{Binding IsWeeklySelected}">
+                    <Label Text="On:" VerticalOptions="Center" TextColor="LightGray"/>
+                    <Picker x:Name="DayOfWeekPicker"
+                            Title="Select Day"
+                            TextColor="WhiteSmoke"
+                            BackgroundColor="#1E1E1E"
+                            ItemsSource="{Binding DisplayDaysOfWeek}"
+                            SelectedItem="{Binding SelectedDisplayDayOfWeek}"
+                            WidthRequest="150" />
+                </StackLayout>
+            </VerticalStackLayout>
+
+            <!-- Action Buttons -->
+            <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="10" Margin="0,20,0,0">
+                <Button Grid.Column="0" Text="Delete" Clicked="OnDeleteClicked" BackgroundColor="DarkRed" TextColor="White" IsVisible="{Binding IsEditMode}" HorizontalOptions="Start" />
+                <Button Grid.Column="2" Text="Cancel" Clicked="OnCancelClicked" BackgroundColor="#444444" TextColor="WhiteSmoke" HorizontalOptions="End" />
+                <Button Grid.Column="3" Text="{Binding ConfirmButtonText}" Clicked="OnConfirmClicked" BackgroundColor="{StaticResource Primary}" TextColor="Black" HorizontalOptions="End" />
+            </Grid>
+
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>
 </file>
 
 <file path="Source\Views\AddTaskPopupPage.xaml.cs">
@@ -10202,6 +11296,75 @@ namespace Tickly.Views
 
     } // End of AddTaskPopupPage class
 } // End of namespace
+</file>
+
+<file path="Source\Views\SettingsPage.xaml">
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:Tickly.ViewModels"
+             x:Class="Tickly.Views.SettingsPage"
+             Title="Settings"
+             BackgroundColor="Black">
+
+    <ContentPage.BindingContext>
+        <vm:SettingsViewModel />
+    </ContentPage.BindingContext>
+
+    <ScrollView>
+        <VerticalStackLayout Padding="20" Spacing="15">
+
+            <Label Text="Calendar Settings"
+                   TextColor="WhiteSmoke"
+                   FontSize="Large"
+                   FontAttributes="Bold"
+                   Margin="0,0,0,10"/>
+
+            <Label Text="Choose the calendar system for displaying dates:"
+                   TextColor="LightGray"
+                   FontSize="Small"/>
+
+            <RadioButton GroupName="CalendarGroup"
+                         Content="Gregorian Calendar"
+                         TextColor="WhiteSmoke"
+                         IsChecked="{Binding IsGregorianSelected}" />
+
+            <RadioButton GroupName="CalendarGroup"
+                         Content="Persian (Shamsi) Calendar"
+                         TextColor="WhiteSmoke"
+                         IsChecked="{Binding IsPersianSelected}" />
+
+            <!-- Separator -->
+            <BoxView HeightRequest="1" Color="#333333" Margin="0,15,0,15"/>
+
+            <!-- Data Management Section -->
+            <Label Text="Data Management"
+                   TextColor="WhiteSmoke"
+                   FontSize="Large"
+                   FontAttributes="Bold"
+                   Margin="0,0,0,10"/>
+
+            <Label Text="Export your current tasks to a JSON file or import tasks from a previously exported file (this will replace current tasks)."
+                    TextColor="LightGray"
+                    FontSize="Small"
+                    LineBreakMode="WordWrap"/>
+
+            <HorizontalStackLayout Spacing="10" Margin="0,10,0,0">
+                <Button Text="Export Tasks"
+                         Command="{Binding ExportTasksCommand}"
+                         BackgroundColor="#005A9C"
+                         TextColor="WhiteSmoke"/>
+
+                <Button Text="Import Tasks"
+                         Command="{Binding ImportTasksCommand}"
+                         BackgroundColor="#008000"
+                         TextColor="WhiteSmoke"/>
+            </HorizontalStackLayout>
+
+        </VerticalStackLayout>
+    </ScrollView>
+
+</ContentPage>
 </file>
 
 <file path="Source\Views\SettingsPage.xaml.cs">

@@ -1,4 +1,4 @@
-﻿namespace Tickly;
+﻿namespace Tickly.Models;
 
 public enum TaskTimeType
 {

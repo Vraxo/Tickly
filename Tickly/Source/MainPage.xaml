@@ -94,12 +94,19 @@
         </ResourceDictionary>
     </ContentPage.Resources>
 
-    <Grid RowDefinitions="*" ColumnDefinitions="*">
+    <Grid RowDefinitions="Auto,*" ColumnDefinitions="*">
 
-        <CollectionView Grid.Row="0" Grid.Column="0"
+        <ProgressBar Grid.Row="0" Grid.Column="0"
+                     Progress="{Binding TaskProgress}"
+                     ProgressColor="{Binding TaskProgressColor}"
+                     BackgroundColor="#404040"
+                     HeightRequest="5"
+                     Margin="0,0,0,5"/>
+
+        <CollectionView Grid.Row="1" Grid.Column="0"
                     ItemsSource="{Binding Tasks}"
                     CanReorderItems="True"
-                    Margin="15,10,15,0"
+                    Margin="15,0,15,0"
                     SelectionMode="None">
 
             <CollectionView.ItemTemplate>
@@ -117,6 +124,9 @@
                                             </MultiBinding>
                                         </DataTrigger.Binding>
                                         <Setter Property="Opacity" Value="0.5" />
+                                    </DataTrigger>
+                                    <DataTrigger TargetType="Grid" Binding="{Binding IsFadingOut}" Value="True">
+                                        <Setter Property="Opacity" Value="0.0"/>
                                     </DataTrigger>
                                 </Style.Triggers>
                             </Style>
@@ -188,7 +198,7 @@
 
         </CollectionView>
 
-        <Button Grid.Row="0" Grid.Column="0"
+        <Button Grid.Row="1" Grid.Column="0"
             Style="{StaticResource AddButtonStyle}"
             Command="{Binding NavigateToAddPageCommand}"/>
 
