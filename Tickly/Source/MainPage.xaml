@@ -1,157 +1,197 @@
 ﻿<?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
-             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-             xmlns:vm="clr-namespace:Tickly.ViewModels"
-             xmlns:model="clr-namespace:Tickly.Models"
-             xmlns:converters="clr-namespace:Tickly.Converters"
-             xmlns:fonts="clr-namespace:Fonts"
-             x:DataType="vm:MainViewModel"
-             x:Class="Tickly.MainPage"
-             Shell.NavBarIsVisible="False"
-             BackgroundColor="{StaticResource PageBackgroundColor}">
+         xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+         xmlns:vm="clr-namespace:Tickly.ViewModels"
+         xmlns:models="clr-namespace:Tickly.Models"
+         xmlns:converters="clr-namespace:Tickly.Converters"
+         x:Class="Tickly.MainPage"
+         BackgroundColor="Black"
+         Title="Tickly Tasks">
+
+    <ContentPage.BindingContext>
+        <vm:MainViewModel />
+    </ContentPage.BindingContext>
+
+    <Shell.TitleView>
+        <Grid ColumnDefinitions="*, Auto" VerticalOptions="FillAndExpand" Margin="0,0,10,0">
+            <Label Grid.Column="0"
+               Text="Tickly Tasks"
+               TextColor="{AppThemeBinding Light=Black, Dark=White}"
+               FontSize="18"
+               FontAttributes="Bold"
+               VerticalOptions="Center"
+               HorizontalOptions="Start"
+               Margin="10,0,0,0"/>
+
+            <Picker Grid.Column="1"
+                ItemsSource="{Binding SortOptionsDisplay}"
+                SelectedItem="{Binding SelectedSortOption}"
+                BackgroundColor="Black"
+                TextColor="WhiteSmoke"
+                FontSize="Small"
+                HorizontalOptions="End"
+                VerticalOptions="Center"
+                MinimumWidthRequest="180"
+                Margin="0,0,5,0"/>
+        </Grid>
+    </Shell.TitleView>
+
 
     <ContentPage.Resources>
-        <converters:PriorityToColorConverter x:Key="PriorityToColorConverter" />
-        <converters:TaskTimeToStringConverter x:Key="TaskTimeToStringConverter" />
-        <converters:InverseBooleanConverter x:Key="InverseBooleanConverter" />
-        <converters:FutureRepeatingTaskIsEnabledConverter x:Key="FutureRepeatingTaskIsEnabledConverter" />
-        <converters:ProgressToColorConverter x:Key="ProgressToColorConverter" />
+        <ResourceDictionary>
+            <converters:PriorityToColorConverter x:Key="PriorityColorConverter" />
+            <converters:TaskTimeToStringConverter x:Key="TaskTimeConverter" />
+            <converters:InverseBooleanConverter x:Key="InverseBooleanConverter" />
+            <converters:FutureRepeatingTaskIsEnabledConverter x:Key="FutureRepeatingTaskIsEnabledConverter" />
 
-        <Style TargetType="Frame" x:Key="TaskCardStyle">
-            <Setter Property="BackgroundColor" Value="White"/>
-            <Setter Property="CornerRadius" Value="8"/>
-            <Setter Property="Padding" Value="15"/>
-            <Setter Property="Margin" Value="10,5"/>
-            <Setter Property="HasShadow" Value="True"/>
-            <Setter Property="BorderColor" Value="#e9ecef"/>
-            <Setter Property="Opacity" Value="1"/>
-            <Style.Triggers>
-                <DataTrigger TargetType="Frame"
-                             Binding="{Binding IsFadingOut}"
-                             Value="True">
-                    <Setter Property="Opacity" Value="0"/>
-                </DataTrigger>
-            </Style.Triggers>
-        </Style>
+            <Style TargetType="Frame" x:Key="PriorityIndicatorFrameStyle">
+                <Setter Property="HeightRequest" Value="12"/>
+                <Setter Property="WidthRequest" Value="12"/>
+                <Setter Property="CornerRadius" Value="6"/>
+                <Setter Property="BackgroundColor" Value="{Binding Priority, Converter={StaticResource PriorityColorConverter}}"/>
+                <Setter Property="VerticalOptions" Value="Center"/>
+                <Setter Property="HorizontalOptions" Value="Center"/>
+                <Setter Property="BorderColor" Value="Transparent"/>
+                <Setter Property="Padding" Value="0"/>
+                <Setter Property="Margin" Value="0,5,0,0"/>
+            </Style>
+            <Style TargetType="Label" x:Key="TaskTitleLabelStyle">
+                <Setter Property="TextColor" Value="{AppThemeBinding Light=Black, Dark=White}"/>
+                <Setter Property="FontSize" Value="16"/>
+                <Setter Property="FontAttributes" Value="Bold"/>
+                <Setter Property="VerticalOptions" Value="Center"/>
+            </Style>
+            <Style TargetType="Label" x:Key="TaskTimeLabelStyle">
+                <Setter Property="TextColor" Value="Gray"/>
+                <Setter Property="FontSize" Value="12"/>
+                <Setter Property="VerticalOptions" Value="Center"/>
+            </Style>
+            <Style TargetType="StackLayout" x:Key="EmptyViewLayoutStyle">
+                <Setter Property="VerticalOptions" Value="Center"/>
+                <Setter Property="HorizontalOptions" Value="Center"/>
+                <Setter Property="Padding" Value="20"/>
+                <Setter Property="Spacing" Value="5"/>
+            </Style>
+            <Style TargetType="Label" x:Key="EmptyViewLabelStyle">
+                <Setter Property="TextColor" Value="Gray"/>
+                <Setter Property="HorizontalTextAlignment" Value="Center"/>
+            </Style>
+            <Style TargetType="Button" x:Key="AddButtonStyle">
+                <Setter Property="Text" Value="+"/>
+                <Setter Property="FontSize" Value="24"/>
+                <Setter Property="FontAttributes" Value="Bold"/>
+                <Setter Property="TextColor" Value="{AppThemeBinding Light=White, Dark=Black}"/>
+                <Setter Property="BackgroundColor" Value="{StaticResource Primary}"/>
+                <Setter Property="CornerRadius" Value="28"/>
+                <Setter Property="HeightRequest" Value="56"/>
+                <Setter Property="WidthRequest" Value="56"/>
+                <Setter Property="HorizontalOptions" Value="End"/>
+                <Setter Property="VerticalOptions" Value="End"/>
+                <Setter Property="Margin" Value="20"/>
+                <Setter Property="SemanticProperties.Hint" Value="Add a new task"/>
+            </Style>
 
-        <Style TargetType="Label" x:Key="TaskTitleStyle">
-            <Setter Property="FontSize" Value="16"/>
-            <Setter Property="FontAttributes" Value="Bold"/>
-            <Setter Property="TextColor" Value="#212529"/>
-            <Setter Property="LineBreakMode" Value="TailTruncation"/>
-        </Style>
-
-        <Style TargetType="Label" x:Key="TaskDetailStyle">
-            <Setter Property="FontSize" Value="12"/>
-            <Setter Property="TextColor" Value="#6c757d"/>
-        </Style>
-
-        <Style TargetType="Grid" x:Key="TaskGridStyle">
-            <Setter Property="ColumnDefinitions" Value="Auto,*,Auto"/>
-            <Setter Property="RowDefinitions" Value="Auto, Auto"/>
-            <Setter Property="ColumnSpacing" Value="10"/>
-        </Style>
-
-        <DataTemplate x:Key="TaskItemTemplate" x:DataType="model:TaskItem">
-            <Frame Style="{StaticResource TaskCardStyle}">
-                <Frame.GestureRecognizers>
-                    <TapGestureRecognizer Command="{Binding Source={RelativeSource AncestorType={x:Type vm:MainViewModel}}, Path=NavigateToEditPageCommand}"
-                                          CommandParameter="{Binding .}"/>
-                </Frame.GestureRecognizers>
-                <Grid Style="{StaticResource TaskGridStyle}">
-                    <Border StrokeShape="RoundRectangle 5"
-                            StrokeThickness="0"
-                            BackgroundColor="{Binding Priority, Converter={StaticResource PriorityToColorConverter}}"
-                            HeightRequest="30" WidthRequest="5"
-                            VerticalOptions="Center"
-                            Grid.RowSpan="2" Grid.Column="0"/>
-
-                    <Label Text="{Binding Title}"
-                           Style="{StaticResource TaskTitleStyle}"
-                           Grid.Row="0" Grid.Column="1"/>
-
-                    <Button Text="{Static fonts:FluentUI.checkmark_20_regular}"
-                            FontFamily="FluentUI" FontSize="16"
-                            BackgroundColor="Transparent" TextColor="#28a745"
-                            HeightRequest="40" WidthRequest="40" Padding="0" Margin="0"
-                            BorderWidth="0"
-                            CornerRadius="20"
-                            VerticalOptions="Center"
-                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:MainViewModel}}, Path=MarkTaskDoneCommand}"
-                            CommandParameter="{Binding .}"
-                            Grid.RowSpan="2" Grid.Column="2">
-                        <Button.IsEnabled>
-                            <MultiBinding Converter="{StaticResource FutureRepeatingTaskIsEnabledConverter}">
-                                <Binding Path="TimeType" />
-                                <Binding Path="DueDate" />
-                            </MultiBinding>
-                        </Button.IsEnabled>
-                    </Button>
-
-                    <Label Style="{StaticResource TaskDetailStyle}"
-                           Grid.Row="1" Grid.Column="1">
-                        <Label.FormattedText>
-                            <FormattedString>
-                                <Span Text="{Binding ., Converter={StaticResource TaskTimeToStringConverter}}"/>
-                            </FormattedString>
-                        </Label.FormattedText>
-                    </Label>
-                </Grid>
-            </Frame>
-        </DataTemplate>
+        </ResourceDictionary>
     </ContentPage.Resources>
 
-    <Grid RowDefinitions="Auto,Auto,*,Auto" BackgroundColor="{StaticResource PageBackgroundColor}">
+    <Grid RowDefinitions="*" ColumnDefinitions="*">
 
-        <ProgressBar Grid.Row="0"
-                     Progress="{Binding TaskCompletionProgress}"
-                     ProgressColor="{Binding TaskCompletionProgress, Converter={StaticResource ProgressToColorConverter}}"
-                     HeightRequest="4"
-                     Margin="0,0,0,0" />
+        <CollectionView Grid.Row="0" Grid.Column="0"
+                    ItemsSource="{Binding Tasks}"
+                    CanReorderItems="True"
+                    Margin="15,10,15,0"
+                    SelectionMode="None">
 
-        <Grid Grid.Row="1" ColumnDefinitions="*,Auto,Auto" Padding="15,10,15,5" BackgroundColor="{StaticResource HeaderBackgroundColor}">
-            <Label Text="Tickly Tasks"
-                   FontSize="24" FontAttributes="Bold" TextColor="{StaticResource HeaderTextColor}"
-                   VerticalOptions="Center"/>
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="models:TaskItem">
+                    <Grid Padding="10, 8" Opacity="{Binding IsFadingOut, Converter={StaticResource InverseBooleanConverter}}">
+                        <Grid.Style>
+                            <Style TargetType="Grid">
+                                <Setter Property="Opacity" Value="1.0" />
+                                <Style.Triggers>
+                                    <DataTrigger TargetType="Grid" Value="False">
+                                        <DataTrigger.Binding>
+                                            <MultiBinding Converter="{StaticResource FutureRepeatingTaskIsEnabledConverter}">
+                                                <Binding Path="TimeType" />
+                                                <Binding Path="DueDate" />
+                                            </MultiBinding>
+                                        </DataTrigger.Binding>
+                                        <Setter Property="Opacity" Value="0.5" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Grid.Style>
 
-            <Picker Grid.Column="1" Title="Sort By..."
-                    ItemsSource="{Binding SortOptionsDisplay}"
-                    SelectedItem="{Binding SelectedSortOption}"
-                    FontSize="12" VerticalOptions="Center"
-                    Margin="0,0,5,0" TextColor="{StaticResource DefaultTextColor}"/>
+                        <Grid ColumnSpacing="10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <Frame Grid.Column="0" Style="{StaticResource PriorityIndicatorFrameStyle}"/>
+                            <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
+                                <VerticalStackLayout.GestureRecognizers>
+                                    <TapGestureRecognizer
+                                    Command="{Binding Source={RelativeSource AncestorType={x:Type vm:MainViewModel}}, Path=NavigateToEditPageCommand}"
+                                    CommandParameter="{Binding .}" />
+                                </VerticalStackLayout.GestureRecognizers>
+                                <Label Text="{Binding Title}" Style="{StaticResource TaskTitleLabelStyle}" />
+                                <Label Text="{Binding ., Converter={StaticResource TaskTimeConverter}}" Style="{StaticResource TaskTimeLabelStyle}" />
+                            </VerticalStackLayout>
 
-            <Button Grid.Column="2" Text="{Static fonts:FluentUI.settings_20_regular}"
-                    FontFamily="FluentUI" FontSize="18"
-                    BackgroundColor="Transparent" TextColor="{StaticResource HeaderTextColor}"
-                    Command="{Binding Source={RelativeSource AncestorType={x:Type Shell}}, Path=GoToAsyncCommand}"
-                    CommandParameter="SettingsPage"
-                    VerticalOptions="Center"
-                    HeightRequest="30" WidthRequest="30" Padding="0"/>
-        </Grid>
+                            <Grid Grid.Column="2"
+                              VerticalOptions="Center"
+                              HorizontalOptions="Center"
+                              Margin="5,0,0,0"
+                              Padding="5">
+                                <Grid.IsEnabled>
+                                    <MultiBinding Converter="{StaticResource FutureRepeatingTaskIsEnabledConverter}">
+                                        <Binding Path="TimeType" />
+                                        <Binding Path="DueDate" />
+                                    </MultiBinding>
+                                </Grid.IsEnabled>
+                                <Grid.Background>
+                                    <SolidColorBrush Color="Transparent"/>
+                                </Grid.Background>
+                                <Grid.GestureRecognizers>
+                                    <TapGestureRecognizer
+                                    Command="{Binding Source={RelativeSource AncestorType={x:Type vm:MainViewModel}}, Path=MarkTaskDoneCommand}"
+                                    CommandParameter="{Binding .}"/>
+                                </Grid.GestureRecognizers>
+                                <Border Stroke="{AppThemeBinding Light=Gray, Dark=LightGray}"
+                                    StrokeThickness="2"
+                                    HeightRequest="24"
+                                    WidthRequest="24"
+                                    VerticalOptions="Center"
+                                    HorizontalOptions="Center"
+                                    InputTransparent="True">
+                                    <Border.StrokeShape>
+                                        <Ellipse/>
+                                    </Border.StrokeShape>
+                                </Border>
+                            </Grid>
+                        </Grid>
+                    </Grid>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
 
-        <CollectionView Grid.Row="2"
-                        ItemsSource="{Binding Tasks}"
-                        ItemTemplate="{StaticResource TaskItemTemplate}"
-                        SelectionMode="None"
-                        CanReorderItems="True"
-                        VerticalOptions="FillAndExpand">
             <CollectionView.EmptyView>
-                <StackLayout Padding="20" VerticalOptions="Center" HorizontalOptions="Center">
-                    <Label Text="No tasks yet!" HorizontalTextAlignment="Center" FontSize="18" TextColor="#6c757d"/>
-                    <Label Text="Tap the '+' button to add your first task." HorizontalTextAlignment="Center" FontSize="14" TextColor="#adb5bd"/>
+                <StackLayout Style="{StaticResource EmptyViewLayoutStyle}">
+                    <Label Text="No tasks yet!" Style="{StaticResource EmptyViewLabelStyle}" FontSize="16"/>
+                    <Label Text="Click the '+' button to add one." Style="{StaticResource EmptyViewLabelStyle}" FontSize="14"/>
                 </StackLayout>
             </CollectionView.EmptyView>
+
+            <CollectionView.Footer>
+                <ContentView HeightRequest="90" BackgroundColor="Transparent"/>
+            </CollectionView.Footer>
+
         </CollectionView>
 
-        <Button Grid.Row="3" Text="{Static fonts:FluentUI.add_24_regular}"
-                FontFamily="FluentUI" FontSize="24"
-                BackgroundColor="{StaticResource AccentColor}" TextColor="White"
-                CornerRadius="28" HeightRequest="56" WidthRequest="56"
-                HorizontalOptions="End" VerticalOptions="End"
-                Margin="0,0,20,20"
-                Command="{Binding NavigateToAddPageCommand}"
-                AbsoluteLayout.LayoutFlags="PositionProportional"
-                AbsoluteLayout.LayoutBounds="1,1,-1,-1"/>
+        <Button Grid.Row="0" Grid.Column="0"
+            Style="{StaticResource AddButtonStyle}"
+            Command="{Binding NavigateToAddPageCommand}"/>
+
     </Grid>
 
 </ContentPage>

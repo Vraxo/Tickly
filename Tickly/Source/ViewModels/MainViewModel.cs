@@ -1,85 +1,102 @@
-﻿// Source/ViewModels/MainViewModel.cs
+﻿using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using CommunityToolkit.Mvvm.Messaging;
+using Microsoft.Maui.ApplicationModel;
+using Microsoft.Maui.Controls;
+using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.Diagnostics;
-using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
-using CommunityToolkit.Mvvm.Messaging;
+using System.IO;
+using System.Linq;
+using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
 using Tickly.Messages;
 using Tickly.Models;
-using Tickly.Services;
+using Tickly.Services; // Needed for AppSettings
 using Tickly.Utils;
-using Tickly.Views; // Needed for AddTaskPopupPage reference
+using Tickly.Views;
 
 namespace Tickly.ViewModels;
 
 public sealed partial class MainViewModel : ObservableObject
 {
-    public ObservableCollection<TaskItem> Tasks { get; set; } = [];
-    public List<string> SortOptionsDisplay { get; set; }
+    private ObservableCollection<TaskItem> _tasks;
+    public ObservableCollection<TaskItem> Tasks
+    {
+        get => _tasks;
+        set => SetProperty(ref _tasks, value);
+    }
 
+    private readonly string _filePath;
+    private bool _isSaving = false;
+    private readonly object _saveLock = new();
+    private Timer? _debounceTimer;
+
+    // Remove local _currentSortOrder, use AppSettings directly
+    // private SortOrderType _currentSortOrder = SortOrderType.PriorityHighFirst;
+
+    private List<string> _sortOptionsDisplay;
+    public List<string> SortOptionsDisplay
+    {
+        get => _sortOptionsDisplay;
+        set => SetProperty(ref _sortOptionsDisplay, value);
+    }
+
+    private string _selectedSortOption;
     public string SelectedSortOption
     {
-        get => field; // Use field keyword for auto-property backing field
-
+        get => _selectedSortOption;
         set
         {
-            if (!SetProperty(ref field, value))
+            if (SetProperty(ref _selectedSortOption, value))
             {
-                return;
+                SortOrderType newSortOrder = value switch
+                {
+                    "Priority (High First)" => SortOrderType.PriorityHighFirst,
+                    "Priority (Low First)" => SortOrderType.PriorityLowFirst,
+                    _ => SortOrderType.Manual
+                };
+
+                // Update AppSettings only if it's not 'Manual'
+                // 'Manual' state is implicit when reordering, not a persisted preference.
+                if (newSortOrder != SortOrderType.Manual)
+                {
+                    AppSettings.SelectedSortOrder = newSortOrder;
+                }
+
+                // Trigger the sort if the *runtime* sort order needs to change
+                // (e.g., switching from Manual to Priority, or Priority High to Low)
+                // Or if the value is being set initially or re-selected.
+                ApplySortOrderCommand.Execute(null);
             }
-
-            SortOrderType newSortOrder = value switch
-            {
-                "Priority (High First)" => SortOrderType.PriorityHighFirst,
-                "Priority (Low First)" => SortOrderType.PriorityLowFirst,
-                _ => SortOrderType.Manual
-            };
-
-            // Only update AppSettings if the user explicitly selects a non-manual sort
-            if (newSortOrder is not SortOrderType.Manual)
-            {
-                AppSettings.SelectedSortOrder = newSortOrder;
-            }
-            // If they select Manual, we don't change AppSettings.SelectedSortOrder here.
-            // The actual sorting (or lack thereof) is handled by ApplySortOrderCommand.
-
-            ApplySortOrderCommand.Execute(null); // Apply the newly selected sort immediately
         }
     }
 
-    [ObservableProperty]
-    private double taskCompletionProgress;
-
-    private readonly ITaskPersistenceService taskPersistenceService;
-    private bool isSaving;
-    private Timer? debounceTimer;
-    private readonly Lock saveLock = new();
-    private const int TargetTaskCount = 15; // Target number for 0% progress
-    private string field = string.Empty; // Backing field for SelectedSortOption
-
-    public MainViewModel(ITaskPersistenceService persistenceService)
+    public MainViewModel()
     {
-        taskPersistenceService = persistenceService;
+        _filePath = Path.Combine(FileSystem.AppDataDirectory, "tasks.json");
+        _tasks = new();
 
-        SortOptionsDisplay =
+        _sortOptionsDisplay =
         [
             "Manual Order",
             "Priority (High First)",
             "Priority (Low First)"
         ];
 
-        SelectedSortOption = GetSortOptionDisplayString(AppSettings.SelectedSortOrder);
+        // Initialize SelectedSortOption based on loaded preference
+        _selectedSortOption = GetSortOptionDisplayString(AppSettings.SelectedSortOrder);
 
-        _ = LoadTasksAsync(); // Load tasks and update progress initially
+        _ = LoadTasksAsync();
 
         WeakReferenceMessenger.Default.Register<AddTaskMessage>(this, (recipient, message) => HandleAddTask(message.Value));
         WeakReferenceMessenger.Default.Register<UpdateTaskMessage>(this, (recipient, message) => HandleUpdateTask(message.Value));
         WeakReferenceMessenger.Default.Register<DeleteTaskMessage>(this, (recipient, message) => HandleDeleteTask(message.Value));
         WeakReferenceMessenger.Default.Register<CalendarSettingChangedMessage>(this, async (recipient, message) => await HandleCalendarSettingChanged());
         WeakReferenceMessenger.Default.Register<TasksReloadRequestedMessage>(this, async (recipient, message) => await HandleTasksReloadRequested());
-
-        Tasks.CollectionChanged += Tasks_CollectionChanged;
     }
 
     [RelayCommand]
@@ -88,6 +105,7 @@ public sealed partial class MainViewModel : ObservableObject
         try
         {
             Dictionary<string, object> navigationParameter = new() { { "TaskToEdit", null! } };
+
             await Shell.Current.GoToAsync(nameof(AddTaskPopupPage), true, navigationParameter);
         }
         catch (Exception exception)
@@ -107,6 +125,7 @@ public sealed partial class MainViewModel : ObservableObject
         try
         {
             Dictionary<string, object> navigationParameter = new() { { "TaskToEdit", taskToEdit } };
+
             await Shell.Current.GoToAsync(nameof(AddTaskPopupPage), true, navigationParameter);
         }
         catch (Exception exception)
@@ -119,70 +138,168 @@ public sealed partial class MainViewModel : ObservableObject
     private async Task LoadTasksAsync()
     {
         bool acquiredLock = false;
-        lock (saveLock)
+
+        lock (_saveLock)
         {
-            if (isSaving) return;
-            isSaving = true;
+            if (_isSaving)
+            {
+                return;
+            }
             acquiredLock = true;
         }
 
-        if (!acquiredLock) return;
+        if (!acquiredLock)
+        {
+            return;
+        }
 
+        Debug.WriteLine($"LoadTasksAsync: Attempting to load tasks from: {_filePath}");
 
-        List<TaskItem> loadedTasks = [];
-        bool dueDateChangesMade = false;
+        bool wasSubscribed = false;
+        bool changesMade = false;
 
         try
         {
-            loadedTasks = await taskPersistenceService.LoadTasksAsync();
-            dueDateChangesMade = UpdateRepeatingTaskDueDates(loadedTasks);
+            Tasks.CollectionChanged -= Tasks_CollectionChanged;
+            wasSubscribed = true;
+        }
+        catch (Exception exception)
+        {
+            Debug.WriteLine($"LoadTasksAsync: Error unsubscribing CollectionChanged: {exception.Message}");
+        }
+
+        List<TaskItem> loadedTasks = [];
+
+        try
+        {
+            if (File.Exists(_filePath))
+            {
+                string json = await File.ReadAllTextAsync(_filePath);
+
+                if (!string.IsNullOrWhiteSpace(json))
+                {
+                    try
+                    {
+                        loadedTasks = JsonSerializer.Deserialize<List<TaskItem>>(json) ?? [];
+                    }
+                    catch (JsonException jsonException)
+                    {
+                        Debug.WriteLine($"LoadTasksAsync: Error deserializing tasks JSON: {jsonException.Message}");
+                        loadedTasks = [];
+                    }
+                }
+            }
+
+            DateTime today = DateTime.Today;
+
+            foreach (TaskItem task in loadedTasks)
+            {
+                if (task.TimeType == TaskTimeType.Repeating && task.DueDate.HasValue && task.DueDate.Value.Date < today)
+                {
+                    DateTime originalDueDate = task.DueDate.Value.Date;
+                    DateTime nextValidDueDate = CalculateNextValidDueDateForRepeatingTask(task, today, originalDueDate);
+
+                    if (task.DueDate.Value.Date != nextValidDueDate)
+                    {
+                        Debug.WriteLine($"LoadTasksAsync: Adjusting overdue task '{task.Title}' ({task.RepetitionType}) from {task.DueDate.Value.Date:d} to {nextValidDueDate:d}");
+                        task.DueDate = nextValidDueDate;
+                        changesMade = true;
+                    }
+                }
+                task.IsFadingOut = false;
+            }
+
+            // Apply manual sort order initially from loaded data
+            List<TaskItem> tasksToAdd = loadedTasks.OrderBy(task => task.Order).ToList();
 
             await MainThread.InvokeOnMainThreadAsync(() =>
             {
                 Tasks.Clear();
-                List<TaskItem> tasksToAdd = (AppSettings.SelectedSortOrder == SortOrderType.Manual)
-                    ? [.. loadedTasks.OrderBy(t => t.Order)]
-                    : [.. loadedTasks];
-
                 foreach (TaskItem task in tasksToAdd)
                 {
                     Tasks.Add(task);
                 }
-                UpdateProgress(); // Update progress after loading
             });
 
+            // Now apply the *persisted* sort order if it's not manual
             if (AppSettings.SelectedSortOrder != SortOrderType.Manual)
             {
-                ApplySortOrderCommand.Execute(null);
+                ApplySortOrderCommand.Execute(null); // This will read from AppSettings
             }
             else
             {
+                // Ensure UI reflects the loaded manual sort state
                 UpdateSelectedSortOptionDisplay(SortOrderType.Manual);
             }
 
 
-            if (dueDateChangesMade)
+            if (changesMade)
             {
+                Debug.WriteLine("LoadTasksAsync: Saving tasks due to date adjustments.");
                 TriggerSave();
             }
         }
         catch (Exception exception)
         {
-            Debug.WriteLine($"LoadTasksAsync: Error processing loaded tasks: {exception.GetType().Name} - {exception.Message}");
+            Debug.WriteLine($"LoadTasksAsync: Error loading tasks: {exception.GetType().Name} - {exception.Message}");
+
             if (Tasks.Any())
             {
-                await MainThread.InvokeOnMainThreadAsync(() => { Tasks.Clear(); UpdateProgress(); });
+                await MainThread.InvokeOnMainThreadAsync(Tasks.Clear);
             }
+
+            // Reset to default sort if loading failed badly
+            AppSettings.SelectedSortOrder = SortOrderType.PriorityHighFirst;
+            UpdateSelectedSortOptionDisplay(AppSettings.SelectedSortOrder);
         }
         finally
         {
-            lock (saveLock)
+            if (wasSubscribed || Tasks.Any())
             {
-                isSaving = false;
+                Tasks.CollectionChanged -= Tasks_CollectionChanged;
+                Tasks.CollectionChanged += Tasks_CollectionChanged;
             }
         }
     }
 
+    private static DateTime CalculateNextValidDueDateForRepeatingTask(TaskItem task, DateTime today, DateTime originalDueDate)
+    {
+        DateTime nextValidDueDate = originalDueDate;
+
+        switch (task.RepetitionType)
+        {
+            case TaskRepetitionType.Daily:
+                {
+                    nextValidDueDate = today;
+                    break;
+                }
+            case TaskRepetitionType.AlternateDay:
+                {
+                    double daysDifference = (today - originalDueDate).TotalDays;
+
+                    nextValidDueDate = daysDifference % 2 == 0
+                        ? today
+                        : today.AddDays(1);
+                    break;
+                }
+            case TaskRepetitionType.Weekly:
+                {
+                    if (task.RepetitionDayOfWeek.HasValue)
+                    {
+                        nextValidDueDate = DateUtils.GetNextWeekday(today, task.RepetitionDayOfWeek.Value);
+                    }
+                    else
+                    {
+                        while (nextValidDueDate < today)
+                        {
+                            nextValidDueDate = nextValidDueDate.AddDays(7);
+                        }
+                    }
+                    break;
+                }
+        }
+        return nextValidDueDate;
+    }
 
     [RelayCommand]
     private async Task MarkTaskDone(TaskItem? task)
@@ -192,250 +309,197 @@ public sealed partial class MainViewModel : ObservableObject
             return;
         }
 
-        if (task.TimeType == TaskTimeType.Repeating)
+        if (task.TimeType == TaskTimeType.None || task.TimeType == TaskTimeType.SpecificDate)
         {
-            await HandleRepeatingTaskCompletion(task);
+            task.IsFadingOut = true;
+            await Task.Delay(350);
+
+            bool removedSuccessfully = false;
+
+            await MainThread.InvokeOnMainThreadAsync(() =>
+            {
+                bool removed = Tasks.Remove(task);
+                if (removed)
+                {
+                    UpdateTaskOrderProperty();
+                    TriggerSave();
+                    removedSuccessfully = true;
+                }
+                else
+                {
+                    task.IsFadingOut = false;
+                }
+            });
+
+            if (removedSuccessfully && AppSettings.SelectedSortOrder != SortOrderType.Manual)
+            {
+                ApplySortOrderCommand.Execute(null);
+            }
         }
-        else
+        else if (task.TimeType == TaskTimeType.Repeating)
         {
-            await HandleNonRepeatingTaskCompletion(task);
+            DateTime? nextDueDate = DateUtils.CalculateNextDueDate(task);
+
+            if (nextDueDate.HasValue)
+            {
+                task.DueDate = nextDueDate;
+                TriggerSave();
+
+                if (AppSettings.SelectedSortOrder != SortOrderType.Manual)
+                {
+                    ApplySortOrderCommand.Execute(null);
+                }
+                else
+                {
+                    await MainThread.InvokeOnMainThreadAsync(() =>
+                    {
+                        int index = Tasks.IndexOf(task);
+                        if (index != -1)
+                        {
+                            Tasks[index] = task;
+                        }
+                    });
+                }
+            }
+            else
+            {
+                Debug.WriteLine($"MarkTaskDone: Could not calculate next due date for repeating task '{task.Title}'. Removing.");
+                task.IsFadingOut = true;
+                await Task.Delay(350);
+
+                bool removedSuccessfully = false;
+
+                await MainThread.InvokeOnMainThreadAsync(() =>
+                {
+                    bool removed = Tasks.Remove(task);
+                    if (removed)
+                    {
+                        UpdateTaskOrderProperty();
+                        TriggerSave();
+                        removedSuccessfully = true;
+                    }
+                    else
+                    {
+                        task.IsFadingOut = false;
+                    }
+                });
+
+                if (removedSuccessfully && AppSettings.SelectedSortOrder != SortOrderType.Manual)
+                {
+                    ApplySortOrderCommand.Execute(null);
+                }
+            }
         }
+    }
+
+    private static string GetSortableTitle(string title)
+    {
+        if (string.IsNullOrWhiteSpace(title))
+        {
+            return string.Empty;
+        }
+
+        int firstLetterIndex = -1;
+
+        for (int index = 0; index < title.Length; index++)
+        {
+            if (char.IsLetterOrDigit(title[index]))
+            {
+                firstLetterIndex = index;
+                break;
+            }
+        }
+
+        return firstLetterIndex == -1
+            ? title.Trim()
+            : title.Substring(firstLetterIndex).Trim();
+    }
+
+    private static bool IsTaskEnabled(TaskItem task)
+    {
+        if (task.TimeType == TaskTimeType.Repeating && task.DueDate.HasValue && task.DueDate.Value.Date > DateTime.Today)
+        {
+            return false;
+        }
+        return true;
     }
 
     [RelayCommand]
     private async Task ApplySortOrder()
     {
-        SortOrderType sortToApply = SelectedSortOption switch
+        SortOrderType requestedSortOrder = SelectedSortOption switch
         {
             "Priority (High First)" => SortOrderType.PriorityHighFirst,
             "Priority (Low First)" => SortOrderType.PriorityLowFirst,
             _ => SortOrderType.Manual
         };
 
+        // Determine the sort order to apply. Use persisted setting if not Manual.
+        SortOrderType sortToApply = requestedSortOrder == SortOrderType.Manual
+            ? SortOrderType.Manual // Special case: if user selects Manual, reload from saved order.
+            : AppSettings.SelectedSortOrder; // Otherwise, use the (potentially just updated) setting.
+
 
         if (sortToApply == SortOrderType.Manual)
         {
-            await LoadTasksAsync();
-            UpdateSelectedSortOptionDisplay(SortOrderType.Manual);
+            // If switching TO manual or re-selecting manual, load based on saved Order property.
+            await LoadTasksAsync(); // Reloads tasks ordered by the saved `Order` property.
+            UpdateSelectedSortOptionDisplay(SortOrderType.Manual); // Ensure UI reflects manual state.
             return;
         }
 
+        // Apply Priority-based sorting
         List<TaskItem> currentTasks = [];
-
-        await MainThread.InvokeOnMainThreadAsync(() =>
-        {
-            currentTasks = [.. Tasks];
-        });
+        await MainThread.InvokeOnMainThreadAsync(() => { currentTasks = new List<TaskItem>(Tasks); });
 
         List<TaskItem> sortedTasks = sortToApply switch
         {
-            SortOrderType.PriorityHighFirst => [.. currentTasks
+            SortOrderType.PriorityHighFirst => currentTasks
                 .OrderByDescending(IsTaskEnabled)
                 .ThenBy(task => task.Priority)
-                .ThenBy(task => GetSortableTitle(task.Title), StringComparer.OrdinalIgnoreCase)],
-            SortOrderType.PriorityLowFirst => [.. currentTasks
+                .ThenBy(task => GetSortableTitle(task.Title), StringComparer.OrdinalIgnoreCase)
+                .ToList(),
+            SortOrderType.PriorityLowFirst => currentTasks
                 .OrderByDescending(IsTaskEnabled)
                 .ThenByDescending(task => task.Priority)
-                .ThenBy(task => GetSortableTitle(task.Title), StringComparer.OrdinalIgnoreCase)],
-            _ => [.. currentTasks.OrderBy(task => task.Order)]
+                .ThenBy(task => GetSortableTitle(task.Title), StringComparer.OrdinalIgnoreCase)
+                .ToList(),
+            // Should not happen due to the initial check, but include for completeness
+            _ => currentTasks.OrderBy(task => task.Order).ToList()
         };
 
         bool orderChanged = !currentTasks.SequenceEqual(sortedTasks);
 
         if (orderChanged)
         {
-            await MainThread.InvokeOnMainThreadAsync(() =>
-            {
-                Tasks.Clear();
-                foreach (TaskItem task in sortedTasks)
-                {
-                    Tasks.Add(task);
-                }
-                // No need to call UpdateProgress here, CollectionChanged handles it
-            });
-        }
-
-        UpdateSelectedSortOptionDisplay(sortToApply);
-    }
-
-
-    private async Task HandleNonRepeatingTaskCompletion(TaskItem task)
-    {
-        task.IsFadingOut = true;
-        await Task.Delay(350);
-
-        bool removedSuccessfully = false;
-        await MainThread.InvokeOnMainThreadAsync(() =>
-        {
-            removedSuccessfully = Tasks.Remove(task);
-            if (removedSuccessfully)
-            {
-                if (AppSettings.SelectedSortOrder == SortOrderType.Manual)
-                {
-                    UpdateTaskOrderPropertyInternal();
-                }
-                UpdateProgress(); // Update progress after removal
-                TriggerSave();
-            }
-            else
-            {
-                task.IsFadingOut = false;
-            }
-        });
-
-        if (removedSuccessfully && AppSettings.SelectedSortOrder != SortOrderType.Manual)
-        {
-            ApplySortOrderCommand.Execute(null);
-        }
-    }
-
-    private async Task HandleRepeatingTaskCompletion(TaskItem task)
-    {
-        DateTime? nextDueDate = DateUtils.CalculateNextDueDate(task);
-
-        if (nextDueDate.HasValue)
-        {
-            task.DueDate = nextDueDate;
-            UpdateProgress(); // Progress doesn't change, but call for consistency
-            TriggerSave();
-
-            if (AppSettings.SelectedSortOrder != SortOrderType.Manual)
-            {
-                ApplySortOrderCommand.Execute(null);
-            }
-            else
+            Tasks.CollectionChanged -= Tasks_CollectionChanged;
+            try
             {
                 await MainThread.InvokeOnMainThreadAsync(() =>
                 {
-                    int index = Tasks.IndexOf(task);
-                    if (index != -1)
+                    Tasks.Clear();
+                    foreach (TaskItem task in sortedTasks)
                     {
-                        // No action needed if TaskItem implements INotifyPropertyChanged
+                        Tasks.Add(task);
                     }
                 });
             }
-        }
-        else
-        {
-            await HandleNonRepeatingTaskCompletion(task);
-        }
-    }
-
-    private bool UpdateRepeatingTaskDueDates(List<TaskItem> tasks)
-    {
-        bool changesMade = false;
-        DateTime today = DateTime.Today;
-
-        foreach (TaskItem task in tasks)
-        {
-            if (task.TimeType == TaskTimeType.Repeating && task.DueDate.HasValue && task.DueDate.Value.Date < today)
+            catch (Exception exception)
             {
-                DateTime originalDueDate = task.DueDate.Value.Date;
-                DateTime nextValidDueDate = CalculateNextValidDueDateForRepeatingTask(task, today, originalDueDate);
-
-                if (task.DueDate.Value.Date != nextValidDueDate)
-                {
-                    task.DueDate = nextValidDueDate;
-                    changesMade = true;
-                }
+                Debug.WriteLine($"ApplySortOrder: Error during sorting: {exception.Message}");
             }
-            task.IsFadingOut = false;
-        }
-        return changesMade;
-    }
-
-    private void UpdateTaskOrderPropertyInternal()
-    {
-        for (int index = 0; index < Tasks.Count; index++)
-        {
-            TaskItem? currentTask = Tasks[index];
-            if (currentTask != null && currentTask.Order != index)
+            finally
             {
-                currentTask.Order = index;
-            }
-        }
-    }
-
-    private async Task SaveTasksAsyncInternal()
-    {
-        bool acquiredLock = false;
-        List<TaskItem> tasksToSave = [];
-
-        try
-        {
-            lock (saveLock)
-            {
-                if (isSaving) return;
-                isSaving = true;
-                acquiredLock = true;
-            }
-
-            await MainThread.InvokeOnMainThreadAsync(() =>
-            {
-                if (AppSettings.SelectedSortOrder == SortOrderType.Manual)
+                if (Tasks.Any())
                 {
-                    UpdateTaskOrderPropertyInternal();
-                }
-                tasksToSave = [.. Tasks];
-            });
-
-            await taskPersistenceService.SaveTasksAsync(tasksToSave);
-        }
-        catch (Exception exception)
-        {
-            Debug.WriteLine($"SaveTasksAsyncInternal: Error saving tasks: {exception.Message}");
-        }
-        finally
-        {
-            if (acquiredLock)
-            {
-                lock (saveLock)
-                {
-                    isSaving = false;
+                    Tasks.CollectionChanged -= Tasks_CollectionChanged;
+                    Tasks.CollectionChanged += Tasks_CollectionChanged;
                 }
             }
         }
-    }
 
-
-    private void TriggerSave()
-    {
-        debounceTimer?.Dispose();
-
-        debounceTimer = new Timer(async _ =>
-        {
-            await SaveTasksAsyncInternal();
-            debounceTimer?.Dispose();
-            debounceTimer = null;
-        },
-        null,
-        TimeSpan.FromMilliseconds(500),
-        Timeout.InfiniteTimeSpan);
-    }
-
-    private void ResetSortToManual()
-    {
-        UpdateSelectedSortOptionDisplay(SortOrderType.Manual);
-    }
-
-    private string GetSortOptionDisplayString(SortOrderType sortOrder)
-    {
-        return sortOrder switch
-        {
-            SortOrderType.PriorityHighFirst => SortOptionsDisplay[1],
-            SortOrderType.PriorityLowFirst => SortOptionsDisplay[2],
-            _ => SortOptionsDisplay[0]
-        };
-    }
-
-    private void UpdateSelectedSortOptionDisplay(SortOrderType sortOrder)
-    {
-        string newDisplayValue = GetSortOptionDisplayString(sortOrder);
-        if (field != newDisplayValue)
-        {
-            field = newDisplayValue;
-            OnPropertyChanged(nameof(SelectedSortOption));
-        }
+        // Ensure the UI reflects the applied sort order
+        UpdateSelectedSortOptionDisplay(sortToApply);
     }
 
 
@@ -444,26 +508,17 @@ public sealed partial class MainViewModel : ObservableObject
         await LoadTasksAsync();
     }
 
-    private async Task HandleTasksReloadRequested()
-    {
-        await LoadTasksAsync();
-    }
-
     private async void HandleAddTask(TaskItem? newTask)
     {
-        if (newTask is null) return;
+        if (newTask is null)
+        {
+            return;
+        }
 
         await MainThread.InvokeOnMainThreadAsync(() =>
         {
             newTask.Order = Tasks.Count;
             Tasks.Add(newTask);
-            UpdateProgress(); // Update progress after adding
-
-            if (AppSettings.SelectedSortOrder == SortOrderType.Manual)
-            {
-                UpdateTaskOrderPropertyInternal();
-            }
-
             TriggerSave();
 
             if (AppSettings.SelectedSortOrder != SortOrderType.Manual)
@@ -475,28 +530,19 @@ public sealed partial class MainViewModel : ObservableObject
 
     private async void HandleUpdateTask(TaskItem? updatedTask)
     {
-        if (updatedTask is null) return;
+        if (updatedTask is null)
+        {
+            return;
+        }
 
         await MainThread.InvokeOnMainThreadAsync(() =>
         {
-            int index = -1;
-            for (int i = 0; i < Tasks.Count; i++)
-            {
-                if (Tasks[i].Id == updatedTask.Id)
-                {
-                    index = i;
-                    break;
-                }
-            }
+            int index = Tasks.ToList().FindIndex(task => task.Id == updatedTask.Id);
 
             if (index != -1)
             {
-                if (AppSettings.SelectedSortOrder == SortOrderType.Manual)
-                {
-                    updatedTask.Order = Tasks[index].Order;
-                }
+                updatedTask.Order = Tasks[index].Order;
                 Tasks[index] = updatedTask;
-                UpdateProgress(); // Update progress after update (count might not change, but good practice)
                 TriggerSave();
 
                 if (AppSettings.SelectedSortOrder != SortOrderType.Manual)
@@ -511,24 +557,22 @@ public sealed partial class MainViewModel : ObservableObject
         });
     }
 
-
     private async void HandleDeleteTask(Guid taskId)
     {
+        TaskItem? taskToRemove = null;
         bool removedSuccessfully = false;
+
         await MainThread.InvokeOnMainThreadAsync(() =>
         {
-            TaskItem? taskToRemove = Tasks.FirstOrDefault(task => task.Id == taskId);
-            if (taskToRemove != null)
+            taskToRemove = Tasks.FirstOrDefault(task => task.Id == taskId);
+            if (taskToRemove is not null)
             {
-                removedSuccessfully = Tasks.Remove(taskToRemove);
-                if (removedSuccessfully)
+                bool removed = Tasks.Remove(taskToRemove);
+                if (removed)
                 {
-                    if (AppSettings.SelectedSortOrder == SortOrderType.Manual)
-                    {
-                        UpdateTaskOrderPropertyInternal();
-                    }
-                    UpdateProgress(); // Update progress after removal
+                    UpdateTaskOrderProperty();
                     TriggerSave();
+                    removedSuccessfully = true;
                 }
             }
         });
@@ -539,84 +583,161 @@ public sealed partial class MainViewModel : ObservableObject
         }
     }
 
-
-    private void Tasks_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    private void Tasks_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs eventArgs)
     {
-        // Update progress whenever the collection changes (Add, Remove, Move, Reset)
-        // If multiple items change (e.g., Reset), this ensures progress updates.
-        UpdateProgress();
+        // Only trigger manual sort reset and save on user reorder (Move)
+        if (eventArgs.Action == NotifyCollectionChangedAction.Move)
+        {
+            UpdateTaskOrderProperty();
+            TriggerSave();
+            ResetSortToManual(); // This now only updates the UI display
+        }
+        // Optional: Trigger save on Add/Remove as well, though handled by message handlers currently
+        // else if (e.Action == NotifyCollectionChangedAction.Add || e.Action == NotifyCollectionChangedAction.Remove)
+        // {
+        //     TriggerSave();
+        // }
+    }
 
-        if (e.Action == NotifyCollectionChangedAction.Move)
+    private void UpdateTaskOrderProperty()
+    {
+        if (!MainThread.IsMainThread)
+        {
+            MainThread.BeginInvokeOnMainThread(UpdateTaskOrderPropertyInternal);
+        }
+        else
         {
             UpdateTaskOrderPropertyInternal();
-            TriggerSave();
-            ResetSortToManual();
-            AppSettings.SelectedSortOrder = SortOrderType.Manual;
         }
     }
 
-
-    private static DateTime CalculateNextValidDueDateForRepeatingTask(TaskItem task, DateTime today, DateTime originalDueDate)
+    private void UpdateTaskOrderPropertyInternal()
     {
-        return task.RepetitionType switch
+        for (int index = 0; index < Tasks.Count; index++)
         {
-            TaskRepetitionType.Daily => today,
-            TaskRepetitionType.AlternateDay =>
-                (today - originalDueDate).TotalDays % 2 == 0
-                    ? today
-                    : today.AddDays(1),
-            TaskRepetitionType.Weekly when task.RepetitionDayOfWeek.HasValue =>
-                DateUtils.GetNextWeekday(today, task.RepetitionDayOfWeek.Value),
-            _ => GetNextWeeklyOccurrence(originalDueDate, today) ?? today
+            TaskItem currentTask = Tasks[index];
+            if (currentTask is not null && currentTask.Order != index)
+            {
+                currentTask.Order = index;
+            }
+        }
+    }
+
+    private async Task SaveTasks()
+    {
+        bool acquiredLock = false;
+        List<TaskItem> tasksToSave = [];
+
+        try
+        {
+            lock (_saveLock)
+            {
+                if (_isSaving)
+                {
+                    Debug.WriteLine("SaveTasks: Save already in progress. Skipping.");
+                    return;
+                }
+                _isSaving = true;
+                acquiredLock = true;
+            }
+
+            await MainThread.InvokeOnMainThreadAsync(() =>
+            {
+                // Always update internal Order property based on current list position before saving
+                UpdateTaskOrderPropertyInternal();
+                tasksToSave = new List<TaskItem>(Tasks);
+            });
+
+
+            if (tasksToSave is not null && tasksToSave.Count > 0)
+            {
+                // No need to re-sort here, Order property is already updated
+                // tasksToSave = tasksToSave.OrderBy(task => task.Order).ToList();
+
+                JsonSerializerOptions options = new() { WriteIndented = true };
+                string json = JsonSerializer.Serialize(tasksToSave, options);
+                await File.WriteAllTextAsync(_filePath, json);
+                Debug.WriteLine($"SaveTasks: Successfully saved {tasksToSave.Count} tasks to {_filePath}");
+            }
+            else if (tasksToSave is not null && tasksToSave.Count == 0)
+            {
+                // Handle saving an empty list
+                if (File.Exists(_filePath))
+                {
+                    File.Delete(_filePath); // Or write "[]"
+                    Debug.WriteLine($"SaveTasks: Deleted tasks file as the list is empty: {_filePath}");
+                }
+                else
+                {
+                    Debug.WriteLine($"SaveTasks: Task list is empty, no file to save or delete at {_filePath}");
+                }
+            }
+        }
+        catch (Exception exception)
+        {
+            Debug.WriteLine($"SaveTasks: Error saving tasks: {exception.Message}");
+        }
+        finally
+        {
+            if (acquiredLock)
+            {
+                lock (_saveLock)
+                {
+                    _isSaving = false;
+                }
+            }
+        }
+    }
+
+    private void TriggerSave()
+    {
+        _debounceTimer?.Dispose();
+
+        _debounceTimer = new Timer(async (state) =>
+        {
+            await SaveTasks();
+            _debounceTimer?.Dispose();
+            _debounceTimer = null;
+        },
+        null,
+        TimeSpan.FromMilliseconds(500),
+        Timeout.InfiniteTimeSpan);
+    }
+
+    // This method now ONLY updates the UI display to "Manual Order".
+    // It DOES NOT change the persisted AppSettings.SelectedSortOrder.
+    private void ResetSortToManual()
+    {
+        UpdateSelectedSortOptionDisplay(SortOrderType.Manual);
+    }
+
+    // Helper to get the display string for a given SortOrderType
+    private string GetSortOptionDisplayString(SortOrderType sortOrder)
+    {
+        return sortOrder switch
+        {
+            SortOrderType.PriorityHighFirst => SortOptionsDisplay[1], // "Priority (High First)"
+            SortOrderType.PriorityLowFirst => SortOptionsDisplay[2],  // "Priority (Low First)"
+            _ => SortOptionsDisplay[0]                                // "Manual Order"
         };
     }
 
-    private static DateTime? GetNextWeeklyOccurrence(DateTime startDate, DateTime today)
+
+    private void UpdateSelectedSortOptionDisplay(SortOrderType sortOrder)
     {
-        DateTime nextDate = startDate.Date;
-        while (nextDate < today)
+        string newDisplayValue = GetSortOptionDisplayString(sortOrder);
+
+        // Use SetProperty to ensure INotifyPropertyChanged is raised correctly for the UI picker
+        if (_selectedSortOption != newDisplayValue)
         {
-            nextDate = nextDate.AddDays(7);
+            SetProperty(ref _selectedSortOption, newDisplayValue, nameof(SelectedSortOption));
+            Debug.WriteLine($"UpdateSelectedSortOptionDisplay: Picker display updated to '{newDisplayValue}'");
         }
-        return nextDate;
     }
 
-    private static string GetSortableTitle(string title)
+    private async Task HandleTasksReloadRequested()
     {
-        if (string.IsNullOrWhiteSpace(title))
-        {
-            return string.Empty;
-        }
-
-        int firstLetterIndex = -1;
-        for (int i = 0; i < title.Length; i++)
-        {
-            if (char.IsLetterOrDigit(title[i]))
-            {
-                firstLetterIndex = i;
-                break;
-            }
-        }
-
-        return (firstLetterIndex == -1)
-            ? title.Trim()
-            : title.Substring(firstLetterIndex).Trim();
-    }
-
-    private static bool IsTaskEnabled(TaskItem task)
-    {
-        bool isRepeating = task.TimeType == TaskTimeType.Repeating;
-        bool hasDueDate = task.DueDate.HasValue;
-        bool isDueInFuture = hasDueDate && task.DueDate.Value.Date > DateTime.Today;
-
-        return !isRepeating || !hasDueDate || !isDueInFuture;
-    }
-
-    private void UpdateProgress()
-    {
-        // Calculate progress: 1.0 when 0 tasks, 0.0 when TargetTaskCount or more tasks.
-        double progressValue = 1.0 - ((double)Tasks.Count / TargetTaskCount);
-        TaskCompletionProgress = Math.Clamp(progressValue, 0.0, 1.0);
-        // Debug.WriteLine($"Progress Updated: {TaskCompletionProgress} ({Tasks.Count} tasks)");
+        Debug.WriteLine("MainViewModel: Received TasksReloadRequestedMessage. Reloading tasks...");
+        await LoadTasksAsync();
     }
 }

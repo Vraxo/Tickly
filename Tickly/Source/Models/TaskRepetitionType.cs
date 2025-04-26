@@ -1,4 +1,4 @@
-﻿namespace Tickly.Models;
+﻿namespace Tickly;
 
 public enum TaskRepetitionType
 {
