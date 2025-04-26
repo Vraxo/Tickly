@@ -112,6 +112,7 @@ public partial class AppShell : Shell
 using Microsoft.Extensions.Logging;
 using Tickly.ViewModels; // Add using for ViewModels
 using Tickly.Views;     // Add using for Views
+using Tickly.Services; // Add using for Services
 using CommunityToolkit.Mvvm.Messaging; // If not already present
 
 namespace Tickly;
@@ -133,6 +134,9 @@ public static class MauiProgram
         builder.Logging.AddDebug();
 #endif
 
+        // Register Services
+        builder.Services.AddSingleton<ITaskPersistenceService, TaskPersistenceService>(); // Register the new service
+
         // Register ViewModels (Singleton for MainViewModel, Transient for Popup is fine)
         builder.Services.AddSingleton<MainViewModel>();
         // No need to register AddTaskPopupPageViewModel if it's created within AddTaskPopupPage code-behind
@@ -140,6 +144,7 @@ public static class MauiProgram
         // Register Pages for Navigation
         builder.Services.AddSingleton<MainPage>(); // MainPage is usually Singleton
         builder.Services.AddTransient<AddTaskPopupPage>(); // Popup page should be Transient
+        builder.Services.AddTransient<SettingsPage>(); // Make sure SettingsPage is registered if it uses DI (it doesn't currently)
 
         // Register Messenger (if not already implicitly available via CommunityToolkit)
         // builder.Services.AddSingleton<IMessenger>(WeakReferenceMessenger.Default); // Usually not needed explicitly
@@ -8578,41 +8583,6 @@ public class UpdateTaskMessage(TaskItem value) : ValueChangedMessage<TaskItem>(v
 }
 </file>
 
-<file path="Source\Models\Enums.cs">
-// File: Models\Enums.cs
-namespace Tickly.Models;
-
-public enum TaskPriority
-{
-    High,   // Red
-    Medium, // Orange
-    Low     // Green
-}
-
-public enum TaskTimeType
-{
-    None,         // One-time, any time
-    SpecificDate, // Specific date
-    Repeating     // Daily, Alternate, Weekly
-}
-
-public enum TaskRepetitionType
-{
-    Daily,
-    AlternateDay, // Every other day from the start date
-    Weekly
-}
-
-// *** ADDED ENUM ***
-public enum SortOrderType
-{
-    Manual, // Default order as saved/reordered by user
-    PriorityHighFirst, // High -> Low -> Title
-    PriorityLowFirst // Low -> High -> Title
-}
-// *** END ADDED ENUM ***
-</file>
-
 <file path="Source\Models\Settings.cs">
 // Models/Settings.cs (New File or add to existing Models)
 namespace Tickly.Models;
@@ -8621,6 +8591,17 @@ public enum CalendarSystemType
 {
     Gregorian,
     Persian
+}
+</file>
+
+<file path="Source\Models\SortOrderType.cs">
+namespace Tickly.Models;
+
+public enum SortOrderType
+{
+    Manual,
+    PriorityHighFirst,
+    PriorityLowFirst
 }
 </file>
 
@@ -8694,52 +8675,178 @@ public partial class TaskItem : ObservableObject
 }
 </file>
 
+<file path="Source\Models\TaskPriority.cs">
+namespace Tickly.Models;
+
+public enum TaskPriority
+{
+    High,
+    Medium,
+    Low
+}
+</file>
+
+<file path="Source\Models\TaskRepetitionType.cs">
+namespace Tickly.Models;
+
+public enum TaskRepetitionType
+{
+    Daily,
+    AlternateDay,
+    Weekly
+}
+</file>
+
+<file path="Source\Models\TaskTimeType.cs">
+namespace Tickly;
+
+public enum TaskTimeType
+{
+    None,
+    SpecificDate,
+    Repeating
+}
+</file>
+
 <file path="Source\Services\AppSettings.cs">
-// Services/AppSettings.cs
-using Microsoft.Maui.Storage; // Required for Preferences
-using System.Diagnostics;
 using Tickly.Models;
 
-namespace Tickly.Services
+namespace Tickly.Services;
+
+public static class AppSettings
 {
-    public static class AppSettings
+    public const string CalendarSystemKey = "CalendarSystemPreference";
+    public const string SortOrderKey = "SortOrderPreference";
+
+    public static CalendarSystemType SelectedCalendarSystem
     {
-        // Key for storing the setting
-        public const string CalendarSystemKey = "CalendarSystemPreference";
+        get;
 
-        // Backing field - Now initialized by static constructor
-        private static CalendarSystemType _selectedCalendarSystem;
-
-        // --- Static Constructor ---
-        // This runs automatically the first time the AppSettings class is accessed.
-        static AppSettings()
+        set
         {
-            // Load from Preferences, default to Gregorian (0) if not found
-            int storedValue = Preferences.Get(CalendarSystemKey, (int)CalendarSystemType.Gregorian);
-            _selectedCalendarSystem = (CalendarSystemType)storedValue; // Set the backing field directly
-            Debug.WriteLine($"AppSettings (Static Constructor): Initialized CalendarSystem to {_selectedCalendarSystem} from Preferences.");
-        }
-        // --- End Static Constructor ---
-
-        // Public property to access the setting
-        public static CalendarSystemType SelectedCalendarSystem
-        {
-            get => _selectedCalendarSystem;
-            set
+            if (field == value)
             {
-                if (_selectedCalendarSystem != value)
+                return;
+            }
+
+            field = value;
+        }
+    }
+
+    public static SortOrderType SelectedSortOrder
+    {
+        get;
+
+        set
+        {
+            if (field == value)
+            {
+                return;
+            }
+
+            field = value;
+            Preferences.Set(SortOrderKey, (int)value);
+        }
+    }
+
+    static AppSettings()
+    {
+        int storedCalendarValue = Preferences.Get(CalendarSystemKey, (int)CalendarSystemType.Gregorian);
+        SelectedCalendarSystem = (CalendarSystemType)storedCalendarValue;
+
+        int storedSortValue = Preferences.Get(SortOrderKey, (int)SortOrderType.PriorityHighFirst);
+        SelectedSortOrder = (SortOrderType)storedSortValue;
+    }
+}
+</file>
+
+<file path="Source\Services\TaskPersistenceService.cs">
+using System.Diagnostics;
+using System.Text.Json;
+using Tickly.Models;
+
+namespace Tickly.Services;
+
+public interface ITaskPersistenceService
+{
+    Task<List<TaskItem>> LoadTasksAsync();
+    Task SaveTasksAsync(IEnumerable<TaskItem> tasks);
+}
+
+public class TaskPersistenceService : ITaskPersistenceService
+{
+    private readonly string filePath;
+
+    public TaskPersistenceService()
+    {
+        filePath = Path.Combine(FileSystem.AppDataDirectory, "tasks.json");
+        Debug.WriteLine($"TaskPersistenceService: Using data file at {filePath}");
+    }
+
+    public async Task<List<TaskItem>> LoadTasksAsync()
+    {
+        if (!File.Exists(filePath))
+        {
+            Debug.WriteLine("LoadTasksAsync: Data file does not exist. Returning empty list.");
+            return [];
+        }
+
+        try
+        {
+            string json = await File.ReadAllTextAsync(filePath);
+
+            if (string.IsNullOrWhiteSpace(json))
+            {
+                Debug.WriteLine("LoadTasksAsync: Data file is empty. Returning empty list.");
+                return [];
+            }
+
+            List<TaskItem>? loadedTasks = JsonSerializer.Deserialize<List<TaskItem>>(json);
+            return loadedTasks ?? [];
+        }
+        catch (JsonException jsonEx)
+        {
+            Debug.WriteLine($"LoadTasksAsync: Error deserializing tasks JSON: {jsonEx.Message}. Returning empty list.");
+            // Consider renaming or backing up the corrupt file here
+            return [];
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"LoadTasksAsync: Error loading tasks: {ex.GetType().Name} - {ex.Message}. Returning empty list.");
+            // Rethrow or handle more gracefully depending on requirements
+            // For now, return empty to prevent crash, but log the error.
+            return [];
+        }
+    }
+
+    public async Task SaveTasksAsync(IEnumerable<TaskItem> tasks)
+    {
+        try
+        {
+            List<TaskItem> tasksToSave = [.. tasks]; // Create a list copy
+
+            if (tasksToSave.Count > 0)
+            {
+                JsonSerializerOptions options = new() { WriteIndented = true };
+                string json = JsonSerializer.Serialize(tasksToSave, options);
+                await File.WriteAllTextAsync(filePath, json);
+                // Debug.WriteLine($"SaveTasksAsync: Successfully saved {tasksToSave.Count} tasks.");
+            }
+            else
+            {
+                // If the list is empty, delete the file if it exists
+                if (File.Exists(filePath))
                 {
-                    _selectedCalendarSystem = value; // Update backing field
-                    // Preferences are saved by SettingsViewModel when user makes changes
-                    Debug.WriteLine($"AppSettings: CalendarSystem changed to {value} (will be saved by SettingsViewModel).");
-                    // Optionally raise an event if needed for non-UI immediate updates
-                    // SettingsChanged?.Invoke(null, EventArgs.Empty);
+                    File.Delete(filePath);
+                    Debug.WriteLine("SaveTasksAsync: Task list is empty. Deleted data file.");
                 }
             }
         }
-
-        // Optional: Event for real-time updates elsewhere if needed
-        // public static event EventHandler SettingsChanged;
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"SaveTasksAsync: Error saving tasks: {ex.GetType().Name} - {ex.Message}");
+            // Consider notifying the user or implementing more robust error handling
+        }
     }
 }
 </file>
@@ -8807,23 +8914,15 @@ public static class DateUtils
 </file>
 
 <file path="Source\ViewModels\MainViewModel.cs">
-using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
-using CommunityToolkit.Mvvm.Messaging;
-using Microsoft.Maui.ApplicationModel;
-using Microsoft.Maui.Controls;
-using System;
-using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.Diagnostics;
-using System.IO;
-using System.Linq;
-using System.Text.Json;
-using System.Threading;
-using System.Threading.Tasks;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using CommunityToolkit.Mvvm.Messaging;
 using Tickly.Messages;
 using Tickly.Models;
+using Tickly.Services;
 using Tickly.Utils;
 using Tickly.Views;
 
@@ -8831,71 +8930,71 @@ namespace Tickly.ViewModels;
 
 public sealed partial class MainViewModel : ObservableObject
 {
-    private ObservableCollection<TaskItem> _tasks;
-    public ObservableCollection<TaskItem> Tasks
-    {
-        get => _tasks;
-        set => SetProperty(ref _tasks, value);
-    }
+    public ObservableCollection<TaskItem> Tasks { get; set; } = [];
+    public List<string> SortOptionsDisplay { get; set; }
 
-    private readonly string _filePath;
-    private bool _isSaving = false;
-    private readonly object _saveLock = new();
-    private Timer? _debounceTimer;
-
-    private SortOrderType _currentSortOrder = SortOrderType.PriorityHighFirst;
-
-    private List<string> _sortOptionsDisplay;
-    public List<string> SortOptionsDisplay
-    {
-        get => _sortOptionsDisplay;
-        set => SetProperty(ref _sortOptionsDisplay, value);
-    }
-
-    private string _selectedSortOption;
     public string SelectedSortOption
     {
-        get => _selectedSortOption;
+        get => field; // Use field keyword for auto-property backing field
+
         set
         {
-            if (SetProperty(ref _selectedSortOption, value))
+            if (!SetProperty(ref field, value))
             {
-                SortOrderType newSortOrder = value switch
-                {
-                    "Priority (High First)" => SortOrderType.PriorityHighFirst,
-                    "Priority (Low First)" => SortOrderType.PriorityLowFirst,
-                    _ => SortOrderType.Manual
-                };
-
-                if (newSortOrder != _currentSortOrder || value == _selectedSortOption)
-                {
-                    ApplySortOrderCommand.Execute(null);
-                }
+                return;
             }
+
+            SortOrderType newSortOrder = value switch
+            {
+                "Priority (High First)" => SortOrderType.PriorityHighFirst,
+                "Priority (Low First)" => SortOrderType.PriorityLowFirst,
+                _ => SortOrderType.Manual
+            };
+
+            // Only update AppSettings if the user explicitly selects a non-manual sort
+            if (newSortOrder is not SortOrderType.Manual)
+            {
+                AppSettings.SelectedSortOrder = newSortOrder;
+            }
+            // If they select Manual, we don't change AppSettings.SelectedSortOrder here.
+            // The actual sorting (or lack thereof) is handled by ApplySortOrderCommand.
+
+            ApplySortOrderCommand.Execute(null); // Apply the newly selected sort immediately
         }
     }
 
-    public MainViewModel()
-    {
-        _filePath = Path.Combine(FileSystem.AppDataDirectory, "tasks.json");
-        _tasks = new();
+    private readonly ITaskPersistenceService taskPersistenceService; // Use the interface
+    private bool isSaving;
+    private Timer? debounceTimer;
+    private readonly Lock saveLock = new();
+    // filePath is removed, service handles it now
 
-        _sortOptionsDisplay =
+    // Inject the persistence service via constructor
+    public MainViewModel(ITaskPersistenceService persistenceService)
+    {
+        taskPersistenceService = persistenceService; // Store injected service
+
+        SortOptionsDisplay =
         [
             "Manual Order",
             "Priority (High First)",
             "Priority (Low First)"
         ];
 
-        _selectedSortOption = _sortOptionsDisplay[1];
+        // Initialize SelectedSortOption based on stored AppSettings
+        SelectedSortOption = GetSortOptionDisplayString(AppSettings.SelectedSortOrder);
 
-        _ = LoadTasksAsync();
+        _ = LoadTasksAsync(); // Load tasks on initialization
 
+        // Register message handlers
         WeakReferenceMessenger.Default.Register<AddTaskMessage>(this, (recipient, message) => HandleAddTask(message.Value));
         WeakReferenceMessenger.Default.Register<UpdateTaskMessage>(this, (recipient, message) => HandleUpdateTask(message.Value));
         WeakReferenceMessenger.Default.Register<DeleteTaskMessage>(this, (recipient, message) => HandleDeleteTask(message.Value));
         WeakReferenceMessenger.Default.Register<CalendarSettingChangedMessage>(this, async (recipient, message) => await HandleCalendarSettingChanged());
         WeakReferenceMessenger.Default.Register<TasksReloadRequestedMessage>(this, async (recipient, message) => await HandleTasksReloadRequested());
+
+        // Handle collection changed events for reordering
+        Tasks.CollectionChanged += Tasks_CollectionChanged;
     }
 
     [RelayCommand]
@@ -8903,13 +9002,14 @@ public sealed partial class MainViewModel : ObservableObject
     {
         try
         {
+            // Use an empty dictionary or specify parameter type if needed later
             Dictionary<string, object> navigationParameter = new() { { "TaskToEdit", null! } };
-
             await Shell.Current.GoToAsync(nameof(AddTaskPopupPage), true, navigationParameter);
         }
         catch (Exception exception)
         {
             Debug.WriteLine($"Error navigating to add page: {exception.Message}");
+            // Consider showing a user-friendly error message
         }
     }
 
@@ -8923,391 +9023,426 @@ public sealed partial class MainViewModel : ObservableObject
 
         try
         {
+            // Pass the TaskItem object directly
             Dictionary<string, object> navigationParameter = new() { { "TaskToEdit", taskToEdit } };
-
             await Shell.Current.GoToAsync(nameof(AddTaskPopupPage), true, navigationParameter);
         }
         catch (Exception exception)
         {
             Debug.WriteLine($"Error navigating to edit page for task {taskToEdit.Id}: {exception.Message}");
+            // Consider showing a user-friendly error message
         }
     }
 
     [RelayCommand]
     private async Task LoadTasksAsync()
     {
+        // Debounce/lock logic remains here to control *when* loading happens
         bool acquiredLock = false;
-
-        lock (_saveLock)
+        lock (saveLock) // Use the same lock for load/save to prevent race conditions
         {
-            if (_isSaving)
-            {
-                return;
-            }
+            if (isSaving) return; // Use a more general flag, or a specific 'isLoading' flag
+            isSaving = true;      // Potentially rename to isLoading or use separate flags
             acquiredLock = true;
         }
 
-        if (!acquiredLock)
-        {
-            return;
-        }
+        if (!acquiredLock) return;
 
-        Debug.WriteLine($"LoadTasksAsync: Attempting to load tasks from: {_filePath}");
-
-        bool wasSubscribed = false;
-        bool changesMade = false;
-
-        try
-        {
-            Tasks.CollectionChanged -= Tasks_CollectionChanged;
-            wasSubscribed = true;
-        }
-        catch (Exception exception)
-        {
-            Debug.WriteLine($"LoadTasksAsync: Error unsubscribing CollectionChanged: {exception.Message}");
-        }
 
         List<TaskItem> loadedTasks = [];
+        bool dueDateChangesMade = false;
 
         try
         {
-            if (File.Exists(_filePath))
-            {
-                string json = await File.ReadAllTextAsync(_filePath);
+            // Delegate actual loading to the service
+            loadedTasks = await taskPersistenceService.LoadTasksAsync();
 
-                if (!string.IsNullOrWhiteSpace(json))
-                {
-                    try
-                    {
-                        loadedTasks = JsonSerializer.Deserialize<List<TaskItem>>(json) ?? [];
-                    }
-                    catch (JsonException jsonException)
-                    {
-                        Debug.WriteLine($"LoadTasksAsync: Error deserializing tasks JSON: {jsonException.Message}");
-                        loadedTasks = [];
-                    }
-                }
-            }
+            // Perform logic specific to the ViewModel after loading
+            dueDateChangesMade = UpdateRepeatingTaskDueDates(loadedTasks);
 
-            DateTime today = DateTime.Today;
-
-            foreach (TaskItem task in loadedTasks)
-            {
-                if (task.TimeType == TaskTimeType.Repeating && task.DueDate.HasValue && task.DueDate.Value.Date < today)
-                {
-                    DateTime originalDueDate = task.DueDate.Value.Date;
-                    DateTime nextValidDueDate = CalculateNextValidDueDateForRepeatingTask(task, today, originalDueDate);
-
-                    if (task.DueDate.Value.Date != nextValidDueDate)
-                    {
-                        Debug.WriteLine($"LoadTasksAsync: Adjusting overdue task '{task.Title}' ({task.RepetitionType}) from {task.DueDate.Value.Date:d} to {nextValidDueDate:d}");
-                        task.DueDate = nextValidDueDate;
-                        changesMade = true;
-                    }
-                }
-                task.IsFadingOut = false;
-            }
-
-            List<TaskItem> tasksToAdd = loadedTasks.OrderBy(task => task.Order).ToList();
-
+            // Clear and repopulate the collection on the main thread
             await MainThread.InvokeOnMainThreadAsync(() =>
             {
                 Tasks.Clear();
+                // Order by the stored Order property initially if SortOrder is Manual
+                // Otherwise, ApplySortOrder will handle the initial sort.
+                List<TaskItem> tasksToAdd = (AppSettings.SelectedSortOrder == SortOrderType.Manual)
+                    ? [.. loadedTasks.OrderBy(t => t.Order)]
+                    : [.. loadedTasks]; // ApplySortOrder will sort non-manual cases
+
                 foreach (TaskItem task in tasksToAdd)
                 {
                     Tasks.Add(task);
                 }
             });
 
-            ApplySortOrderCommand.Execute(null);
-
-            if (changesMade)
+            // Apply the current sort order after loading
+            if (AppSettings.SelectedSortOrder != SortOrderType.Manual)
             {
-                Debug.WriteLine("LoadTasksAsync: Saving tasks due to date adjustments.");
+                // Execute sorting command to apply the loaded setting
+                ApplySortOrderCommand.Execute(null);
+            }
+            else
+            {
+                // Ensure the UI reflects "Manual Order" if that's the setting
+                UpdateSelectedSortOptionDisplay(SortOrderType.Manual);
+            }
+
+
+            // If due dates were updated, trigger a save
+            if (dueDateChangesMade)
+            {
                 TriggerSave();
             }
         }
         catch (Exception exception)
         {
-            Debug.WriteLine($"LoadTasksAsync: Error loading tasks: {exception.GetType().Name} - {exception.Message}");
-
+            // Handle potential errors during the loading/processing phase
+            Debug.WriteLine($"LoadTasksAsync: Error processing loaded tasks: {exception.GetType().Name} - {exception.Message}");
+            // Optionally clear tasks or show an error message
             if (Tasks.Any())
             {
                 await MainThread.InvokeOnMainThreadAsync(Tasks.Clear);
             }
-
-            _currentSortOrder = SortOrderType.PriorityHighFirst;
-            UpdateSelectedSortOptionDisplay(_currentSortOrder);
+            // Maybe reset sort order to default if loading fails catastrophically?
+            // AppSettings.SelectedSortOrder = SortOrderType.PriorityHighFirst;
+            // UpdateSelectedSortOptionDisplay(AppSettings.SelectedSortOrder);
         }
         finally
         {
-            if (wasSubscribed || Tasks.Any())
+            // Release the lock
+            lock (saveLock)
             {
-                Tasks.CollectionChanged -= Tasks_CollectionChanged;
-                Tasks.CollectionChanged += Tasks_CollectionChanged;
+                isSaving = false; // Or isLoading = false;
             }
         }
     }
 
-    private static DateTime CalculateNextValidDueDateForRepeatingTask(TaskItem task, DateTime today, DateTime originalDueDate)
-    {
-        DateTime nextValidDueDate = originalDueDate;
-
-        switch (task.RepetitionType)
-        {
-            case TaskRepetitionType.Daily:
-                {
-                    nextValidDueDate = today;
-                    break;
-                }
-            case TaskRepetitionType.AlternateDay:
-                {
-                    double daysDifference = (today - originalDueDate).TotalDays;
-
-                    nextValidDueDate = daysDifference % 2 == 0
-                        ? today
-                        : today.AddDays(1);
-                    break;
-                }
-            case TaskRepetitionType.Weekly:
-                {
-                    if (task.RepetitionDayOfWeek.HasValue)
-                    {
-                        nextValidDueDate = DateUtils.GetNextWeekday(today, task.RepetitionDayOfWeek.Value);
-                    }
-                    else
-                    {
-                        while (nextValidDueDate < today)
-                        {
-                            nextValidDueDate = nextValidDueDate.AddDays(7);
-                        }
-                    }
-                    break;
-                }
-        }
-        return nextValidDueDate;
-    }
 
     [RelayCommand]
     private async Task MarkTaskDone(TaskItem? task)
     {
         if (task is null || task.IsFadingOut)
         {
-            return;
+            return; // Ignore if task is null or already fading
         }
 
-        if (task.TimeType == TaskTimeType.None || task.TimeType == TaskTimeType.SpecificDate)
+        // Handle repeating tasks differently
+        if (task.TimeType == TaskTimeType.Repeating)
         {
-            task.IsFadingOut = true;
-            await Task.Delay(350);
-
-            bool removedSuccessfully = false;
-
-            await MainThread.InvokeOnMainThreadAsync(() =>
-            {
-                bool removed = Tasks.Remove(task);
-                if (removed)
-                {
-                    UpdateTaskOrderProperty();
-                    TriggerSave();
-                    removedSuccessfully = true;
-                }
-                else
-                {
-                    task.IsFadingOut = false;
-                }
-            });
-
-            if (removedSuccessfully && _currentSortOrder != SortOrderType.Manual)
-            {
-                ApplySortOrderCommand.Execute(null);
-            }
+            await HandleRepeatingTaskCompletion(task);
         }
-        else if (task.TimeType == TaskTimeType.Repeating)
+        else
         {
-            DateTime? nextDueDate = DateUtils.CalculateNextDueDate(task);
-
-            if (nextDueDate.HasValue)
-            {
-                task.DueDate = nextDueDate;
-                TriggerSave();
-
-                if (_currentSortOrder != SortOrderType.Manual)
-                {
-                    ApplySortOrderCommand.Execute(null);
-                }
-                else
-                {
-                    await MainThread.InvokeOnMainThreadAsync(() =>
-                    {
-                        int index = Tasks.IndexOf(task);
-                        if (index != -1)
-                        {
-                            Tasks[index] = task;
-                        }
-                    });
-                }
-            }
-            else
-            {
-                Debug.WriteLine($"MarkTaskDone: Could not calculate next due date for repeating task '{task.Title}'. Removing.");
-                task.IsFadingOut = true;
-                await Task.Delay(350);
-
-                bool removedSuccessfully = false;
-
-                await MainThread.InvokeOnMainThreadAsync(() =>
-                {
-                    bool removed = Tasks.Remove(task);
-                    if (removed)
-                    {
-                        UpdateTaskOrderProperty();
-                        TriggerSave();
-                        removedSuccessfully = true;
-                    }
-                    else
-                    {
-                        task.IsFadingOut = false;
-                    }
-                });
-
-                if (removedSuccessfully && _currentSortOrder != SortOrderType.Manual)
-                {
-                    ApplySortOrderCommand.Execute(null);
-                }
-            }
+            await HandleNonRepeatingTaskCompletion(task);
         }
-    }
-
-    private static string GetSortableTitle(string title)
-    {
-        if (string.IsNullOrWhiteSpace(title))
-        {
-            return string.Empty;
-        }
-
-        int firstLetterIndex = -1;
-
-        for (int index = 0; index < title.Length; index++)
-        {
-            if (char.IsLetterOrDigit(title[index]))
-            {
-                firstLetterIndex = index;
-                break;
-            }
-        }
-
-        return firstLetterIndex == -1
-            ? title.Trim()
-            : title.Substring(firstLetterIndex).Trim();
-    }
-
-    private static bool IsTaskEnabled(TaskItem task)
-    {
-        if (task.TimeType == TaskTimeType.Repeating && task.DueDate.HasValue && task.DueDate.Value.Date > DateTime.Today)
-        {
-            return false;
-        }
-        return true;
     }
 
     [RelayCommand]
     private async Task ApplySortOrder()
     {
-        SortOrderType requestedSortOrder = SelectedSortOption switch
+        SortOrderType sortToApply = SelectedSortOption switch
         {
             "Priority (High First)" => SortOrderType.PriorityHighFirst,
             "Priority (Low First)" => SortOrderType.PriorityLowFirst,
-            _ => SortOrderType.Manual
+            _ => SortOrderType.Manual // Default to Manual if the string doesn't match
         };
 
-        if (requestedSortOrder == SortOrderType.Manual)
+
+        // If user selected Manual, we need to reload based on stored order.
+        if (sortToApply == SortOrderType.Manual)
         {
-            if (_currentSortOrder != SortOrderType.Manual)
-            {
-                _currentSortOrder = SortOrderType.Manual;
-                UpdateSelectedSortOptionDisplay(_currentSortOrder);
-                await LoadTasksAsync();
-            }
-            else
-            {
-                _currentSortOrder = SortOrderType.Manual;
-                UpdateSelectedSortOptionDisplay(_currentSortOrder);
-            }
-            return;
+            await LoadTasksAsync(); // This will load and sort by 'Order' property
+            UpdateSelectedSortOptionDisplay(SortOrderType.Manual); // Ensure dropdown shows "Manual"
+            return; // Exit after loading manual order
         }
 
+        // For non-manual sorting:
         List<TaskItem> currentTasks = [];
-        await MainThread.InvokeOnMainThreadAsync(() => { currentTasks = new List<TaskItem>(Tasks); });
 
-        List<TaskItem> sortedTasks = requestedSortOrder switch
+        // Ensure operations on Tasks happen on the main thread
+        await MainThread.InvokeOnMainThreadAsync(() =>
         {
-            SortOrderType.PriorityHighFirst => currentTasks
-                .OrderByDescending(IsTaskEnabled)
-                .ThenBy(task => task.Priority)
-                .ThenBy(task => GetSortableTitle(task.Title), StringComparer.OrdinalIgnoreCase)
-                .ToList(),
-            SortOrderType.PriorityLowFirst => currentTasks
-                .OrderByDescending(IsTaskEnabled)
-                .ThenByDescending(task => task.Priority)
-                .ThenBy(task => GetSortableTitle(task.Title), StringComparer.OrdinalIgnoreCase)
-                .ToList(),
-            _ => currentTasks
+            currentTasks = [.. Tasks]; // Copy current tasks
+        });
+
+        // Apply the selected sort logic
+        List<TaskItem> sortedTasks = sortToApply switch
+        {
+            SortOrderType.PriorityHighFirst => [.. currentTasks
+                .OrderByDescending(IsTaskEnabled) // Enabled tasks first
+                .ThenBy(task => task.Priority) // Then by priority (High=0, Medium=1, Low=2)
+                .ThenBy(task => GetSortableTitle(task.Title), StringComparer.OrdinalIgnoreCase)], // Then alphabetically by title
+            SortOrderType.PriorityLowFirst => [.. currentTasks
+                .OrderByDescending(IsTaskEnabled) // Enabled tasks first
+                .ThenByDescending(task => task.Priority) // Then by priority reversed (Low=2, Medium=1, High=0)
+                .ThenBy(task => GetSortableTitle(task.Title), StringComparer.OrdinalIgnoreCase)], // Then alphabetically by title
+            _ => [.. currentTasks.OrderBy(task => task.Order)] // Fallback should not happen here due to manual check above
         };
 
+        // Check if the order actually changed
         bool orderChanged = !currentTasks.SequenceEqual(sortedTasks);
 
         if (orderChanged)
         {
-            Tasks.CollectionChanged -= Tasks_CollectionChanged;
-            try
+            // Update the ObservableCollection on the main thread
+            await MainThread.InvokeOnMainThreadAsync(() =>
             {
+                Tasks.Clear();
+                foreach (TaskItem task in sortedTasks)
+                {
+                    Tasks.Add(task);
+                }
+                // Note: We DO NOT update the 'Order' property here.
+                // 'Order' is only for manual sorting persistence.
+            });
+        }
+
+        // Update the display string if it wasn't already set (e.g., on initial load)
+        UpdateSelectedSortOptionDisplay(sortToApply);
+    }
+
+
+    // --- Private Helper Methods ---
+
+    private async Task HandleNonRepeatingTaskCompletion(TaskItem task)
+    {
+        task.IsFadingOut = true; // Trigger animation
+        await Task.Delay(350); // Wait for fade-out
+
+        bool removedSuccessfully = false;
+        await MainThread.InvokeOnMainThreadAsync(() =>
+        {
+            removedSuccessfully = Tasks.Remove(task);
+            if (removedSuccessfully)
+            {
+                // Only update Order property if sort is manual AFTER removing
+                if (AppSettings.SelectedSortOrder == SortOrderType.Manual)
+                {
+                    UpdateTaskOrderPropertyInternal();
+                }
+                TriggerSave(); // Save changes
+            }
+            else
+            {
+                task.IsFadingOut = false; // Reset if removal failed somehow
+            }
+        });
+
+        // Re-apply sort only if sorting is active and an item was actually removed
+        if (removedSuccessfully && AppSettings.SelectedSortOrder != SortOrderType.Manual)
+        {
+            ApplySortOrderCommand.Execute(null);
+        }
+    }
+
+    private async Task HandleRepeatingTaskCompletion(TaskItem task)
+    {
+        DateTime? nextDueDate = DateUtils.CalculateNextDueDate(task);
+
+        if (nextDueDate.HasValue)
+        {
+            // Update the due date in the ViewModel
+            task.DueDate = nextDueDate;
+            TriggerSave(); // Save the updated task
+
+            // Re-apply sort if not manual, as the due date change might affect order
+            if (AppSettings.SelectedSortOrder != SortOrderType.Manual)
+            {
+                ApplySortOrderCommand.Execute(null);
+            }
+            else
+            {
+                // If manual sort, just ensure the UI reflects the change if necessary
+                // This might involve notifying property changed if DueDate binding is complex
+                // For simple binding, the existing OnPropertyChanged from TaskItem should suffice.
                 await MainThread.InvokeOnMainThreadAsync(() =>
                 {
-                    Tasks.Clear();
-                    foreach (TaskItem task in sortedTasks)
+                    // Force refresh if needed, though usually binding handles this
+                    int index = Tasks.IndexOf(task);
+                    if (index != -1)
                     {
-                        Tasks.Add(task);
+                        // Tasks[index] = task; // Usually not needed if TaskItem implements INotifyPropertyChanged
                     }
                 });
             }
-            catch (Exception exception)
+        }
+        else
+        {
+            // If CalculateNextDueDate returns null (e.g., error or unsupported type), treat as non-repeating
+            await HandleNonRepeatingTaskCompletion(task);
+        }
+    }
+
+    private bool UpdateRepeatingTaskDueDates(List<TaskItem> tasks)
+    {
+        bool changesMade = false;
+        DateTime today = DateTime.Today;
+
+        foreach (TaskItem task in tasks)
+        {
+            // Only update repeating tasks whose due date is in the past
+            if (task.TimeType == TaskTimeType.Repeating && task.DueDate.HasValue && task.DueDate.Value.Date < today)
             {
-                Debug.WriteLine($"ApplySortOrder: Error during sorting: {exception.Message}");
-            }
-            finally
-            {
-                if (Tasks.Any())
+                DateTime originalDueDate = task.DueDate.Value.Date; // Store original date part
+                // Calculate the next valid due date starting from today
+                DateTime nextValidDueDate = CalculateNextValidDueDateForRepeatingTask(task, today, originalDueDate);
+
+                // Update only if the date part actually changes
+                if (task.DueDate.Value.Date != nextValidDueDate)
                 {
-                    Tasks.CollectionChanged -= Tasks_CollectionChanged;
-                    Tasks.CollectionChanged += Tasks_CollectionChanged;
+                    task.DueDate = nextValidDueDate;
+                    changesMade = true;
+                }
+            }
+            // Reset animation flag on load
+            task.IsFadingOut = false;
+        }
+        return changesMade;
+    }
+
+    // Renamed for clarity: only updates Order property, doesn't trigger save
+    private void UpdateTaskOrderPropertyInternal()
+    {
+        for (int index = 0; index < Tasks.Count; index++)
+        {
+            TaskItem? currentTask = Tasks[index]; // Handle potential null during changes
+            if (currentTask != null && currentTask.Order != index)
+            {
+                currentTask.Order = index; // Update the Order property directly
+            }
+        }
+    }
+
+    // Renamed: This method initiates the save process via the service
+    private async Task SaveTasksAsyncInternal()
+    {
+        // This lock prevents multiple save operations from running concurrently
+        bool acquiredLock = false;
+        List<TaskItem> tasksToSave = [];
+
+        try
+        {
+            lock (saveLock)
+            {
+                if (isSaving) return; // Already saving
+                isSaving = true;
+                acquiredLock = true;
+            }
+
+            // Get a snapshot of the tasks on the main thread
+            await MainThread.InvokeOnMainThreadAsync(() =>
+            {
+                // Ensure Order property is up-to-date before saving, especially for manual sort
+                if (AppSettings.SelectedSortOrder == SortOrderType.Manual)
+                {
+                    UpdateTaskOrderPropertyInternal();
+                }
+                tasksToSave = [.. Tasks]; // Create a copy to save
+            });
+
+            // Delegate the actual saving to the service
+            await taskPersistenceService.SaveTasksAsync(tasksToSave);
+        }
+        catch (Exception exception)
+        {
+            Debug.WriteLine($"SaveTasksAsyncInternal: Error saving tasks: {exception.Message}");
+            // Consider showing an error to the user
+        }
+        finally
+        {
+            if (acquiredLock)
+            {
+                lock (saveLock)
+                {
+                    isSaving = false; // Release the saving flag
                 }
             }
         }
-
-        _currentSortOrder = requestedSortOrder;
-        UpdateSelectedSortOptionDisplay(_currentSortOrder);
     }
+
+
+    // This method manages the debouncing and calls the internal save method
+    private void TriggerSave()
+    {
+        debounceTimer?.Dispose(); // Cancel any pending save
+
+        // Start a new timer
+        debounceTimer = new Timer(async _ =>
+        {
+            await SaveTasksAsyncInternal(); // Call the actual save logic
+            debounceTimer?.Dispose(); // Clean up the timer itself
+            debounceTimer = null;
+        },
+        null,
+        TimeSpan.FromMilliseconds(500), // Debounce interval
+        Timeout.InfiniteTimeSpan); // Ensure it runs only once per trigger
+    }
+
+    private void ResetSortToManual()
+    {
+        // Only update the UI display if the underlying setting isn't already Manual
+        // AppSettings.SelectedSortOrder remains unchanged here.
+        UpdateSelectedSortOptionDisplay(SortOrderType.Manual);
+    }
+
+    // --- Sort Option Helpers ---
+    private string GetSortOptionDisplayString(SortOrderType sortOrder)
+    {
+        return sortOrder switch
+        {
+            SortOrderType.PriorityHighFirst => SortOptionsDisplay[1], // "Priority (High First)"
+            SortOrderType.PriorityLowFirst => SortOptionsDisplay[2],  // "Priority (Low First)"
+            _ => SortOptionsDisplay[0]                                // "Manual Order"
+        };
+    }
+
+    private void UpdateSelectedSortOptionDisplay(SortOrderType sortOrder)
+    {
+        string newDisplayValue = GetSortOptionDisplayString(sortOrder);
+        // Update the public property, but prevent recursive calls via SetProperty check
+        // Use the field directly to avoid triggering the setter's logic again
+        if (field != newDisplayValue) // Check against the backing field
+        {
+            field = newDisplayValue;
+            OnPropertyChanged(nameof(SelectedSortOption)); // Manually raise property changed
+        }
+    }
+
+
+    // --- Message Handlers ---
 
     private async Task HandleCalendarSettingChanged()
     {
+        // Reload tasks to apply new date formatting via converters
+        await LoadTasksAsync();
+    }
+
+    private async Task HandleTasksReloadRequested()
+    {
+        // Force a reload, e.g., after import
         await LoadTasksAsync();
     }
 
     private async void HandleAddTask(TaskItem? newTask)
     {
-        if (newTask is null)
-        {
-            return;
-        }
+        if (newTask is null) return;
 
         await MainThread.InvokeOnMainThreadAsync(() =>
         {
-            newTask.Order = Tasks.Count;
+            newTask.Order = Tasks.Count; // Assign initial order based on current count
             Tasks.Add(newTask);
-            TriggerSave();
 
-            if (_currentSortOrder != SortOrderType.Manual)
+            // Update Order properties if sort is currently manual
+            if (AppSettings.SelectedSortOrder == SortOrderType.Manual)
+            {
+                UpdateTaskOrderPropertyInternal();
+            }
+
+            TriggerSave(); // Save the updated list
+
+            // If sorting is active, re-apply it
+            if (AppSettings.SelectedSortOrder != SortOrderType.Manual)
             {
                 ApplySortOrderCommand.Execute(null);
             }
@@ -9316,22 +9451,35 @@ public sealed partial class MainViewModel : ObservableObject
 
     private async void HandleUpdateTask(TaskItem? updatedTask)
     {
-        if (updatedTask is null)
-        {
-            return;
-        }
+        if (updatedTask is null) return;
 
         await MainThread.InvokeOnMainThreadAsync(() =>
         {
-            int index = Tasks.ToList().FindIndex(task => task.Id == updatedTask.Id);
+            // Find the task by ID
+            int index = -1;
+            for (int i = 0; i < Tasks.Count; i++)
+            {
+                if (Tasks[i].Id == updatedTask.Id)
+                {
+                    index = i;
+                    break;
+                }
+            }
 
             if (index != -1)
             {
-                updatedTask.Order = Tasks[index].Order;
-                Tasks[index] = updatedTask;
-                TriggerSave();
+                // Preserve the original order property if sorting is manual
+                // Otherwise, order doesn't matter as sorting will be reapplied
+                if (AppSettings.SelectedSortOrder == SortOrderType.Manual)
+                {
+                    updatedTask.Order = Tasks[index].Order;
+                }
+                Tasks[index] = updatedTask; // Replace the item in the collection
 
-                if (_currentSortOrder != SortOrderType.Manual)
+                TriggerSave(); // Save changes
+
+                // Re-apply sort if not manual
+                if (AppSettings.SelectedSortOrder != SortOrderType.Manual)
                 {
                     ApplySortOrderCommand.Execute(null);
                 }
@@ -9343,170 +9491,134 @@ public sealed partial class MainViewModel : ObservableObject
         });
     }
 
+
     private async void HandleDeleteTask(Guid taskId)
     {
-        TaskItem? taskToRemove = null;
         bool removedSuccessfully = false;
-
         await MainThread.InvokeOnMainThreadAsync(() =>
         {
-            taskToRemove = Tasks.FirstOrDefault(task => task.Id == taskId);
-            if (taskToRemove is not null)
+            TaskItem? taskToRemove = Tasks.FirstOrDefault(task => task.Id == taskId);
+            if (taskToRemove != null)
             {
-                bool removed = Tasks.Remove(taskToRemove);
-                if (removed)
+                removedSuccessfully = Tasks.Remove(taskToRemove);
+                if (removedSuccessfully)
                 {
-                    UpdateTaskOrderProperty();
-                    TriggerSave();
-                    removedSuccessfully = true;
+                    // Only update Order property if sort is manual AFTER removing
+                    if (AppSettings.SelectedSortOrder == SortOrderType.Manual)
+                    {
+                        UpdateTaskOrderPropertyInternal();
+                    }
+                    TriggerSave(); // Save changes
                 }
             }
         });
 
-        if (removedSuccessfully && _currentSortOrder != SortOrderType.Manual)
+        // Re-apply sort only if sorting is active and an item was actually removed
+        if (removedSuccessfully && AppSettings.SelectedSortOrder != SortOrderType.Manual)
         {
             ApplySortOrderCommand.Execute(null);
         }
     }
 
-    private void Tasks_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs eventArgs)
-    {
-        if (eventArgs.Action == NotifyCollectionChangedAction.Move)
-        {
-            UpdateTaskOrderProperty();
-            TriggerSave();
-            ResetSortToManual();
-        }
-    }
 
-    private void UpdateTaskOrderProperty()
+    // --- CollectionChanged Handler ---
+    private void Tasks_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
-        if (!MainThread.IsMainThread)
+        // This event fires for Add, Remove, Replace, Move, Reset.
+        // We only care about Move for manual reordering detection.
+        if (e.Action == NotifyCollectionChangedAction.Move)
         {
-            MainThread.BeginInvokeOnMainThread(UpdateTaskOrderPropertyInternal);
-        }
-        else
-        {
+            // If items were moved (drag-and-drop), update the Order property
             UpdateTaskOrderPropertyInternal();
+            TriggerSave(); // Save the new manual order
+                           // Switch the UI dropdown to "Manual Order"
+            ResetSortToManual();
+            // Set the underlying sort preference to Manual
+            AppSettings.SelectedSortOrder = SortOrderType.Manual;
         }
+        // We don't need to handle Add/Remove here for saving,
+        // as those actions call TriggerSave() directly in their handlers.
     }
 
-    private void UpdateTaskOrderPropertyInternal()
+
+    // --- Date Calculation Helpers ---
+
+    private static DateTime CalculateNextValidDueDateForRepeatingTask(TaskItem task, DateTime today, DateTime originalDueDate)
     {
-        for (int index = 0; index < Tasks.Count; index++)
+        // Calculates the *first* valid due date that is on or after 'today'
+        return task.RepetitionType switch
         {
-            TaskItem currentTask = Tasks[index];
-            if (currentTask is not null && currentTask.Order != index)
-            {
-                currentTask.Order = index;
-            }
-        }
-    }
+            TaskRepetitionType.Daily => today, // Daily tasks are always due 'today' if missed
 
-    private async Task SaveTasks()
-    {
-        bool acquiredLock = false;
-        List<TaskItem> tasksToSave = [];
+            TaskRepetitionType.AlternateDay =>
+                // If the difference in days is even, it's due today. If odd, it's due tomorrow.
+                (today - originalDueDate).TotalDays % 2 == 0
+                    ? today
+                    : today.AddDays(1),
 
-        try
-        {
-            lock (_saveLock)
-            {
-                if (_isSaving)
-                {
-                    Debug.WriteLine("SaveTasks: Save already in progress. Skipping.");
-                    return;
-                }
-                _isSaving = true;
-                acquiredLock = true;
-            }
+            TaskRepetitionType.Weekly when task.RepetitionDayOfWeek.HasValue =>
+                // Find the next specified weekday on or after today
+                DateUtils.GetNextWeekday(today, task.RepetitionDayOfWeek.Value),
 
-            await MainThread.InvokeOnMainThreadAsync(() =>
-            {
-                if (_currentSortOrder == SortOrderType.Manual)
-                {
-                    UpdateTaskOrderPropertyInternal();
-                }
-                tasksToSave = new List<TaskItem>(Tasks);
-            });
-
-
-            if (tasksToSave is not null && tasksToSave.Count > 0)
-            {
-                tasksToSave = tasksToSave.OrderBy(task => task.Order).ToList();
-
-                JsonSerializerOptions options = new() { WriteIndented = true };
-                string json = JsonSerializer.Serialize(tasksToSave, options);
-                await File.WriteAllTextAsync(_filePath, json);
-                Debug.WriteLine($"SaveTasks: Successfully saved {tasksToSave.Count} tasks to {_filePath}");
-            }
-            else if (tasksToSave is not null && tasksToSave.Count == 0)
-            {
-                await File.WriteAllTextAsync(_filePath, "[]");
-                Debug.WriteLine($"SaveTasks: Saved empty task list to {_filePath}");
-            }
-        }
-        catch (Exception exception)
-        {
-            Debug.WriteLine($"SaveTasks: Error saving tasks: {exception.Message}");
-        }
-        finally
-        {
-            if (acquiredLock)
-            {
-                lock (_saveLock)
-                {
-                    _isSaving = false;
-                }
-            }
-        }
-    }
-
-    private void TriggerSave()
-    {
-        _debounceTimer?.Dispose();
-
-        _debounceTimer = new Timer(async (state) =>
-        {
-            await SaveTasks();
-            _debounceTimer?.Dispose();
-            _debounceTimer = null;
-        },
-        null,
-        TimeSpan.FromMilliseconds(500),
-        Timeout.InfiniteTimeSpan);
-    }
-
-    private void ResetSortToManual()
-    {
-        if (_currentSortOrder == SortOrderType.Manual)
-        {
-            return;
-        }
-        _currentSortOrder = SortOrderType.Manual;
-        UpdateSelectedSortOptionDisplay(SortOrderType.Manual);
-    }
-
-    private void UpdateSelectedSortOptionDisplay(SortOrderType sortOrder)
-    {
-        string newDisplayValue = sortOrder switch
-        {
-            SortOrderType.PriorityHighFirst => SortOptionsDisplay[1],
-            SortOrderType.PriorityLowFirst => SortOptionsDisplay[2],
-            _ => SortOptionsDisplay[0]
+            // Fallback for Weekly without a specific day (shouldn't happen with UI constraints)
+            // Or for unknown repetition types - return the original date or today if original is invalid?
+            // Returning 'today' might be safer than an invalid date.
+            _ => GetNextWeeklyOccurrence(originalDueDate, today) // Calculate next weekly if specific day unknown
+                 ?? today // Fallback to today if GetNextWeeklyOccurrence fails (unlikely)
         };
-
-        if (_selectedSortOption != newDisplayValue)
-        {
-            SetProperty(ref _selectedSortOption, newDisplayValue, nameof(SelectedSortOption));
-            Debug.WriteLine($"UpdateSelectedSortOptionDisplay: Picker set to '{newDisplayValue}'");
-        }
     }
 
-    private async Task HandleTasksReloadRequested()
+    private static DateTime? GetNextWeeklyOccurrence(DateTime startDate, DateTime today)
     {
-        Debug.WriteLine("MainViewModel: Received TasksReloadRequestedMessage. Reloading tasks...");
-        await LoadTasksAsync();
+        // Simple weekly recurrence based on the start date's day of week
+        DateTime nextDate = startDate.Date; // Ensure we start from the date part
+        while (nextDate < today)
+        {
+            nextDate = nextDate.AddDays(7);
+        }
+        return nextDate;
+    }
+
+    // --- Title Sorting Helper ---
+    private static string GetSortableTitle(string title)
+    {
+        if (string.IsNullOrWhiteSpace(title))
+        {
+            return string.Empty;
+        }
+
+        // Find the index of the first letter or digit
+        int firstLetterIndex = -1;
+        for (int i = 0; i < title.Length; i++)
+        {
+            if (char.IsLetterOrDigit(title[i]))
+            {
+                firstLetterIndex = i;
+                break;
+            }
+        }
+
+        // If no letters/digits found, return the trimmed original string
+        // Otherwise, return the substring starting from the first letter/digit, trimmed.
+        return (firstLetterIndex == -1)
+            ? title.Trim()
+            : title.Substring(firstLetterIndex).Trim();
+    }
+
+    // --- Task Enabled Check for Sorting ---
+    private static bool IsTaskEnabled(TaskItem task)
+    {
+        // A task is considered "enabled" (should appear higher in sorted lists)
+        // if it's NOT a repeating task with a future due date.
+        bool isRepeating = task.TimeType == TaskTimeType.Repeating;
+        bool hasDueDate = task.DueDate.HasValue;
+        bool isDueInFuture = hasDueDate && task.DueDate.Value.Date > DateTime.Today;
+
+        // Enabled if:
+        // - Not repeating OR
+        // - No due date OR
+        // - Due date is today or in the past
+        return !isRepeating || !hasDueDate || !isDueInFuture;
     }
 }
 </file>
@@ -9525,101 +9637,83 @@ namespace Tickly.ViewModels;
 
 public sealed partial class SettingsViewModel : ObservableObject
 {
-    private bool _isGregorianSelected;
-    private bool _isPersianSelected;
-    private readonly string _applicationTasksFilePath;
+    private readonly string applicationTasksFilePath;
+    private const string ExportFilePrefix = "Tickly-Tasks-";
 
     public bool IsGregorianSelected
     {
-        get => _isGregorianSelected;
+        get => field;
         set
         {
-            if (SetProperty(ref _isGregorianSelected, value) && value)
+            if (SetProperty(ref field, value))
             {
-                OnCalendarSelectionChanged(true);
+                OnIsGregorianSelectedChanged(value);
             }
         }
     }
 
     public bool IsPersianSelected
     {
-        get => _isPersianSelected;
+        get => field;
         set
         {
-            if (SetProperty(ref _isPersianSelected, value) && value)
+            if (SetProperty(ref field, value))
             {
-                OnCalendarSelectionChanged(false);
+                OnIsPersianSelectedChanged(value);
             }
         }
     }
 
     public SettingsViewModel()
     {
-        _applicationTasksFilePath = Path.Combine(FileSystem.AppDataDirectory, "tasks.json");
+        applicationTasksFilePath = Path.Combine(FileSystem.AppDataDirectory, "tasks.json");
+        Debug.WriteLine($"SettingsViewModel: Tasks file path is set to: {applicationTasksFilePath}");
         LoadSettings();
-    }
-
-    private void OnCalendarSelectionChanged(bool isGregorianNowSelected)
-    {
-        if (isGregorianNowSelected)
-        {
-            SetProperty(ref _isPersianSelected, false, nameof(IsPersianSelected));
-            UpdateCalendarSetting(CalendarSystemType.Gregorian);
-        }
-        else
-        {
-            SetProperty(ref _isGregorianSelected, false, nameof(IsGregorianSelected));
-            UpdateCalendarSetting(CalendarSystemType.Persian);
-        }
-    }
-
-    private void UpdateCalendarSetting(CalendarSystemType newSystem)
-    {
-        if (AppSettings.SelectedCalendarSystem == newSystem)
-        {
-            return;
-        }
-
-        AppSettings.SelectedCalendarSystem = newSystem;
-        Preferences.Set(AppSettings.CalendarSystemKey, (int)newSystem);
-        WeakReferenceMessenger.Default.Send(new CalendarSettingChangedMessage());
-    }
-
-    private void LoadSettings()
-    {
-        CalendarSystemType currentSystem = AppSettings.SelectedCalendarSystem;
-
-        bool shouldBeGregorian = currentSystem == CalendarSystemType.Gregorian;
-        bool shouldBePersian = currentSystem == CalendarSystemType.Persian;
-
-        SetProperty(ref _isGregorianSelected, shouldBeGregorian, nameof(IsGregorianSelected));
-        SetProperty(ref _isPersianSelected, shouldBePersian, nameof(IsPersianSelected));
-
-        if (!_isGregorianSelected && !_isPersianSelected)
-        {
-            SetProperty(ref _isGregorianSelected, true, nameof(IsGregorianSelected));
-            AppSettings.SelectedCalendarSystem = CalendarSystemType.Gregorian;
-            Preferences.Set(AppSettings.CalendarSystemKey, (int)CalendarSystemType.Gregorian);
-        }
     }
 
     [RelayCommand]
     private async Task ExportTasksAsync()
     {
-        string temporaryExportPath = string.Empty;
-
         try
         {
-            if (!File.Exists(_applicationTasksFilePath))
+            if (!File.Exists(applicationTasksFilePath))
             {
-                await SettingsViewModel.ShowAlertAsync("Export Failed", "No tasks file exists to export.", "OK");
+                await ShowAlertAsync("Export Failed", "No tasks file exists to export.", "OK");
                 return;
             }
 
-            string exportFilename = $"Tickly-Tasks-{DateTime.Now:yyyy--MM--dd}.json";
-            temporaryExportPath = Path.Combine(FileSystem.CacheDirectory, exportFilename);
+            CleanUpOldExportFiles();
 
-            File.Copy(_applicationTasksFilePath, temporaryExportPath, true);
+            string exportFilename = $"{ExportFilePrefix}{DateTime.Now:yyyy-MM-dd_HH-mm-ss}.json";
+            string temporaryExportPath = Path.Combine(FileSystem.CacheDirectory, exportFilename);
+
+            string? cacheDir = Path.GetDirectoryName(temporaryExportPath);
+            if (cacheDir is not null && !Directory.Exists(cacheDir))
+            {
+                Directory.CreateDirectory(cacheDir);
+            }
+
+            File.Copy(applicationTasksFilePath, temporaryExportPath, true);
+
+            if (!File.Exists(temporaryExportPath))
+            {
+                Debug.WriteLine($"ExportTasksAsync: ERROR - Temporary file does not exist after copy attempt: {temporaryExportPath}");
+                await ShowAlertAsync("Export Error", "Failed to create temporary export file.", "OK");
+                return;
+            }
+
+            try
+            {
+                FileInfo tempInfo = new(temporaryExportPath);
+                if (tempInfo.Length == 0)
+                {
+                    Debug.WriteLine($"ExportTasksAsync: ERROR - Temporary file is 0 bytes after copy!");
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"ExportTasksAsync: Could not get temporary file info: {ex.Message}");
+            }
 
             ShareFileRequest request = new()
             {
@@ -9631,21 +9725,8 @@ public sealed partial class SettingsViewModel : ObservableObject
         }
         catch (Exception exception)
         {
-            await SettingsViewModel.ShowAlertAsync("Export Error", $"An error occurred during export: {exception.Message}", "OK");
-        }
-        finally
-        {
-            if (!string.IsNullOrEmpty(temporaryExportPath) && File.Exists(temporaryExportPath))
-            {
-                try
-                {
-                    File.Delete(temporaryExportPath);
-                }
-                catch (Exception cleanupException)
-                {
-                    Debug.WriteLine($"Error cleaning up temporary file: {cleanupException.Message}");
-                }
-            }
+            Debug.WriteLine($"ExportTasksAsync: Exception caught: {exception.GetType().Name} - {exception.Message}\nStackTrace: {exception.StackTrace}");
+            await ShowAlertAsync("Export Error", $"An error occurred during export: {exception.Message}", "OK");
         }
     }
 
@@ -9657,10 +9738,10 @@ public sealed partial class SettingsViewModel : ObservableObject
             FilePickerFileType customFileType = new(
                 new Dictionary<DevicePlatform, IEnumerable<string>>
                 {
-                    [DevicePlatform.iOS] = ["public.json"],
-                    [DevicePlatform.Android] = ["application/json"],
-                    [DevicePlatform.WinUI] = [".json"],
-                    [DevicePlatform.MacCatalyst] = ["json"]
+                    [DevicePlatform.iOS] = ["public.json", "public.text"],
+                    [DevicePlatform.Android] = ["application/json", "text/plain"],
+                    [DevicePlatform.WinUI] = [".json", ".txt"],
+                    [DevicePlatform.MacCatalyst] = ["json", "txt"]
                 });
 
             PickOptions options = new()
@@ -9685,14 +9766,14 @@ public sealed partial class SettingsViewModel : ObservableObject
             }
             catch (JsonException jsonException)
             {
+                Debug.WriteLine($"ImportTasksAsync: Invalid JSON format during import: {jsonException.Message}");
                 await SettingsViewModel.ShowAlertAsync("Import Failed", "The selected file is not a valid JSON task file.", "OK");
-                Debug.WriteLine($"Invalid JSON format during import: {jsonException.Message}");
                 return;
             }
             catch (Exception readException)
             {
+                Debug.WriteLine($"ImportTasksAsync: Error reading selected file: {readException.GetType().Name} - {readException.Message}");
                 await SettingsViewModel.ShowAlertAsync("Import Failed", $"Could not read the selected file: {readException.Message}", "OK");
-                Debug.WriteLine($"Error reading selected file for import: {readException.Message}");
                 return;
             }
 
@@ -9709,25 +9790,128 @@ public sealed partial class SettingsViewModel : ObservableObject
 
             try
             {
-                File.Copy(result.FullPath, _applicationTasksFilePath, true);
+                File.Copy(result.FullPath, applicationTasksFilePath, true);
                 WeakReferenceMessenger.Default.Send(new TasksReloadRequestedMessage());
-                await SettingsViewModel.ShowAlertAsync("Import Successful", "Tasks imported successfully. The task list has been updated.", "OK");
+                await ShowAlertAsync("Import Successful", "Tasks imported successfully. The task list has been updated.", "OK");
             }
             catch (Exception copyException)
             {
-                await SettingsViewModel.ShowAlertAsync("Import Failed", $"Could not replace the tasks file: {copyException.Message}", "OK");
-                Debug.WriteLine($"Error copying imported file: {copyException.Message}");
+                Debug.WriteLine($"ImportTasksAsync: Error copying imported file: {copyException.GetType().Name} - {copyException.Message}");
+                await ShowAlertAsync("Import Failed", $"Could not replace the tasks file: {copyException.Message}", "OK");
             }
         }
         catch (Exception exception)
         {
-            await SettingsViewModel.ShowAlertAsync("Import Error", $"An unexpected error occurred during import: {exception.Message}", "OK");
-            Debug.WriteLine($"General error during import: {exception.Message}");
+            Debug.WriteLine($"ImportTasksAsync: General error during import: {exception.GetType().Name} - {exception.Message}\nStackTrace: {exception.StackTrace}");
+            await ShowAlertAsync("Import Error", $"An unexpected error occurred during import: {exception.Message}", "OK");
         }
+    }
+
+    private void OnCalendarSelectionChanged(bool isGregorianNowSelected)
+    {
+        if (isGregorianNowSelected)
+        {
+            IsPersianSelected = false;
+            UpdateCalendarSetting(CalendarSystemType.Gregorian);
+        }
+        else
+        {
+            IsGregorianSelected = false;
+            UpdateCalendarSetting(CalendarSystemType.Persian);
+        }
+    }
+
+    private static void UpdateCalendarSetting(CalendarSystemType newSystem)
+    {
+        if (AppSettings.SelectedCalendarSystem == newSystem)
+        {
+            return;
+        }
+
+        AppSettings.SelectedCalendarSystem = newSystem;
+        Preferences.Set(AppSettings.CalendarSystemKey, (int)newSystem);
+        WeakReferenceMessenger.Default.Send(new CalendarSettingChangedMessage());
+    }
+
+    private void LoadSettings()
+    {
+        CalendarSystemType currentSystem = AppSettings.SelectedCalendarSystem;
+
+        IsGregorianSelected = currentSystem == CalendarSystemType.Gregorian;
+        IsPersianSelected = currentSystem == CalendarSystemType.Persian;
+
+        if (!IsGregorianSelected && !IsPersianSelected)
+        {
+            IsGregorianSelected = true;
+        }
+    }
+
+    private static void CleanUpOldExportFiles()
+    {
+        try
+        {
+            string cacheDir = FileSystem.CacheDirectory;
+            string searchPattern = $"{ExportFilePrefix}*.json";
+
+            if (!Directory.Exists(cacheDir))
+            {
+                return;
+            }
+
+            IEnumerable<string> oldFiles = Directory.EnumerateFiles(cacheDir, searchPattern);
+            int count = 0;
+
+            foreach (string file in oldFiles)
+            {
+                try
+                {
+                    File.Delete(file);
+                    count++;
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"CleanUpOldExportFiles: Error deleting old file '{file}': {ex.Message}");
+                }
+            }
+            if (count > 0)
+            {
+                Debug.WriteLine($"CleanUpOldExportFiles: Deleted {count} old export files.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"CleanUpOldExportFiles: Error during cleanup: {ex.Message}");
+        }
+    }
+
+    private void OnIsGregorianSelectedChanged(bool value)
+    {
+        if (!value)
+        {
+            return;
+        }
+
+        OnCalendarSelectionChanged(true);
+    }
+
+    private void OnIsPersianSelectedChanged(bool value)
+    {
+        if (!value)
+        {
+            return;
+        }
+
+        OnCalendarSelectionChanged(false);
     }
 
     private static async Task ShowAlertAsync(string title, string message, string cancelAction)
     {
+        if (!MainThread.IsMainThread)
+        {
+            await MainThread.InvokeOnMainThreadAsync(() => ShowAlertAsync(title, message, cancelAction));
+            return;
+        }
+
         Page? currentPage = GetCurrentPage();
 
         if (currentPage is not null)
@@ -9742,6 +9926,11 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     private static async Task<bool> ShowConfirmationAsync(string title, string message, string acceptAction, string cancelAction)
     {
+        if (!MainThread.IsMainThread)
+        {
+            return await MainThread.InvokeOnMainThreadAsync(() => ShowConfirmationAsync(title, message, acceptAction, cancelAction));
+        }
+
         Page? currentPage = GetCurrentPage();
 
         if (currentPage is not null)
@@ -9757,26 +9946,21 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     private static Page? GetCurrentPage()
     {
-        if (Shell.Current is not null)
+        if (Application.Current?.Windows is { Count: > 0 } windows)
         {
-            return Shell.Current.CurrentPage;
-        }
+            Page? mainPage = windows[0].Page;
 
-        if (Application.Current?.Windows is not { Count: > 0 } windows)
-        {
-            return null;
-        }
-
-        foreach (Window window in windows)
-        {
-            if (window.Page is null)
+            if (mainPage is Shell shell && shell.CurrentPage is not null)
             {
-                continue;
+                return shell.CurrentPage;
             }
-
-            return window.Page;
+            else if (mainPage is not null)
+            {
+                return mainPage;
+            }
         }
 
+        Debug.WriteLine("GetCurrentPage: Could not determine the current page using the Windows collection.");
         return null;
     }
 }

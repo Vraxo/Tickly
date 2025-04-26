@@ -1,8 +1,8 @@
-﻿namespace Tickly;
+﻿namespace Tickly.Models;
 
 public enum TaskPriority
 {
-    High,   // Red
-    Medium, // Orange
-    Low     // Green
+    High,
+    Medium,
+    Low
 }
