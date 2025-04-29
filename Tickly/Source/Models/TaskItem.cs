@@ -1,7 +1,8 @@
 ﻿// Models/TaskItem.cs
 using CommunityToolkit.Mvvm.ComponentModel;
 using System;
-using Tickly.Models; // Make sure enum namespace is referenced if separate
+using Microsoft.Maui.Graphics; // <<== ADD THIS USING DIRECTIVE
+using Tickly.Models;
 
 namespace Tickly.Models;
 
@@ -14,13 +15,10 @@ public partial class TaskItem : ObservableObject
     private string _title;
 
     [ObservableProperty]
-    private TaskPriority _priority;
-
-    [ObservableProperty]
     private TaskTimeType _timeType;
 
     [ObservableProperty]
-    private DateTime? _dueDate; // Base/current due date or start date for repeating
+    private DateTime? _dueDate;
 
     [ObservableProperty]
     private TaskRepetitionType? _repetitionType;
@@ -31,23 +29,28 @@ public partial class TaskItem : ObservableObject
     [ObservableProperty]
     private int _order;
 
-    // --- NEW Property for Animation ---
     [ObservableProperty]
-    private bool _isFadingOut; // Flag to trigger fade-out animation before removal
+    private bool _isFadingOut;
 
-    // Parameterless constructor for JSON deserialization
+    [ObservableProperty]
+    private int _index;
+
+    // --- NEW Color Property ---
+    [ObservableProperty]
+    private Color _positionColor = Colors.Transparent; // Initialize with a default
+
+    // Parameterless constructor
     public TaskItem()
     {
         Id = Guid.NewGuid();
         Title = string.Empty;
-        // Default TimeType is TaskTimeType.None (0)
-        IsFadingOut = false; // Default state
+        IsFadingOut = false;
+        Index = -1;
     }
 
     // Full constructor
     public TaskItem(
         string title,
-        TaskPriority priority,
         TaskTimeType timeType,
         DateTime? dueDate,
         TaskRepetitionType? repetitionType,
@@ -56,12 +59,12 @@ public partial class TaskItem : ObservableObject
     {
         Id = Guid.NewGuid();
         Title = title;
-        Priority = priority;
         TimeType = timeType;
         DueDate = dueDate;
         RepetitionType = repetitionType;
         RepetitionDayOfWeek = repetitionDayOfWeek;
         Order = order;
-        IsFadingOut = false; // Default state
+        IsFadingOut = false;
+        Index = -1;
     }
 }

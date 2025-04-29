@@ -5,6 +5,7 @@
          xmlns:models="clr-namespace:Tickly.Models"
          xmlns:converters="clr-namespace:Tickly.Converters"
          x:Class="Tickly.MainPage"
+         x:Name="MainTasksPage"
          BackgroundColor="Black"
          Title="Tickly Tasks">
 
@@ -13,7 +14,7 @@
     </ContentPage.BindingContext>
 
     <Shell.TitleView>
-        <Grid ColumnDefinitions="*, Auto" VerticalOptions="FillAndExpand" Margin="0,0,10,0">
+        <Grid ColumnDefinitions="*" VerticalOptions="FillAndExpand" Margin="0,0,10,0">
             <Label Grid.Column="0"
                Text="Tickly Tasks"
                TextColor="{AppThemeBinding Light=Black, Dark=White}"
@@ -22,39 +23,29 @@
                VerticalOptions="Center"
                HorizontalOptions="Start"
                Margin="10,0,0,0"/>
-
-            <Picker Grid.Column="1"
-                ItemsSource="{Binding SortOptionsDisplay}"
-                SelectedItem="{Binding SelectedSortOption}"
-                BackgroundColor="Black"
-                TextColor="WhiteSmoke"
-                FontSize="Small"
-                HorizontalOptions="End"
-                VerticalOptions="Center"
-                MinimumWidthRequest="180"
-                Margin="0,0,5,0"/>
         </Grid>
     </Shell.TitleView>
 
 
     <ContentPage.Resources>
         <ResourceDictionary>
-            <converters:PriorityToColorConverter x:Key="PriorityColorConverter" />
             <converters:TaskTimeToStringConverter x:Key="TaskTimeConverter" />
             <converters:InverseBooleanConverter x:Key="InverseBooleanConverter" />
             <converters:FutureRepeatingTaskIsEnabledConverter x:Key="FutureRepeatingTaskIsEnabledConverter" />
+            <!-- REMOVED: PositionToColorConverter Resource -->
+            <!-- <converters:PositionToColorConverter x:Key="PositionToColorConverter" /> -->
 
-            <Style TargetType="Frame" x:Key="PriorityIndicatorFrameStyle">
+            <Style TargetType="Frame" x:Key="PositionIndicatorFrameStyle">
                 <Setter Property="HeightRequest" Value="12"/>
                 <Setter Property="WidthRequest" Value="12"/>
                 <Setter Property="CornerRadius" Value="6"/>
-                <Setter Property="BackgroundColor" Value="{Binding Priority, Converter={StaticResource PriorityColorConverter}}"/>
                 <Setter Property="VerticalOptions" Value="Center"/>
                 <Setter Property="HorizontalOptions" Value="Center"/>
                 <Setter Property="BorderColor" Value="Transparent"/>
                 <Setter Property="Padding" Value="0"/>
                 <Setter Property="Margin" Value="0,5,0,0"/>
             </Style>
+
             <Style TargetType="Label" x:Key="TaskTitleLabelStyle">
                 <Setter Property="TextColor" Value="{AppThemeBinding Light=Black, Dark=White}"/>
                 <Setter Property="FontSize" Value="16"/>
@@ -103,7 +94,8 @@
                      HeightRequest="5"
                      Margin="0,0,0,5"/>
 
-        <CollectionView Grid.Row="1" Grid.Column="0"
+        <CollectionView x:Name="TasksCollectionView"
+                    Grid.Row="1" Grid.Column="0"
                     ItemsSource="{Binding Tasks}"
                     CanReorderItems="True"
                     Margin="15,0,15,0"
@@ -111,7 +103,7 @@
 
             <CollectionView.ItemTemplate>
                 <DataTemplate x:DataType="models:TaskItem">
-                    <Grid Padding="10, 8" Opacity="{Binding IsFadingOut, Converter={StaticResource InverseBooleanConverter}}">
+                    <Grid Padding="10, 8">
                         <Grid.Style>
                             <Style TargetType="Grid">
                                 <Setter Property="Opacity" Value="1.0" />
@@ -138,7 +130,12 @@
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
-                            <Frame Grid.Column="0" Style="{StaticResource PriorityIndicatorFrameStyle}"/>
+
+                            <!-- CORRECTED Binding: Directly to the TaskItem's PositionColor property -->
+                            <Frame Grid.Column="0"
+                                   Style="{StaticResource PositionIndicatorFrameStyle}"
+                                   BackgroundColor="{Binding PositionColor}" />
+
                             <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
                                 <VerticalStackLayout.GestureRecognizers>
                                     <TapGestureRecognizer

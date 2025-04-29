@@ -9,21 +9,16 @@
              x:DataType="vm:AddTaskPopupPageViewModel"
              BackgroundColor="Black"
              Title="{Binding PageTitle}">
-    <!-- Dynamic Page Title (Add New Task / Edit Task) -->
-    <!-- Set DataType for compile-time checking and intellisense -->
 
     <ContentPage.Resources>
         <ResourceDictionary>
             <converters:InverseBooleanConverter x:Key="InverseBooleanConverter" />
-            <!-- Styles -->
             <Style TargetType="Entry" x:Key="MinimalEntry">
                 <Setter Property="TextColor" Value="White" />
                 <Setter Property="PlaceholderColor" Value="Gray" />
                 <Setter Property="BackgroundColor" Value="Transparent" />
                 <Setter Property="Margin" Value="0,0,0,5" />
             </Style>
-            <!-- Ensure Primary color is defined globally -->
-            <!-- <Color x:Key="Primary">#512BD4</Color> -->
         </ResourceDictionary>
     </ContentPage.Resources>
 
@@ -37,18 +32,18 @@
                    Text="{Binding Title}"
                    Style="{StaticResource MinimalEntry}" />
 
-            <!-- Priority Selection -->
-            <Label Text="Priority" TextColor="WhiteSmoke"/>
-            <HorizontalStackLayout Spacing="10" BindableLayout.ItemsSource="{Binding PriorityOptions}">
-                <BindableLayout.ItemTemplate>
-                    <DataTemplate x:DataType="vm:SelectableOption(models:TaskPriority)">
-                        <RadioButton GroupName="PriorityGroup"
-                                     IsChecked="{Binding IsSelected}"
-                                     Content="{Binding Name}"
-                                     TextColor="WhiteSmoke" />
-                    </DataTemplate>
-                </BindableLayout.ItemTemplate>
-            </HorizontalStackLayout>
+            <!-- REMOVED: Priority Selection -->
+            <!-- <Label Text="Priority" TextColor="WhiteSmoke"/> -->
+            <!-- <HorizontalStackLayout Spacing="10" BindableLayout.ItemsSource="{Binding PriorityOptions}"> -->
+            <!--     <BindableLayout.ItemTemplate> -->
+            <!--         <DataTemplate x:DataType="vm:SelectableOption(models:TaskPriority)"> -->
+            <!--             <RadioButton GroupName="PriorityGroup" -->
+            <!--                          IsChecked="{Binding IsSelected}" -->
+            <!--                          Content="{Binding Name}" -->
+            <!--                          TextColor="WhiteSmoke" /> -->
+            <!--         </DataTemplate> -->
+            <!--     </BindableLayout.ItemTemplate> -->
+            <!-- </HorizontalStackLayout> -->
 
             <!-- Time / Repetition Type Selection -->
             <Label Text="Time / Repetition" TextColor="WhiteSmoke"/>
@@ -84,15 +79,6 @@
                         </DataTemplate>
                     </BindableLayout.ItemTemplate>
                 </HorizontalStackLayout>
-
-                <!-- *** Start Date for Repetition Picker REMOVED *** -->
-                <!-- <StackLayout Orientation="Horizontal" Spacing="5" Margin="0,5,0,0"> -->
-                <!--     <Label Text="Starting:" VerticalOptions="Center" TextColor="LightGray"/> -->
-                <!--     <DatePicker x:Name="RepeatStartDatePicker" -->
-                <!--                 Date="{Binding DueDate}" -->
-                <!--                 TextColor="WhiteSmoke" -->
-                <!--                 BackgroundColor="#1E1E1E" /> -->
-                <!-- </StackLayout> -->
 
                 <!-- Day of Week Picker (Visible only for Weekly repetition) -->
                 <StackLayout Orientation="Horizontal" Spacing="5" Margin="0,5,0,0"
