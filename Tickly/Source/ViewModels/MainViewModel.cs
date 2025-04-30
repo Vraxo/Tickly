@@ -205,6 +205,9 @@ public sealed partial class MainViewModel : ObservableObject
                     // Re-calculate color for potentially changed visibility/state
                     UpdateTaskIndexAndColorProperty(); // ** CALL THE UPDATED METHOD **
                     UpdateTaskProgressAndColor();
+                    // --- REMOVED INVALID OnPropertyChanged calls ---
+                    // task.OnPropertyChanged(nameof(TaskItem.DueDate));
+                    // task.OnPropertyChanged(nameof(TaskItem.RepetitionType));
                     TriggerSave();
                 });
             }
@@ -222,6 +225,36 @@ public sealed partial class MainViewModel : ObservableObject
             }
         }
     }
+
+    // --- NEW COMMAND ---
+    [RelayCommand]
+    private async Task ResetDailyTask(TaskItem? task)
+    {
+        if (task == null ||
+            task.TimeType != TaskTimeType.Repeating ||
+            task.RepetitionType != TaskRepetitionType.Daily ||
+            !task.DueDate.HasValue ||
+            task.DueDate.Value.Date != DateTime.Today.AddDays(1)) // Only reset if due date is tomorrow
+        {
+            Debug.WriteLine($"ResetDailyTask: Task does not meet reset criteria (ID: {task?.Id}, Due: {task?.DueDate})");
+            return;
+        }
+
+        Debug.WriteLine($"ResetDailyTask: Resetting task '{task.Title}' (ID: {task.Id}) due date to today.");
+
+        await MainThread.InvokeOnMainThreadAsync(() =>
+        {
+            task.DueDate = DateTime.Today;
+            // Update properties that might affect UI state
+            UpdateTaskIndexAndColorProperty(); // Recalculate colors
+            UpdateTaskProgressAndColor();      // Update overall progress
+            // --- REMOVED INVALID OnPropertyChanged calls ---
+            // task.OnPropertyChanged(nameof(TaskItem.DueDate));
+            // task.OnPropertyChanged(nameof(TaskItem.RepetitionType));
+            TriggerSave();
+        });
+    }
+    // --- END NEW COMMAND ---
 
     private async Task HandleCalendarSettingChanged() { await LoadTasksAsync(); }
 
