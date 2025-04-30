@@ -48,6 +48,7 @@
 	  <AndroidSigningKeyPass>123456789</AndroidSigningKeyPass>
 	  <AndroidSigningKeyAlias>myalias</AndroidSigningKeyAlias>
 	  <AndroidSigningStorePass>123456789</AndroidSigningStorePass>
+	  <EmbedAssembliesIntoApk>True</EmbedAssembliesIntoApk>
 	</PropertyGroup>
 
 	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Release|net9.0-android|AnyCPU'">
@@ -56,6 +57,19 @@
 	  <AndroidSigningKeyAlias>myalias</AndroidSigningKeyAlias>
 	  <AndroidSigningStorePass>123456789</AndroidSigningStorePass>
 	  <AndroidPackageFormat>apk</AndroidPackageFormat>
+	  <Optimize>False</Optimize>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Release|net9.0-ios|AnyCPU'">
+	  <Optimize>False</Optimize>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Release|net9.0-maccatalyst|AnyCPU'">
+	  <Optimize>False</Optimize>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Release|net9.0-windows10.0.19041.0|AnyCPU'">
+	  <Optimize>False</Optimize>
 	</PropertyGroup>
 
 	<ItemGroup>

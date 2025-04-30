@@ -43,12 +43,12 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private Color taskProgressColor;
 
-    private const double ReferenceTaskCount = 10.0;
+    // REMOVED: Unused ReferenceTaskCount
+    // private const double ReferenceTaskCount = 10.0;
 
-    // Define the colors for the gradient
-    private static readonly Color StartColor = Colors.Red;    // Color for index 0 (factor 0.0)
-    private static readonly Color MidColor = Colors.Yellow; // Color for middle (factor 0.5)
-    private static readonly Color EndColor = Colors.LimeGreen;// Color for the last index (factor 1.0)
+    private static readonly Color StartColor = Colors.Red;
+    private static readonly Color MidColor = Colors.Yellow; // Added for smoother gradient
+    private static readonly Color EndColor = Colors.LimeGreen;
 
     public MainViewModel()
     {
@@ -127,7 +127,7 @@ public sealed partial class MainViewModel : ObservableObject
                     }
                 }
                 task.IsFadingOut = false;
-                task.PositionColor = Colors.Transparent; // Reset color before recalculation
+                task.PositionColor = Colors.Transparent;
             }
 
             List<TaskItem> tasksToAdd = loadedTasks.OrderBy(task => task.Order).ToList();
@@ -136,7 +136,7 @@ public sealed partial class MainViewModel : ObservableObject
             {
                 Tasks.Clear();
                 foreach (TaskItem task in tasksToAdd) { Tasks.Add(task); }
-                UpdateTaskIndexAndColorProperty(); // ** CALL THE UPDATED METHOD **
+                UpdateTaskIndexAndColorProperty();
                 UpdateTaskProgressAndColor();
             });
 
@@ -149,7 +149,7 @@ public sealed partial class MainViewModel : ObservableObject
             {
                 Tasks.Clear();
                 UpdateTaskProgressAndColor();
-                UpdateTaskIndexAndColorProperty(); // ** CALL THE UPDATED METHOD **
+                UpdateTaskIndexAndColorProperty();
             });
         }
         finally
@@ -191,7 +191,7 @@ public sealed partial class MainViewModel : ObservableObject
             await MainThread.InvokeOnMainThreadAsync(() =>
             {
                 removedSuccessfully = Tasks.Remove(task);
-                if (removedSuccessfully) { UpdateTaskIndexAndColorProperty(); UpdateTaskProgressAndColor(); TriggerSave(); } // ** CALL THE UPDATED METHOD **
+                if (removedSuccessfully) { UpdateTaskIndexAndColorProperty(); UpdateTaskProgressAndColor(); TriggerSave(); }
                 else task.IsFadingOut = false;
             });
         }
@@ -203,8 +203,7 @@ public sealed partial class MainViewModel : ObservableObject
                 await MainThread.InvokeOnMainThreadAsync(() =>
                 {
                     task.DueDate = nextDueDate;
-                    // Re-calculate color for potentially changed visibility/state
-                    UpdateTaskIndexAndColorProperty(); // ** CALL THE UPDATED METHOD **
+                    UpdateTaskIndexAndColorProperty();
                     UpdateTaskProgressAndColor();
                     TriggerSave();
                 });
@@ -217,14 +216,13 @@ public sealed partial class MainViewModel : ObservableObject
                 await MainThread.InvokeOnMainThreadAsync(() =>
                 {
                     removedSuccessfully = Tasks.Remove(task);
-                    if (removedSuccessfully) { UpdateTaskIndexAndColorProperty(); UpdateTaskProgressAndColor(); TriggerSave(); } // ** CALL THE UPDATED METHOD **
+                    if (removedSuccessfully) { UpdateTaskIndexAndColorProperty(); UpdateTaskProgressAndColor(); TriggerSave(); }
                     else task.IsFadingOut = false;
                 });
             }
         }
     }
 
-    // --- NEW COMMAND ---
     [RelayCommand]
     private async Task ResetDailyTask(TaskItem? task)
     {
@@ -232,7 +230,7 @@ public sealed partial class MainViewModel : ObservableObject
             task.TimeType != TaskTimeType.Repeating ||
             task.RepetitionType != TaskRepetitionType.Daily ||
             !task.DueDate.HasValue ||
-            task.DueDate.Value.Date != DateTime.Today.AddDays(1)) // Only reset if due date is tomorrow
+            task.DueDate.Value.Date != DateTime.Today.AddDays(1))
         {
             Debug.WriteLine($"ResetDailyTask: Task does not meet reset criteria (ID: {task?.Id}, Due: {task?.DueDate})");
             return;
@@ -243,13 +241,11 @@ public sealed partial class MainViewModel : ObservableObject
         await MainThread.InvokeOnMainThreadAsync(() =>
         {
             task.DueDate = DateTime.Today;
-            // Update properties that might affect UI state
-            UpdateTaskIndexAndColorProperty(); // Recalculate colors
-            UpdateTaskProgressAndColor();      // Update overall progress
+            UpdateTaskIndexAndColorProperty();
+            UpdateTaskProgressAndColor();
             TriggerSave();
         });
     }
-    // --- END NEW COMMAND ---
 
     private async Task HandleCalendarSettingChanged() { await LoadTasksAsync(); }
 
@@ -260,7 +256,7 @@ public sealed partial class MainViewModel : ObservableObject
         {
             newTask.Order = Tasks.Count;
             Tasks.Add(newTask);
-            UpdateTaskIndexAndColorProperty(); // ** CALL THE UPDATED METHOD **
+            UpdateTaskIndexAndColorProperty();
             UpdateTaskProgressAndColor();
             TriggerSave();
         });
@@ -276,8 +272,7 @@ public sealed partial class MainViewModel : ObservableObject
             {
                 updatedTask.Order = Tasks[index].Order;
                 updatedTask.Index = index;
-                // Recalculate color in case properties affecting it changed
-                UpdateTaskIndexAndColorPropertyInternal(); // Can call internal directly as we are on main thread
+                UpdateTaskIndexAndColorPropertyInternal();
                 Tasks[index] = updatedTask;
                 UpdateTaskProgressAndColor();
                 TriggerSave();
@@ -295,7 +290,7 @@ public sealed partial class MainViewModel : ObservableObject
             if (taskToRemove is not null)
             {
                 removedSuccessfully = Tasks.Remove(taskToRemove);
-                if (removedSuccessfully) { UpdateTaskIndexAndColorProperty(); UpdateTaskProgressAndColor(); TriggerSave(); } // ** CALL THE UPDATED METHOD **
+                if (removedSuccessfully) { UpdateTaskIndexAndColorProperty(); UpdateTaskProgressAndColor(); TriggerSave(); }
             }
         });
     }
@@ -309,7 +304,7 @@ public sealed partial class MainViewModel : ObservableObject
             eventArgs.Action == NotifyCollectionChangedAction.Replace ||
             eventArgs.Action == NotifyCollectionChangedAction.Reset)
         {
-            UpdateTaskIndexAndColorProperty(); // ** CALL THE UPDATED METHOD **
+            UpdateTaskIndexAndColorProperty();
             if (eventArgs.Action == NotifyCollectionChangedAction.Move) { TriggerSave(); }
         }
     }
@@ -324,18 +319,6 @@ public sealed partial class MainViewModel : ObservableObject
         UpdateTaskIndexAndColorPropertyInternal();
     }
 
-    // Interpolates color between two points
-    private static Color InterpolateColor(Color color1, Color color2, double factor)
-    {
-        factor = Math.Clamp(factor, 0.0, 1.0);
-        float r = (float)(color1.Red + factor * (color2.Red - color1.Red));
-        float g = (float)(color1.Green + factor * (color2.Green - color1.Green));
-        float b = (float)(color1.Blue + factor * (color2.Blue - color1.Blue));
-        float a = (float)(color1.Alpha + factor * (color2.Alpha - color1.Alpha));
-        return new Color(r, g, b, a);
-    }
-
-
     private void UpdateTaskIndexAndColorPropertyInternal()
     {
         int totalCount = Tasks.Count;
@@ -346,43 +329,29 @@ public sealed partial class MainViewModel : ObservableObject
             TaskItem currentTask = Tasks[i];
             if (currentTask != null)
             {
-                // Update Order and Index
                 if (currentTask.Order != i) currentTask.Order = i;
                 if (currentTask.Index != i) currentTask.Index = i;
 
-                // --- UPDATED: Calculate and Set Color using 3-point gradient ---
                 Color newColor;
                 if (totalCount <= 1)
                 {
-                    newColor = StartColor; // Single item case, use start color
+                    newColor = StartColor;
                 }
                 else
                 {
-                    // Calculate the overall factor (0.0 at index 0, 1.0 at index totalCount-1)
-                    double overallFactor = (double)i / (totalCount - 1);
-                    overallFactor = Math.Clamp(overallFactor, 0.0, 1.0);
+                    double factor = (double)i / (totalCount - 1);
+                    factor = Math.Clamp(factor, 0.0, 1.0);
 
-                    if (overallFactor < 0.5)
-                    {
-                        // Interpolate between StartColor (Red) and MidColor (Yellow)
-                        // Need to scale the factor from [0, 0.5) to [0, 1.0) for this segment
-                        double segmentFactor = overallFactor * 2.0;
-                        newColor = InterpolateColor(StartColor, MidColor, segmentFactor);
-                    }
-                    else
-                    {
-                        // Interpolate between MidColor (Yellow) and EndColor (LimeGreen)
-                        // Need to scale the factor from [0.5, 1.0] to [0, 1.0] for this segment
-                        double segmentFactor = (overallFactor - 0.5) * 2.0;
-                        newColor = InterpolateColor(MidColor, EndColor, segmentFactor);
-                    }
+                    float r = (float)(StartColor.Red + factor * (EndColor.Red - StartColor.Red));
+                    float g = (float)(StartColor.Green + factor * (EndColor.Green - StartColor.Green));
+                    float b = (float)(StartColor.Blue + factor * (EndColor.Blue - StartColor.Blue));
+                    float a = (float)(StartColor.Alpha + factor * (EndColor.Alpha - StartColor.Alpha));
+                    newColor = new Color(r, g, b, a);
                 }
 
-                // Only update if the color actually changed to avoid unnecessary UI refreshes
                 if (currentTask.PositionColor != newColor)
                 {
                     currentTask.PositionColor = newColor;
-                    // Debug.WriteLine($"   - Task {i} ('{currentTask.Title}'): Set Color {newColor}");
                 }
             }
         }
@@ -398,7 +367,6 @@ public sealed partial class MainViewModel : ObservableObject
 
             await MainThread.InvokeOnMainThreadAsync(() =>
             {
-                // Order is already updated by UpdateTaskIndexAndColorPropertyInternal
                 tasksToSave = new List<TaskItem>(Tasks);
             });
 
@@ -429,14 +397,55 @@ public sealed partial class MainViewModel : ObservableObject
         await LoadTasksAsync();
     }
 
+    // *** UPDATED PROGRESS BAR LOGIC ***
     private void UpdateTaskProgressAndColor()
     {
-        double enabledTaskCount = Tasks?.Count(t => !(t.TimeType == TaskTimeType.Repeating && t.DueDate.HasValue && t.DueDate.Value.Date > DateTime.Today)) ?? 0;
-        double progressValue = ReferenceTaskCount <= 0 ? (enabledTaskCount > 0 ? 0.0 : 1.0) : Math.Clamp(1.0 - (enabledTaskCount / ReferenceTaskCount), 0.0, 1.0);
-        TaskProgress = progressValue;
-        // --- PROGRESS BAR COLOR CALCULATION (Remains Red -> Green) ---
-        float redComponent = (float)(1.0 - progressValue); float greenComponent = (float)progressValue; float blueComponent = 0.0f;
-        redComponent = Math.Clamp(redComponent, 0.0f, 1.0f); greenComponent = Math.Clamp(greenComponent, 0.0f, 1.0f);
-        TaskProgressColor = new Color(redComponent, greenComponent, blueComponent);
+        if (Tasks is null)
+        {
+            TaskProgress = 0.0; // Default to 0 if tasks collection is null
+            TaskProgressColor = StartColor; // Default color
+            return;
+        }
+
+        double totalTasks = Tasks.Count;
+        double tasksDueToday = Tasks.Count(t => t.DueDate.HasValue && t.DueDate.Value.Date == DateTime.Today);
+
+        double progressValue;
+        if (totalTasks == 0)
+        {
+            progressValue = 1.0; // 100% if no tasks exist
+        }
+        else
+        {
+            progressValue = (totalTasks - tasksDueToday) / totalTasks;
+        }
+
+        TaskProgress = Math.Clamp(progressValue, 0.0, 1.0); // Ensure it's between 0 and 1
+
+        // Interpolate color: Red -> Yellow -> Green
+        float r, g, b;
+        float factor = (float)TaskProgress;
+
+        if (factor < 0.5f) // Red to Yellow
+        {
+            r = 1.0f;
+            g = factor * 2.0f; // Gradually increase green
+            b = 0.0f;
+        }
+        else // Yellow to Green
+        {
+            r = 1.0f - (factor - 0.5f) * 2.0f; // Gradually decrease red
+            g = 1.0f;
+            b = 0.0f;
+        }
+
+        // Clamp final values just in case
+        r = Math.Clamp(r, 0.0f, 1.0f);
+        g = Math.Clamp(g, 0.0f, 1.0f);
+        b = Math.Clamp(b, 0.0f, 1.0f);
+
+        TaskProgressColor = new Color(r, g, b);
+
+        // Debug.WriteLine($"UpdateTaskProgress: Total={totalTasks}, DueToday={tasksDueToday}, Progress={TaskProgress:F2}, Color=R{r:F2} G{g:F2} B{b:F2}");
     }
 }
