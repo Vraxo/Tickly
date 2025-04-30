@@ -219,7 +219,6 @@ public static class MauiProgram
          xmlns:models="clr-namespace:Tickly.Models"
          xmlns:converters="clr-namespace:Tickly.Converters"
          x:Class="Tickly.MainPage"
-         x:Name="MainTasksPage"
          BackgroundColor="Black"
          Title="Tickly Tasks">
 
@@ -228,7 +227,7 @@ public static class MauiProgram
     </ContentPage.BindingContext>
 
     <Shell.TitleView>
-        <Grid ColumnDefinitions="*" VerticalOptions="FillAndExpand" Margin="0,0,10,0">
+        <Grid ColumnDefinitions="*, Auto" VerticalOptions="FillAndExpand" Margin="0,0,10,0">
             <Label Grid.Column="0"
                Text="Tickly Tasks"
                TextColor="{AppThemeBinding Light=Black, Dark=White}"
@@ -237,29 +236,39 @@ public static class MauiProgram
                VerticalOptions="Center"
                HorizontalOptions="Start"
                Margin="10,0,0,0"/>
+
+            <Picker Grid.Column="1"
+                ItemsSource="{Binding SortOptionsDisplay}"
+                SelectedItem="{Binding SelectedSortOption}"
+                BackgroundColor="Black"
+                TextColor="WhiteSmoke"
+                FontSize="Small"
+                HorizontalOptions="End"
+                VerticalOptions="Center"
+                MinimumWidthRequest="180"
+                Margin="0,0,5,0"/>
         </Grid>
     </Shell.TitleView>
 
 
     <ContentPage.Resources>
         <ResourceDictionary>
+            <converters:PriorityToColorConverter x:Key="PriorityColorConverter" />
             <converters:TaskTimeToStringConverter x:Key="TaskTimeConverter" />
             <converters:InverseBooleanConverter x:Key="InverseBooleanConverter" />
             <converters:FutureRepeatingTaskIsEnabledConverter x:Key="FutureRepeatingTaskIsEnabledConverter" />
-            <!-- REMOVED: PositionToColorConverter Resource -->
-            <!-- <converters:PositionToColorConverter x:Key="PositionToColorConverter" /> -->
 
-            <Style TargetType="Frame" x:Key="PositionIndicatorFrameStyle">
+            <Style TargetType="Frame" x:Key="PriorityIndicatorFrameStyle">
                 <Setter Property="HeightRequest" Value="12"/>
                 <Setter Property="WidthRequest" Value="12"/>
                 <Setter Property="CornerRadius" Value="6"/>
+                <Setter Property="BackgroundColor" Value="{Binding Priority, Converter={StaticResource PriorityColorConverter}}"/>
                 <Setter Property="VerticalOptions" Value="Center"/>
                 <Setter Property="HorizontalOptions" Value="Center"/>
                 <Setter Property="BorderColor" Value="Transparent"/>
                 <Setter Property="Padding" Value="0"/>
                 <Setter Property="Margin" Value="0,5,0,0"/>
             </Style>
-
             <Style TargetType="Label" x:Key="TaskTitleLabelStyle">
                 <Setter Property="TextColor" Value="{AppThemeBinding Light=Black, Dark=White}"/>
                 <Setter Property="FontSize" Value="16"/>
@@ -308,8 +317,7 @@ public static class MauiProgram
                      HeightRequest="5"
                      Margin="0,0,0,5"/>
 
-        <CollectionView x:Name="TasksCollectionView"
-                    Grid.Row="1" Grid.Column="0"
+        <CollectionView Grid.Row="1" Grid.Column="0"
                     ItemsSource="{Binding Tasks}"
                     CanReorderItems="True"
                     Margin="15,0,15,0"
@@ -317,7 +325,7 @@ public static class MauiProgram
 
             <CollectionView.ItemTemplate>
                 <DataTemplate x:DataType="models:TaskItem">
-                    <Grid Padding="10, 8">
+                    <Grid Padding="10, 8" Opacity="{Binding IsFadingOut, Converter={StaticResource InverseBooleanConverter}}">
                         <Grid.Style>
                             <Style TargetType="Grid">
                                 <Setter Property="Opacity" Value="1.0" />
@@ -344,12 +352,7 @@ public static class MauiProgram
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
-
-                            <!-- CORRECTED Binding: Directly to the TaskItem's PositionColor property -->
-                            <Frame Grid.Column="0"
-                                   Style="{StaticResource PositionIndicatorFrameStyle}"
-                                   BackgroundColor="{Binding PositionColor}" />
-
+                            <Frame Grid.Column="0" Style="{StaticResource PriorityIndicatorFrameStyle}"/>
                             <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
                                 <VerticalStackLayout.GestureRecognizers>
                                     <TapGestureRecognizer
@@ -9070,85 +9073,31 @@ public class InverseBooleanConverter : IValueConverter
 }
 </file>
 
-<file path="Source\Converters\PositionToColorConverter.cs">
-using System;
-using System.Diagnostics; // Added for Debug.WriteLine
+<file path="Source\Converters\PriorityToColorConverter.cs">
 using System.Globalization;
-using Microsoft.Maui.Graphics; // For Color
+using Tickly.Models;
 
 namespace Tickly.Converters;
 
-public class PositionToColorConverter : IValueConverter
+public class PriorityToColorConverter : IValueConverter
 {
-    // Define the start (top) and end (bottom) colors
-    private static readonly Color StartColor = Colors.Red;    // Color for index 0
-    private static readonly Color EndColor = Colors.LimeGreen; // Color for the last index
-
-    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+    public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
-        int index = -1; // Default to invalid
-        if (value is int idx)
+        if (value is TaskPriority priority)
         {
-            index = idx;
-        }
-        else if (value != null)
-        {
-            Debug.WriteLine($"[PositionToColorConverter] Warning: Received non-int value: {value} ({value.GetType()})");
-        }
-
-
-        if (index < 0)
-        {
-            Debug.WriteLine($"[PositionToColorConverter] Error: Received invalid index: {index}");
-            return Colors.Gray; // Return Gray for invalid index
+            return priority switch
+            {
+                TaskPriority.High => Colors.Red,
+                TaskPriority.Medium => Colors.Orange,
+                TaskPriority.Low => Colors.LimeGreen,
+                _ => Colors.Gray,
+            };
         }
 
-        int totalCount = 1; // Default to 1 if parameter is invalid
-        if (parameter is int count && count > 0)
-        {
-            totalCount = count;
-        }
-        else if (parameter is string countStr && int.TryParse(countStr, out int parsedCount) && parsedCount > 0)
-        {
-            totalCount = parsedCount;
-        }
-        else if (parameter != null)
-        {
-            Debug.WriteLine($"[PositionToColorConverter] Warning: Received invalid parameter type: {parameter} ({parameter.GetType()}). Using default count 1.");
-        }
-        else
-        {
-            Debug.WriteLine($"[PositionToColorConverter] Warning: Received null parameter. Using default count 1.");
-        }
-
-
-        Debug.WriteLine($"[PositionToColorConverter] Index: {index}, TotalCount: {totalCount}"); // DEBUG OUTPUT
-
-        // Handle the edge case of a single item
-        if (totalCount <= 1)
-        {
-            Debug.WriteLine($"[PositionToColorConverter] Single item or invalid count <= 1. Returning StartColor: {StartColor}");
-            return StartColor;
-        }
-
-        // Calculate the interpolation factor (0.0 at index 0, 1.0 at index totalCount-1)
-        double factor = (double)index / (totalCount - 1);
-        factor = Math.Clamp(factor, 0.0, 1.0); // Ensure factor stays within [0, 1]
-        Debug.WriteLine($"[PositionToColorConverter] Factor: {factor:F3}");
-
-        // Linear interpolation between StartColor and EndColor
-        float r = (float)(StartColor.Red + factor * (EndColor.Red - StartColor.Red));
-        float g = (float)(StartColor.Green + factor * (EndColor.Green - StartColor.Green));
-        float b = (float)(StartColor.Blue + factor * (EndColor.Blue - StartColor.Blue));
-        float a = (float)(StartColor.Alpha + factor * (EndColor.Alpha - StartColor.Alpha));
-
-        Color resultColor = new Color(r, g, b, a);
-        Debug.WriteLine($"[PositionToColorConverter] Result Color: R={r:F2}, G={g:F2}, B={b:F2}, A={a:F2}");
-
-        return resultColor;
+        return Colors.Gray;
     }
 
-    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+    public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
         throw new NotImplementedException();
     }
@@ -9438,12 +9387,22 @@ public enum CalendarSystemType
 }
 </file>
 
+<file path="Source\Models\SortOrderType.cs">
+namespace Tickly.Models;
+
+public enum SortOrderType
+{
+    Manual,
+    PriorityHighFirst,
+    PriorityLowFirst
+}
+</file>
+
 <file path="Source\Models\TaskItem.cs">
 // Models/TaskItem.cs
 using CommunityToolkit.Mvvm.ComponentModel;
 using System;
-using Microsoft.Maui.Graphics; // <<== ADD THIS USING DIRECTIVE
-using Tickly.Models;
+using Tickly.Models; // Make sure enum namespace is referenced if separate
 
 namespace Tickly.Models;
 
@@ -9456,10 +9415,13 @@ public partial class TaskItem : ObservableObject
     private string _title;
 
     [ObservableProperty]
+    private TaskPriority _priority;
+
+    [ObservableProperty]
     private TaskTimeType _timeType;
 
     [ObservableProperty]
-    private DateTime? _dueDate;
+    private DateTime? _dueDate; // Base/current due date or start date for repeating
 
     [ObservableProperty]
     private TaskRepetitionType? _repetitionType;
@@ -9470,28 +9432,23 @@ public partial class TaskItem : ObservableObject
     [ObservableProperty]
     private int _order;
 
+    // --- NEW Property for Animation ---
     [ObservableProperty]
-    private bool _isFadingOut;
+    private bool _isFadingOut; // Flag to trigger fade-out animation before removal
 
-    [ObservableProperty]
-    private int _index;
-
-    // --- NEW Color Property ---
-    [ObservableProperty]
-    private Color _positionColor = Colors.Transparent; // Initialize with a default
-
-    // Parameterless constructor
+    // Parameterless constructor for JSON deserialization
     public TaskItem()
     {
         Id = Guid.NewGuid();
         Title = string.Empty;
-        IsFadingOut = false;
-        Index = -1;
+        // Default TimeType is TaskTimeType.None (0)
+        IsFadingOut = false; // Default state
     }
 
     // Full constructor
     public TaskItem(
         string title,
+        TaskPriority priority,
         TaskTimeType timeType,
         DateTime? dueDate,
         TaskRepetitionType? repetitionType,
@@ -9500,14 +9457,25 @@ public partial class TaskItem : ObservableObject
     {
         Id = Guid.NewGuid();
         Title = title;
+        Priority = priority;
         TimeType = timeType;
         DueDate = dueDate;
         RepetitionType = repetitionType;
         RepetitionDayOfWeek = repetitionDayOfWeek;
         Order = order;
-        IsFadingOut = false;
-        Index = -1;
+        IsFadingOut = false; // Default state
     }
+}
+</file>
+
+<file path="Source\Models\TaskPriority.cs">
+namespace Tickly.Models;
+
+public enum TaskPriority
+{
+    High,   // Red
+    Medium, // Orange
+    Low     // Green
 }
 </file>
 
@@ -9543,26 +9511,25 @@ public static class AppSettings
 {
     // Key for storing the setting
     public const string CalendarSystemKey = "CalendarSystemPreference";
-    // REMOVED: SortOrderKey
-    // public const string SortOrderKey = "SortOrderPreference";
+    public const string SortOrderKey = "SortOrderPreference"; // Key for sort order
 
     // Backing field - Now initialized by static constructor
     private static CalendarSystemType _selectedCalendarSystem;
-    // REMOVED: _selectedSortOrder
-    // private static SortOrderType _selectedSortOrder;
+    private static SortOrderType _selectedSortOrder; // Backing field for sort order
 
     // --- Static Constructor ---
+    // This runs automatically the first time the AppSettings class is accessed.
     static AppSettings()
     {
         // Load Calendar from Preferences, default to Gregorian (0) if not found
         int storedCalendarValue = Preferences.Get(CalendarSystemKey, (int)CalendarSystemType.Gregorian);
-        _selectedCalendarSystem = (CalendarSystemType)storedCalendarValue;
+        _selectedCalendarSystem = (CalendarSystemType)storedCalendarValue; // Set the backing field directly
         Debug.WriteLine($"AppSettings (Static Constructor): Initialized CalendarSystem to {_selectedCalendarSystem} from Preferences.");
 
-        // REMOVED: Sort Order loading
-        // int storedSortValue = Preferences.Get(SortOrderKey, (int)SortOrderType.PriorityHighFirst);
-        // _selectedSortOrder = (SortOrderType)storedSortValue;
-        // Debug.WriteLine($"AppSettings (Static Constructor): Initialized SortOrder to {_selectedSortOrder} from Preferences.");
+        // Load Sort Order from Preferences, default to PriorityHighFirst (1) if not found
+        int storedSortValue = Preferences.Get(SortOrderKey, (int)SortOrderType.PriorityHighFirst);
+        _selectedSortOrder = (SortOrderType)storedSortValue; // Set the backing field directly
+        Debug.WriteLine($"AppSettings (Static Constructor): Initialized SortOrder to {_selectedSortOrder} from Preferences.");
     }
     // --- End Static Constructor ---
 
@@ -9574,15 +9541,35 @@ public static class AppSettings
         {
             if (_selectedCalendarSystem != value)
             {
-                _selectedCalendarSystem = value;
+                _selectedCalendarSystem = value; // Update backing field
+                // Preferences are saved by SettingsViewModel when user makes changes
                 Debug.WriteLine($"AppSettings: CalendarSystem changed to {value} (will be saved by SettingsViewModel).");
+                // Optionally raise an event if needed for non-UI immediate updates
+                // SettingsChanged?.Invoke(null, EventArgs.Empty);
             }
         }
     }
 
-    // REMOVED: SelectedSortOrder property
-    // public static SortOrderType SelectedSortOrder { ... }
+    // Public property to access the Sort Order setting
+    public static SortOrderType SelectedSortOrder
+    {
+        get => _selectedSortOrder;
+        set
+        {
+            if (_selectedSortOrder != value)
+            {
+                _selectedSortOrder = value; // Update backing field
+                Preferences.Set(SortOrderKey, (int)value); // Save immediately when set
+                Debug.WriteLine($"AppSettings: SortOrder changed and saved to {value}.");
+                // Optionally raise an event if needed for non-UI immediate updates
+                // SortOrderChanged?.Invoke(null, EventArgs.Empty);
+            }
+        }
+    }
 
+    // Optional: Event for real-time updates elsewhere if needed
+    // public static event EventHandler SettingsChanged;
+    // public static event EventHandler SortOrderChanged;
 }
 </file>
 
@@ -9668,7 +9655,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Tickly.Messages;
 using Tickly.Models;
-using Tickly.Services;
+using Tickly.Services; // Needed for AppSettings
 using Tickly.Utils;
 using Tickly.Views;
 
@@ -9688,24 +9675,62 @@ public sealed partial class MainViewModel : ObservableObject
     private readonly object _saveLock = new();
     private Timer? _debounceTimer;
 
+    private List<string> _sortOptionsDisplay;
+    public List<string> SortOptionsDisplay
+    {
+        get => _sortOptionsDisplay;
+        set => SetProperty(ref _sortOptionsDisplay, value);
+    }
+
+    private string _selectedSortOption;
+    public string SelectedSortOption
+    {
+        get => _selectedSortOption;
+
+        set
+        {
+            if (SetProperty(ref _selectedSortOption, value))
+            {
+                SortOrderType newSortOrder = value switch
+                {
+                    "Priority (High First)" => SortOrderType.PriorityHighFirst,
+                    "Priority (Low First)" => SortOrderType.PriorityLowFirst,
+                    _ => SortOrderType.Manual
+                };
+
+                if (newSortOrder != SortOrderType.Manual)
+                {
+                    AppSettings.SelectedSortOrder = newSortOrder;
+                }
+
+                ApplySortOrderCommand.Execute(null);
+            }
+        }
+    }
+
     [ObservableProperty]
     private double taskProgress;
 
     [ObservableProperty]
     private Color taskProgressColor;
 
-    private const double ReferenceTaskCount = 10.0;
-
-    // Define the start (top) and end (bottom) colors for the gradient
-    private static readonly Color StartColor = Colors.Red;
-    private static readonly Color EndColor = Colors.LimeGreen;
+    private const double ReferenceTaskCount = 10.0; // Adjusted: Max tasks for 'full red'. Fewer tasks make it greener faster.
 
     public MainViewModel()
     {
         _filePath = Path.Combine(FileSystem.AppDataDirectory, "tasks.json");
         _tasks = new();
 
-        _ = LoadTasksAsync();
+        _sortOptionsDisplay =
+        [
+            "Manual Order",
+            "Priority (High First)",
+            "Priority (Low First)"
+        ];
+
+        _selectedSortOption = GetSortOptionDisplayString(AppSettings.SelectedSortOrder);
+
+        _ = LoadTasksAsync(); // LoadTasksAsync will call UpdateTaskProgressAndColor
 
         WeakReferenceMessenger.Default.Register<AddTaskMessage>(this, (recipient, message) => HandleAddTask(message.Value));
         WeakReferenceMessenger.Default.Register<UpdateTaskMessage>(this, (recipient, message) => HandleUpdateTask(message.Value));
@@ -9713,6 +9738,7 @@ public sealed partial class MainViewModel : ObservableObject
         WeakReferenceMessenger.Default.Register<CalendarSettingChangedMessage>(this, async (recipient, message) => await HandleCalendarSettingChanged());
         WeakReferenceMessenger.Default.Register<TasksReloadRequestedMessage>(this, async (recipient, message) => await HandleTasksReloadRequested());
 
+        UpdateTaskProgressAndColor();
     }
 
     [RelayCommand]
@@ -9721,63 +9747,104 @@ public sealed partial class MainViewModel : ObservableObject
         try
         {
             Dictionary<string, object> navigationParameter = new() { { "TaskToEdit", null! } };
+
             await Shell.Current.GoToAsync(nameof(AddTaskPopupPage), true, navigationParameter);
         }
-        catch (Exception exception) { Debug.WriteLine($"Error navigating to add page: {exception.Message}"); }
+        catch (Exception exception)
+        {
+            Debug.WriteLine($"Error navigating to add page: {exception.Message}");
+        }
     }
 
     [RelayCommand]
     private async Task NavigateToEditPage(TaskItem? taskToEdit)
     {
-        if (taskToEdit is null) return;
+        if (taskToEdit is null)
+        {
+            return;
+        }
+
         try
         {
             Dictionary<string, object> navigationParameter = new() { { "TaskToEdit", taskToEdit } };
+
             await Shell.Current.GoToAsync(nameof(AddTaskPopupPage), true, navigationParameter);
         }
-        catch (Exception exception) { Debug.WriteLine($"Error navigating to edit page for task {taskToEdit.Id}: {exception.Message}"); }
+        catch (Exception exception)
+        {
+            Debug.WriteLine($"Error navigating to edit page for task {taskToEdit.Id}: {exception.Message}");
+        }
     }
 
     [RelayCommand]
     private async Task LoadTasksAsync()
     {
         bool acquiredLock = false;
-        lock (_saveLock) { if (_isSaving) return; acquiredLock = true; }
-        if (!acquiredLock) return;
+
+        lock (_saveLock)
+        {
+            if (_isSaving)
+            {
+                return;
+            }
+            acquiredLock = true;
+        }
+
+        if (!acquiredLock)
+        {
+            return;
+        }
 
         Debug.WriteLine($"LoadTasksAsync: Attempting to load tasks from: {_filePath}");
+
         bool wasSubscribed = false;
         bool changesMade = false;
         List<TaskItem> loadedTasks = [];
 
         try
         {
-            if (Tasks != null) { Tasks.CollectionChanged -= Tasks_CollectionChanged; wasSubscribed = true; }
+            if (Tasks != null)
+            {
+                Tasks.CollectionChanged -= Tasks_CollectionChanged;
+                wasSubscribed = true;
+            }
 
             if (File.Exists(_filePath))
             {
                 string json = await File.ReadAllTextAsync(_filePath);
+
                 if (!string.IsNullOrWhiteSpace(json))
                 {
-                    try { loadedTasks = JsonSerializer.Deserialize<List<TaskItem>>(json) ?? []; }
-                    catch (JsonException jsonException) { Debug.WriteLine($"LoadTasksAsync: Error deserializing tasks JSON: {jsonException.Message}"); loadedTasks = []; }
+                    try
+                    {
+                        loadedTasks = JsonSerializer.Deserialize<List<TaskItem>>(json) ?? [];
+                    }
+                    catch (JsonException jsonException)
+                    {
+                        Debug.WriteLine($"LoadTasksAsync: Error deserializing tasks JSON: {jsonException.Message}");
+                        loadedTasks = [];
+                    }
                 }
             }
 
             DateTime today = DateTime.Today;
+            List<TaskItem> tasksToRemove = [];
+
             foreach (TaskItem task in loadedTasks)
             {
                 if (task.TimeType == TaskTimeType.Repeating && task.DueDate.HasValue && task.DueDate.Value.Date < today)
                 {
                     DateTime originalDueDate = task.DueDate.Value.Date;
                     DateTime nextValidDueDate = CalculateNextValidDueDateForRepeatingTask(task, today, originalDueDate);
+
                     if (task.DueDate.Value.Date != nextValidDueDate)
                     {
-                        task.DueDate = nextValidDueDate; changesMade = true;
+                        Debug.WriteLine($"LoadTasksAsync: Adjusting overdue task '{task.Title}' ({task.RepetitionType}) from {task.DueDate.Value.Date:d} to {nextValidDueDate:d}");
+                        task.DueDate = nextValidDueDate;
+                        changesMade = true;
                     }
                 }
                 task.IsFadingOut = false;
-                task.PositionColor = Colors.Transparent; // Reset color before recalculation
             }
 
             List<TaskItem> tasksToAdd = loadedTasks.OrderBy(task => task.Order).ToList();
@@ -9785,12 +9852,27 @@ public sealed partial class MainViewModel : ObservableObject
             await MainThread.InvokeOnMainThreadAsync(() =>
             {
                 Tasks.Clear();
-                foreach (TaskItem task in tasksToAdd) { Tasks.Add(task); }
-                UpdateTaskIndexAndColorProperty(); // ** CALL THE UPDATED METHOD **
+                foreach (TaskItem task in tasksToAdd)
+                {
+                    Tasks.Add(task);
+                }
                 UpdateTaskProgressAndColor();
             });
 
-            if (changesMade) { TriggerSave(); }
+            if (AppSettings.SelectedSortOrder != SortOrderType.Manual)
+            {
+                ApplySortOrderCommand.Execute(null);
+            }
+            else
+            {
+                UpdateSelectedSortOptionDisplay(SortOrderType.Manual);
+            }
+
+            if (changesMade)
+            {
+                Debug.WriteLine("LoadTasksAsync: Saving tasks due to date adjustments.");
+                TriggerSave();
+            }
         }
         catch (Exception exception)
         {
@@ -9799,31 +9881,68 @@ public sealed partial class MainViewModel : ObservableObject
             {
                 Tasks.Clear();
                 UpdateTaskProgressAndColor();
-                UpdateTaskIndexAndColorProperty(); // ** CALL THE UPDATED METHOD **
             });
+            AppSettings.SelectedSortOrder = SortOrderType.PriorityHighFirst;
+            UpdateSelectedSortOptionDisplay(AppSettings.SelectedSortOrder);
         }
         finally
         {
-            if (Tasks != null && (wasSubscribed || Tasks.Any())) { Tasks.CollectionChanged -= Tasks_CollectionChanged; Tasks.CollectionChanged += Tasks_CollectionChanged; }
-            else if (Tasks != null) { Tasks.CollectionChanged += Tasks_CollectionChanged; }
-            if (acquiredLock) { lock (_saveLock) { /* Release lock */ } }
+            if (Tasks != null && (wasSubscribed || Tasks.Any()))
+            {
+                Tasks.CollectionChanged -= Tasks_CollectionChanged;
+                Tasks.CollectionChanged += Tasks_CollectionChanged;
+            }
+            else if (Tasks != null)
+            {
+                Tasks.CollectionChanged += Tasks_CollectionChanged;
+            }
+
+            if (acquiredLock)
+            {
+                lock (_saveLock)
+                {
+
+                }
+            }
         }
     }
+
 
     private static DateTime CalculateNextValidDueDateForRepeatingTask(TaskItem task, DateTime today, DateTime originalDueDate)
     {
         DateTime nextValidDueDate = originalDueDate;
+
         switch (task.RepetitionType)
         {
-            case TaskRepetitionType.Daily: nextValidDueDate = today; break;
+            case TaskRepetitionType.Daily:
+                {
+                    nextValidDueDate = today;
+                    break;
+                }
             case TaskRepetitionType.AlternateDay:
-                double daysDifference = (today - originalDueDate).TotalDays;
-                nextValidDueDate = daysDifference % 2 == 0 ? today : today.AddDays(1);
-                break;
+                {
+                    double daysDifference = (today - originalDueDate).TotalDays;
+
+                    nextValidDueDate = daysDifference % 2 == 0
+                        ? today
+                        : today.AddDays(1);
+                    break;
+                }
             case TaskRepetitionType.Weekly:
-                if (task.RepetitionDayOfWeek.HasValue) nextValidDueDate = DateUtils.GetNextWeekday(today, task.RepetitionDayOfWeek.Value);
-                else while (nextValidDueDate < today) nextValidDueDate = nextValidDueDate.AddDays(7);
-                break;
+                {
+                    if (task.RepetitionDayOfWeek.HasValue)
+                    {
+                        nextValidDueDate = DateUtils.GetNextWeekday(today, task.RepetitionDayOfWeek.Value);
+                    }
+                    else
+                    {
+                        while (nextValidDueDate < today)
+                        {
+                            nextValidDueDate = nextValidDueDate.AddDays(7);
+                        }
+                    }
+                    break;
+                }
         }
         return nextValidDueDate;
     }
@@ -9831,81 +9950,252 @@ public sealed partial class MainViewModel : ObservableObject
     [RelayCommand]
     private async Task MarkTaskDone(TaskItem? task)
     {
-        if (task is null || task.IsFadingOut) return;
+        if (task is null || task.IsFadingOut)
+        {
+            return;
+        }
 
         if (task.TimeType == TaskTimeType.None || task.TimeType == TaskTimeType.SpecificDate)
         {
             task.IsFadingOut = true;
             await Task.Delay(350);
+
             bool removedSuccessfully = false;
             await MainThread.InvokeOnMainThreadAsync(() =>
             {
                 removedSuccessfully = Tasks.Remove(task);
-                if (removedSuccessfully) { UpdateTaskIndexAndColorProperty(); UpdateTaskProgressAndColor(); TriggerSave(); } // ** CALL THE UPDATED METHOD **
-                else task.IsFadingOut = false;
+                if (removedSuccessfully)
+                {
+                    UpdateTaskOrderProperty();
+                    UpdateTaskProgressAndColor();
+                    TriggerSave();
+                }
+                else
+                {
+                    task.IsFadingOut = false;
+                }
             });
+
+            if (removedSuccessfully && AppSettings.SelectedSortOrder != SortOrderType.Manual)
+            {
+                ApplySortOrderCommand.Execute(null);
+            }
         }
         else if (task.TimeType == TaskTimeType.Repeating)
         {
             DateTime? nextDueDate = DateUtils.CalculateNextDueDate(task);
+
             if (nextDueDate.HasValue)
             {
                 await MainThread.InvokeOnMainThreadAsync(() =>
                 {
                     task.DueDate = nextDueDate;
-                    // Re-calculate color for potentially changed visibility/state
-                    UpdateTaskIndexAndColorProperty(); // ** CALL THE UPDATED METHOD **
+                    int index = Tasks.IndexOf(task);
+                    if (index != -1)
+                    {
+                        Tasks[index] = task;
+                    }
                     UpdateTaskProgressAndColor();
                     TriggerSave();
                 });
+
+
+                if (AppSettings.SelectedSortOrder != SortOrderType.Manual)
+                {
+                    ApplySortOrderCommand.Execute(null);
+                }
             }
             else
             {
+                Debug.WriteLine($"MarkTaskDone: Could not calculate next due date for repeating task '{task.Title}'. Removing.");
                 task.IsFadingOut = true;
                 await Task.Delay(350);
+
                 bool removedSuccessfully = false;
                 await MainThread.InvokeOnMainThreadAsync(() =>
                 {
                     removedSuccessfully = Tasks.Remove(task);
-                    if (removedSuccessfully) { UpdateTaskIndexAndColorProperty(); UpdateTaskProgressAndColor(); TriggerSave(); } // ** CALL THE UPDATED METHOD **
-                    else task.IsFadingOut = false;
+                    if (removedSuccessfully)
+                    {
+                        UpdateTaskOrderProperty();
+                        UpdateTaskProgressAndColor();
+                        TriggerSave();
+                    }
+                    else
+                    {
+                        task.IsFadingOut = false;
+                    }
                 });
+
+                if (removedSuccessfully && AppSettings.SelectedSortOrder != SortOrderType.Manual)
+                {
+                    ApplySortOrderCommand.Execute(null);
+                }
             }
         }
     }
 
-    private async Task HandleCalendarSettingChanged() { await LoadTasksAsync(); }
+
+    private static string GetSortableTitle(string title)
+    {
+        if (string.IsNullOrWhiteSpace(title))
+        {
+            return string.Empty;
+        }
+
+        int firstLetterIndex = -1;
+
+        for (int index = 0; index < title.Length; index++)
+        {
+            if (char.IsLetterOrDigit(title[index]))
+            {
+                firstLetterIndex = index;
+                break;
+            }
+        }
+
+        return firstLetterIndex == -1
+            ? title.Trim()
+            : title.Substring(firstLetterIndex).Trim();
+    }
+
+    private static bool IsTaskEnabled(TaskItem task)
+    {
+        if (task.TimeType == TaskTimeType.Repeating && task.DueDate.HasValue && task.DueDate.Value.Date > DateTime.Today)
+        {
+            return false;
+        }
+        return true;
+    }
+
+    [RelayCommand]
+    private async Task ApplySortOrder()
+    {
+        SortOrderType requestedSortOrder = SelectedSortOption switch
+        {
+            "Priority (High First)" => SortOrderType.PriorityHighFirst,
+            "Priority (Low First)" => SortOrderType.PriorityLowFirst,
+            _ => SortOrderType.Manual
+        };
+
+        SortOrderType sortToApply = requestedSortOrder == SortOrderType.Manual
+            ? SortOrderType.Manual
+            : AppSettings.SelectedSortOrder;
+
+
+        if (sortToApply == SortOrderType.Manual)
+        {
+            await LoadTasksAsync();
+            UpdateSelectedSortOptionDisplay(SortOrderType.Manual);
+            return;
+        }
+
+        List<TaskItem> currentTasks = [];
+        await MainThread.InvokeOnMainThreadAsync(() => { currentTasks = new List<TaskItem>(Tasks); });
+
+        List<TaskItem> sortedTasks = sortToApply switch
+        {
+            SortOrderType.PriorityHighFirst => currentTasks
+                .OrderByDescending(IsTaskEnabled) // Keep disabled tasks at the bottom
+                .ThenBy(task => task.Priority)    // Sort enabled by priority H->L
+                .ThenBy(task => GetSortableTitle(task.Title), StringComparer.OrdinalIgnoreCase)
+                .ToList(),
+            SortOrderType.PriorityLowFirst => currentTasks
+                .OrderByDescending(IsTaskEnabled) // Keep disabled tasks at the bottom
+                .ThenByDescending(task => task.Priority) // Sort enabled by priority L->H
+                .ThenBy(task => GetSortableTitle(task.Title), StringComparer.OrdinalIgnoreCase)
+                .ToList(),
+            _ => currentTasks.OrderBy(task => task.Order).ToList() // Manual uses saved Order
+        };
+
+        bool orderChanged = !currentTasks.SequenceEqual(sortedTasks);
+
+        if (orderChanged)
+        {
+            Tasks.CollectionChanged -= Tasks_CollectionChanged;
+            try
+            {
+                await MainThread.InvokeOnMainThreadAsync(() =>
+                {
+                    Tasks.Clear();
+                    foreach (TaskItem task in sortedTasks)
+                    {
+                        Tasks.Add(task);
+                    }
+                    UpdateTaskProgressAndColor();
+                });
+            }
+            catch (Exception exception)
+            {
+                Debug.WriteLine($"ApplySortOrder: Error during sorting: {exception.Message}");
+            }
+            finally
+            {
+                if (Tasks.Any())
+                {
+                    Tasks.CollectionChanged -= Tasks_CollectionChanged;
+                    Tasks.CollectionChanged += Tasks_CollectionChanged;
+                }
+            }
+        }
+
+        UpdateSelectedSortOptionDisplay(sortToApply);
+    }
+
+
+    private async Task HandleCalendarSettingChanged()
+    {
+        await LoadTasksAsync();
+    }
 
     private async void HandleAddTask(TaskItem? newTask)
     {
-        if (newTask is null) return;
+        if (newTask is null)
+        {
+            return;
+        }
+
         await MainThread.InvokeOnMainThreadAsync(() =>
         {
             newTask.Order = Tasks.Count;
             Tasks.Add(newTask);
-            UpdateTaskIndexAndColorProperty(); // ** CALL THE UPDATED METHOD **
             UpdateTaskProgressAndColor();
             TriggerSave();
+
+            if (AppSettings.SelectedSortOrder != SortOrderType.Manual)
+            {
+                ApplySortOrderCommand.Execute(null);
+            }
         });
     }
 
     private async void HandleUpdateTask(TaskItem? updatedTask)
     {
-        if (updatedTask is null) return;
+        if (updatedTask is null)
+        {
+            return;
+        }
+
         await MainThread.InvokeOnMainThreadAsync(() =>
         {
             int index = Tasks.ToList().FindIndex(task => task.Id == updatedTask.Id);
+
             if (index != -1)
             {
                 updatedTask.Order = Tasks[index].Order;
-                updatedTask.Index = index;
-                // Recalculate color in case properties affecting it changed (though none currently do)
-                UpdateTaskIndexAndColorPropertyInternal(); // Can call internal directly as we are on main thread
                 Tasks[index] = updatedTask;
                 UpdateTaskProgressAndColor();
                 TriggerSave();
+
+                if (AppSettings.SelectedSortOrder != SortOrderType.Manual)
+                {
+                    ApplySortOrderCommand.Execute(null);
+                }
             }
-            else Debug.WriteLine($"HandleUpdateTask: Task with ID {updatedTask.Id} not found.");
+            else
+            {
+                Debug.WriteLine($"HandleUpdateTask: Task with ID {updatedTask.Id} not found.");
+            }
         });
     }
 
@@ -9918,75 +10208,61 @@ public sealed partial class MainViewModel : ObservableObject
             if (taskToRemove is not null)
             {
                 removedSuccessfully = Tasks.Remove(taskToRemove);
-                if (removedSuccessfully) { UpdateTaskIndexAndColorProperty(); UpdateTaskProgressAndColor(); TriggerSave(); } // ** CALL THE UPDATED METHOD **
+                if (removedSuccessfully)
+                {
+                    UpdateTaskOrderProperty();
+                    UpdateTaskProgressAndColor();
+                    TriggerSave();
+                }
             }
         });
+
+        if (removedSuccessfully && AppSettings.SelectedSortOrder != SortOrderType.Manual)
+        {
+            ApplySortOrderCommand.Execute(null);
+        }
     }
 
     private void Tasks_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs eventArgs)
     {
         UpdateTaskProgressAndColor();
-        if (eventArgs.Action == NotifyCollectionChangedAction.Move ||
-            eventArgs.Action == NotifyCollectionChangedAction.Add ||
-            eventArgs.Action == NotifyCollectionChangedAction.Remove ||
-            eventArgs.Action == NotifyCollectionChangedAction.Replace ||
-            eventArgs.Action == NotifyCollectionChangedAction.Reset)
+
+        if (eventArgs.Action == NotifyCollectionChangedAction.Move)
         {
-            UpdateTaskIndexAndColorProperty(); // ** CALL THE UPDATED METHOD **
-            if (eventArgs.Action == NotifyCollectionChangedAction.Move) { TriggerSave(); }
+            UpdateTaskOrderProperty();
+            TriggerSave();
+            ResetSortToManual();
+        }
+        else if (eventArgs.Action == NotifyCollectionChangedAction.Add || eventArgs.Action == NotifyCollectionChangedAction.Remove)
+        {
+            if (eventArgs.Action == NotifyCollectionChangedAction.Remove)
+            {
+                UpdateTaskOrderProperty();
+            }
         }
     }
 
-    // ** RENAMED and UPDATED METHOD **
-    private void UpdateTaskIndexAndColorProperty()
+
+    private void UpdateTaskOrderProperty()
     {
         if (!MainThread.IsMainThread)
         {
-            MainThread.BeginInvokeOnMainThread(UpdateTaskIndexAndColorPropertyInternal);
-            return;
+            MainThread.BeginInvokeOnMainThread(UpdateTaskOrderPropertyInternal);
         }
-        UpdateTaskIndexAndColorPropertyInternal();
+        else
+        {
+            UpdateTaskOrderPropertyInternal();
+        }
     }
 
-    // ** RENAMED and UPDATED METHOD **
-    private void UpdateTaskIndexAndColorPropertyInternal()
+    private void UpdateTaskOrderPropertyInternal()
     {
-        int totalCount = Tasks.Count;
-        Debug.WriteLine($"UpdateTaskIndexAndColorPropertyInternal: Updating for {totalCount} tasks.");
-
-        for (int i = 0; i < totalCount; i++)
+        for (int index = 0; index < Tasks.Count; index++)
         {
-            TaskItem currentTask = Tasks[i];
-            if (currentTask != null)
+            TaskItem currentTask = Tasks[index];
+            if (currentTask is not null && currentTask.Order != index)
             {
-                // Update Order and Index
-                if (currentTask.Order != i) currentTask.Order = i;
-                if (currentTask.Index != i) currentTask.Index = i;
-
-                // Calculate and Set Color
-                Color newColor;
-                if (totalCount <= 1)
-                {
-                    newColor = StartColor; // Single item case
-                }
-                else
-                {
-                    double factor = (double)i / (totalCount - 1);
-                    factor = Math.Clamp(factor, 0.0, 1.0); // Ensure factor stays within [0, 1]
-
-                    float r = (float)(StartColor.Red + factor * (EndColor.Red - StartColor.Red));
-                    float g = (float)(StartColor.Green + factor * (EndColor.Green - StartColor.Green));
-                    float b = (float)(StartColor.Blue + factor * (EndColor.Blue - StartColor.Blue));
-                    float a = (float)(StartColor.Alpha + factor * (EndColor.Alpha - StartColor.Alpha));
-                    newColor = new Color(r, g, b, a);
-                }
-
-                // Only update if the color actually changed to avoid unnecessary UI refreshes
-                if (currentTask.PositionColor != newColor)
-                {
-                    currentTask.PositionColor = newColor;
-                    // Debug.WriteLine($"   - Task {i} ('{currentTask.Title}'): Set Color {newColor}");
-                }
+                currentTask.Order = index;
             }
         }
     }
@@ -9995,35 +10271,103 @@ public sealed partial class MainViewModel : ObservableObject
     {
         bool acquiredLock = false;
         List<TaskItem> tasksToSave = [];
+
         try
         {
-            lock (_saveLock) { if (_isSaving) { return; } _isSaving = true; acquiredLock = true; }
+            lock (_saveLock)
+            {
+                if (_isSaving)
+                {
+                    Debug.WriteLine("SaveTasks: Save already in progress. Skipping.");
+                    return;
+                }
+                _isSaving = true;
+                acquiredLock = true;
+            }
 
             await MainThread.InvokeOnMainThreadAsync(() =>
             {
-                // Order is already updated by UpdateTaskIndexAndColorPropertyInternal
+                UpdateTaskOrderPropertyInternal();
                 tasksToSave = new List<TaskItem>(Tasks);
             });
 
-            if (tasksToSave != null && tasksToSave.Count > 0)
+
+            if (tasksToSave is not null && tasksToSave.Count > 0)
             {
                 JsonSerializerOptions options = new() { WriteIndented = true };
                 string json = JsonSerializer.Serialize(tasksToSave, options);
                 await File.WriteAllTextAsync(_filePath, json);
+                Debug.WriteLine($"SaveTasks: Successfully saved {tasksToSave.Count} tasks to {_filePath}");
             }
-            else if (tasksToSave != null && tasksToSave.Count == 0)
+            else if (tasksToSave is not null && tasksToSave.Count == 0)
             {
-                if (File.Exists(_filePath)) { File.Delete(_filePath); }
+                if (File.Exists(_filePath))
+                {
+                    File.Delete(_filePath);
+                    Debug.WriteLine($"SaveTasks: Deleted tasks file as the list is empty: {_filePath}");
+                }
+                else
+                {
+                    Debug.WriteLine($"SaveTasks: Task list is empty, no file to save or delete at {_filePath}");
+                }
             }
         }
-        catch (Exception exception) { Debug.WriteLine($"SaveTasks: Error saving tasks: {exception.Message}"); }
-        finally { if (acquiredLock) { lock (_saveLock) { _isSaving = false; } } }
+        catch (Exception exception)
+        {
+            Debug.WriteLine($"SaveTasks: Error saving tasks: {exception.Message}");
+        }
+        finally
+        {
+            if (acquiredLock)
+            {
+                lock (_saveLock)
+                {
+                    _isSaving = false;
+                }
+            }
+        }
     }
 
     private void TriggerSave()
     {
         _debounceTimer?.Dispose();
-        _debounceTimer = new Timer(async (state) => { await SaveTasks(); _debounceTimer?.Dispose(); _debounceTimer = null; }, null, TimeSpan.FromMilliseconds(500), Timeout.InfiniteTimeSpan);
+
+        _debounceTimer = new Timer(async (state) =>
+        {
+            await SaveTasks();
+            _debounceTimer?.Dispose();
+            _debounceTimer = null;
+        },
+        null,
+        TimeSpan.FromMilliseconds(500),
+        Timeout.InfiniteTimeSpan);
+    }
+
+    private void ResetSortToManual()
+    {
+        UpdateSelectedSortOptionDisplay(SortOrderType.Manual);
+    }
+
+    private string GetSortOptionDisplayString(SortOrderType sortOrder)
+    {
+        return sortOrder switch
+        {
+            SortOrderType.PriorityHighFirst => SortOptionsDisplay[1],
+            SortOrderType.PriorityLowFirst => SortOptionsDisplay[2],
+            _ => SortOptionsDisplay[0]
+        };
+    }
+
+
+    private void UpdateSelectedSortOptionDisplay(SortOrderType sortOrder)
+    {
+        string newDisplayValue = GetSortOptionDisplayString(sortOrder);
+
+        if (_selectedSortOption != newDisplayValue)
+        {
+            SetProperty(ref _selectedSortOption, newDisplayValue, nameof(SelectedSortOption));
+            Debug.WriteLine($"UpdateSelectedSortOptionDisplay: Picker display updated to '{newDisplayValue}'");
+        }
     }
 
     private async Task HandleTasksReloadRequested()
@@ -10034,12 +10378,26 @@ public sealed partial class MainViewModel : ObservableObject
 
     private void UpdateTaskProgressAndColor()
     {
-        double enabledTaskCount = Tasks?.Count(t => !(t.TimeType == TaskTimeType.Repeating && t.DueDate.HasValue && t.DueDate.Value.Date > DateTime.Today)) ?? 0;
-        double progressValue = ReferenceTaskCount <= 0 ? (enabledTaskCount > 0 ? 0.0 : 1.0) : Math.Clamp(1.0 - (enabledTaskCount / ReferenceTaskCount), 0.0, 1.0);
+        // Count only enabled tasks
+        double enabledTaskCount = Tasks?.Count(IsTaskEnabled) ?? 0;
+
+        // Calculate progress based on enabled tasks
+        double progressValue = ReferenceTaskCount <= 0 ? (enabledTaskCount > 0 ? 0.0 : 1.0)
+                         : Math.Clamp(1.0 - (enabledTaskCount / ReferenceTaskCount), 0.0, 1.0);
+
         TaskProgress = progressValue;
-        float redComponent = (float)(1.0 - progressValue); float greenComponent = (float)progressValue; float blueComponent = 0.0f;
-        redComponent = Math.Clamp(redComponent, 0.0f, 1.0f); greenComponent = Math.Clamp(greenComponent, 0.0f, 1.0f);
+
+        // Interpolate color from Red (0.0) to Green (1.0)
+        float redComponent = (float)(1.0 - progressValue);
+        float greenComponent = (float)progressValue;
+        float blueComponent = 0.0f;
+
+        redComponent = Math.Clamp(redComponent, 0.0f, 1.0f);
+        greenComponent = Math.Clamp(greenComponent, 0.0f, 1.0f);
+
         TaskProgressColor = new Color(redComponent, greenComponent, blueComponent);
+
+        Debug.WriteLine($"UpdateTaskProgressAndColor: EnabledCount={enabledTaskCount}, TotalCount={Tasks?.Count ?? 0}, Progress={TaskProgress}, Color={TaskProgressColor}");
     }
 }
 </file>
@@ -10450,16 +10808,21 @@ namespace Tickly.Messages
              x:DataType="vm:AddTaskPopupPageViewModel"
              BackgroundColor="Black"
              Title="{Binding PageTitle}">
+    <!-- Dynamic Page Title (Add New Task / Edit Task) -->
+    <!-- Set DataType for compile-time checking and intellisense -->
 
     <ContentPage.Resources>
         <ResourceDictionary>
             <converters:InverseBooleanConverter x:Key="InverseBooleanConverter" />
+            <!-- Styles -->
             <Style TargetType="Entry" x:Key="MinimalEntry">
                 <Setter Property="TextColor" Value="White" />
                 <Setter Property="PlaceholderColor" Value="Gray" />
                 <Setter Property="BackgroundColor" Value="Transparent" />
                 <Setter Property="Margin" Value="0,0,0,5" />
             </Style>
+            <!-- Ensure Primary color is defined globally -->
+            <!-- <Color x:Key="Primary">#512BD4</Color> -->
         </ResourceDictionary>
     </ContentPage.Resources>
 
@@ -10473,18 +10836,18 @@ namespace Tickly.Messages
                    Text="{Binding Title}"
                    Style="{StaticResource MinimalEntry}" />
 
-            <!-- REMOVED: Priority Selection -->
-            <!-- <Label Text="Priority" TextColor="WhiteSmoke"/> -->
-            <!-- <HorizontalStackLayout Spacing="10" BindableLayout.ItemsSource="{Binding PriorityOptions}"> -->
-            <!--     <BindableLayout.ItemTemplate> -->
-            <!--         <DataTemplate x:DataType="vm:SelectableOption(models:TaskPriority)"> -->
-            <!--             <RadioButton GroupName="PriorityGroup" -->
-            <!--                          IsChecked="{Binding IsSelected}" -->
-            <!--                          Content="{Binding Name}" -->
-            <!--                          TextColor="WhiteSmoke" /> -->
-            <!--         </DataTemplate> -->
-            <!--     </BindableLayout.ItemTemplate> -->
-            <!-- </HorizontalStackLayout> -->
+            <!-- Priority Selection -->
+            <Label Text="Priority" TextColor="WhiteSmoke"/>
+            <HorizontalStackLayout Spacing="10" BindableLayout.ItemsSource="{Binding PriorityOptions}">
+                <BindableLayout.ItemTemplate>
+                    <DataTemplate x:DataType="vm:SelectableOption(models:TaskPriority)">
+                        <RadioButton GroupName="PriorityGroup"
+                                     IsChecked="{Binding IsSelected}"
+                                     Content="{Binding Name}"
+                                     TextColor="WhiteSmoke" />
+                    </DataTemplate>
+                </BindableLayout.ItemTemplate>
+            </HorizontalStackLayout>
 
             <!-- Time / Repetition Type Selection -->
             <Label Text="Time / Repetition" TextColor="WhiteSmoke"/>
@@ -10520,6 +10883,15 @@ namespace Tickly.Messages
                         </DataTemplate>
                     </BindableLayout.ItemTemplate>
                 </HorizontalStackLayout>
+
+                <!-- *** Start Date for Repetition Picker REMOVED *** -->
+                <!-- <StackLayout Orientation="Horizontal" Spacing="5" Margin="0,5,0,0"> -->
+                <!--     <Label Text="Starting:" VerticalOptions="Center" TextColor="LightGray"/> -->
+                <!--     <DatePicker x:Name="RepeatStartDatePicker" -->
+                <!--                 Date="{Binding DueDate}" -->
+                <!--                 TextColor="WhiteSmoke" -->
+                <!--                 BackgroundColor="#1E1E1E" /> -->
+                <!-- </StackLayout> -->
 
                 <!-- Day of Week Picker (Visible only for Weekly repetition) -->
                 <StackLayout Orientation="Horizontal" Spacing="5" Margin="0,5,0,0"
@@ -10587,8 +10959,7 @@ namespace Tickly.Views
         [ObservableProperty] private bool _isTimeTypeNone = true; // Default selection
         [ObservableProperty] private bool _isTimeTypeSpecificDate;
         [ObservableProperty] private bool _isTimeTypeRepeating;
-        // REMOVED: PriorityOptions
-        // [ObservableProperty] private ObservableCollection<SelectableOption<TaskPriority>> _priorityOptions;
+        [ObservableProperty] private ObservableCollection<SelectableOption<TaskPriority>> _priorityOptions;
         [ObservableProperty] private ObservableCollection<SelectableOption<TaskRepetitionType>> _repetitionTypeOptions;
         [ObservableProperty] private bool _isWeeklySelected; // Controls visibility of DayOfWeek picker
 
@@ -10606,8 +10977,13 @@ namespace Tickly.Views
 
         public AddTaskPopupPageViewModel()
         {
-            // REMOVED: Priority options initialization
-            // PriorityOptions = new ObservableCollection<SelectableOption<TaskPriority>> { ... };
+            // Initialize Priority options (without color names)
+            PriorityOptions = new ObservableCollection<SelectableOption<TaskPriority>>
+            {
+                new SelectableOption<TaskPriority>("High", TaskPriority.High),
+                new SelectableOption<TaskPriority>("Medium", TaskPriority.Medium, true), // Default selected
+                new SelectableOption<TaskPriority>("Low", TaskPriority.Low)
+            };
 
             // Initialize Repetition options
             RepetitionTypeOptions = new ObservableCollection<SelectableOption<TaskRepetitionType>>
@@ -10618,11 +10994,13 @@ namespace Tickly.Views
             };
 
             // Initialize Display Days of Week
+            // Use CultureInfo.InvariantCulture to ensure consistent order regardless of system settings
             var culture = System.Globalization.CultureInfo.InvariantCulture;
             DisplayDaysOfWeek = culture.DateTimeFormat.DayNames.ToList();
+            // Set default selected display day based on Today
             SelectedDisplayDayOfWeek = culture.DateTimeFormat.GetDayName(DateTime.Today.DayOfWeek);
 
-            // Handle changes in RepetitionType selection
+            // Handle changes in RepetitionType selection to show/hide DayOfWeek picker
             foreach (var option in RepetitionTypeOptions)
             {
                 option.PropertyChanged += (sender, args) =>
@@ -10630,10 +11008,13 @@ namespace Tickly.Views
                     if (args.PropertyName == nameof(SelectableOption<TaskRepetitionType>.IsSelected))
                     {
                         var changedOption = sender as SelectableOption<TaskRepetitionType>;
+                        // If this option became selected, update IsWeeklySelected based on its value
                         if (changedOption != null && changedOption.IsSelected)
                         {
                             IsWeeklySelected = (changedOption.Value == TaskRepetitionType.Weekly);
                         }
+                        // Handle case where Weekly might be deselected (though RadioButton group should prevent direct deselection)
+                        // Check if the currently selected option *is not* Weekly
                         else if (changedOption != null && !changedOption.IsSelected && changedOption.Value == TaskRepetitionType.Weekly)
                         {
                             if (RepetitionTypeOptions.FirstOrDefault(o => o.IsSelected)?.Value != TaskRepetitionType.Weekly)
@@ -10644,51 +11025,63 @@ namespace Tickly.Views
                     }
                 };
             }
+            // Initial check for DayOfWeek picker visibility
             IsWeeklySelected = RepetitionTypeOptions.FirstOrDefault(o => o.IsSelected)?.Value == TaskRepetitionType.Weekly;
 
-            // Handle changes in the main TimeType selection
+            // Handle changes in the main TimeType selection (None, Specific, Repeating)
             this.PropertyChanged += (sender, args) =>
             {
                 if (args.PropertyName == nameof(IsTimeTypeRepeating) || args.PropertyName == nameof(IsTimeTypeSpecificDate) || args.PropertyName == nameof(IsTimeTypeNone))
                 {
+                    // Ensure DayOfWeek picker visibility is correct based on whether Repeating is selected AND Weekly is chosen
                     IsWeeklySelected = IsTimeTypeRepeating && (RepetitionTypeOptions.FirstOrDefault(o => o.IsSelected)?.Value == TaskRepetitionType.Weekly);
                 }
             };
         }
 
+        // Populates the ViewModel fields based on an existing TaskItem (for editing)
         public void LoadFromTask(TaskItem task)
         {
-            _originalTask = task;
-            IsEditMode = true;
+            _originalTask = task; // Store the original task
+            IsEditMode = true; // Set EditMode flag
             PageTitle = "Edit Task";
             ConfirmButtonText = "Update Task";
 
-            Title = task.Title;
+            Title = task.Title; // Load title into ViewModel property
 
-            // REMOVED: Loading priority
-            // foreach (var option in PriorityOptions) option.IsSelected = (option.Value == task.Priority);
-            // if (!PriorityOptions.Any(o => o.IsSelected)) PriorityOptions.FirstOrDefault(o => o.Value == TaskPriority.Medium)!.IsSelected = true;
+            // Set Priority RadioButton
+            foreach (var option in PriorityOptions)
+                option.IsSelected = (option.Value == task.Priority);
+            if (!PriorityOptions.Any(o => o.IsSelected)) // Ensure default if no match
+                PriorityOptions.FirstOrDefault(o => o.Value == TaskPriority.Medium)!.IsSelected = true;
 
+            // Set TimeType RadioButtons
             IsTimeTypeNone = task.TimeType == TaskTimeType.None;
             IsTimeTypeSpecificDate = task.TimeType == TaskTimeType.SpecificDate;
             IsTimeTypeRepeating = task.TimeType == TaskTimeType.Repeating;
 
-            DueDate = task.DueDate ?? DateTime.Today;
+            // Set DatePicker value (used for Specific Date or Repeating Start Date)
+            DueDate = task.DueDate ?? DateTime.Today; // Use today if null
 
+            // Set Repetition details if applicable
             if (task.TimeType == TaskTimeType.Repeating)
             {
+                // Set Repetition Type RadioButton
                 foreach (var option in RepetitionTypeOptions)
                     option.IsSelected = (option.Value == task.RepetitionType);
-                if (!RepetitionTypeOptions.Any(o => o.IsSelected))
+                if (!RepetitionTypeOptions.Any(o => o.IsSelected)) // Ensure default if no match
                     RepetitionTypeOptions.FirstOrDefault(o => o.Value == TaskRepetitionType.Daily)!.IsSelected = true;
 
+                // Set DayOfWeek Picker selected item using display name
                 var culture = System.Globalization.CultureInfo.InvariantCulture;
                 SelectedDisplayDayOfWeek = culture.DateTimeFormat.GetDayName(task.RepetitionDayOfWeek ?? DateTime.Today.DayOfWeek);
 
+                // Update DayOfWeek picker visibility based on loaded type
                 IsWeeklySelected = RepetitionTypeOptions.FirstOrDefault(o => o.IsSelected)?.Value == TaskRepetitionType.Weekly;
             }
             else
             {
+                // Reset repetition details if not a repeating task
                 RepetitionTypeOptions.FirstOrDefault(o => o.Value == TaskRepetitionType.Daily)!.IsSelected = true;
                 var culture = System.Globalization.CultureInfo.InvariantCulture;
                 SelectedDisplayDayOfWeek = culture.DateTimeFormat.GetDayName(DateTime.Today.DayOfWeek);
@@ -10696,29 +11089,36 @@ namespace Tickly.Views
             }
         }
 
+        // Method to create or update a TaskItem based on ViewModel state
         public TaskItem? GetTaskItem()
         {
+            // --- 1. Validate Input ---
             string title = Title?.Trim();
             if (string.IsNullOrWhiteSpace(title))
             {
+                // Consider how to report validation errors (e.g., return null, throw exception)
                 Debug.WriteLine("Validation Error: Task title cannot be empty.");
                 return null;
             }
 
-            // REMOVED: Reading priority
-            // var selectedPriorityOption = PriorityOptions.FirstOrDefault(p => p.IsSelected);
-            // TaskPriority priority = selectedPriorityOption?.Value ?? TaskPriority.Medium;
+            // --- 2. Read Data from ViewModel ---
+            // Priority
+            var selectedPriorityOption = PriorityOptions.FirstOrDefault(p => p.IsSelected);
+            TaskPriority priority = selectedPriorityOption?.Value ?? TaskPriority.Medium;
 
+            // Time Type
             TaskTimeType timeType = IsTimeTypeSpecificDate ? TaskTimeType.SpecificDate :
                                     IsTimeTypeRepeating ? TaskTimeType.Repeating :
                                     TaskTimeType.None;
 
+            // Due Date
             DateTime? dueDate = null;
             if (timeType == TaskTimeType.SpecificDate || timeType == TaskTimeType.Repeating)
             {
                 dueDate = DueDate;
             }
 
+            // Repetition Details
             TaskRepetitionType? repetitionType = null;
             DayOfWeek? repetitionDayOfWeek = null;
             if (timeType == TaskTimeType.Repeating)
@@ -10728,29 +11128,31 @@ namespace Tickly.Views
 
                 if (repetitionType == TaskRepetitionType.Weekly)
                 {
+                    // Convert selected display name back to DayOfWeek enum
                     repetitionDayOfWeek = GetDayOfWeekFromDisplayName(SelectedDisplayDayOfWeek);
                 }
             }
 
-            if (IsEditMode && _originalTask != null)
+            // --- 3. Create or Update TaskItem ---
+            if (IsEditMode && _originalTask != null) // Updating existing task
             {
                 var updatedTask = new TaskItem(
-                    title, /* REMOVED: priority, */ timeType, dueDate, repetitionType, repetitionDayOfWeek, _originalTask.Order
+                    title, priority, timeType, dueDate, repetitionType, repetitionDayOfWeek, _originalTask.Order // Keep original order
                 )
                 {
-                    Id = _originalTask.Id,
-                    Index = _originalTask.Index // Preserve index if updating
+                    Id = _originalTask.Id // *** CRUCIAL: Assign the original ID ***
                 };
                 return updatedTask;
             }
-            else
+            else // Adding new task
             {
-                var newTask = new TaskItem(title, /* REMOVED: priority, */ timeType, dueDate, repetitionType, repetitionDayOfWeek);
-                // Index and Order will be assigned by MainViewModel
+                var newTask = new TaskItem(title, priority, timeType, dueDate, repetitionType, repetitionDayOfWeek);
+                // Order will be assigned by MainViewModel
                 return newTask;
             }
         }
 
+        // Helper to convert display day name back to DayOfWeek enum
         private DayOfWeek? GetDayOfWeekFromDisplayName(string displayName)
         {
             var culture = System.Globalization.CultureInfo.InvariantCulture;
@@ -10761,21 +11163,21 @@ namespace Tickly.Views
                     return (DayOfWeek)i;
                 }
             }
-            return null;
+            return null; // Not found
         }
 
+        // Optional: Reset state if needed when closing or cancelling
         public void Reset()
         {
             Title = string.Empty;
-            // REMOVED: Reset priority
-            // PriorityOptions.FirstOrDefault(o => o.Value == TaskPriority.Medium)!.IsSelected = true;
-            IsTimeTypeNone = true;
+            PriorityOptions.FirstOrDefault(o => o.Value == TaskPriority.Medium)!.IsSelected = true; // Reset priority
+            IsTimeTypeNone = true; // Reset TimeType
             IsTimeTypeSpecificDate = false;
             IsTimeTypeRepeating = false;
             DueDate = DateTime.Today;
-            RepetitionTypeOptions.FirstOrDefault(o => o.Value == TaskRepetitionType.Daily)!.IsSelected = true;
+            RepetitionTypeOptions.FirstOrDefault(o => o.Value == TaskRepetitionType.Daily)!.IsSelected = true; // Reset repetition type
             var culture = System.Globalization.CultureInfo.InvariantCulture;
-            SelectedDisplayDayOfWeek = culture.DateTimeFormat.GetDayName(DateTime.Today.DayOfWeek);
+            SelectedDisplayDayOfWeek = culture.DateTimeFormat.GetDayName(DateTime.Today.DayOfWeek); // Reset day
             IsWeeklySelected = false;
 
             _originalTask = null;
@@ -10783,7 +11185,7 @@ namespace Tickly.Views
             PageTitle = "Add New Task";
             ConfirmButtonText = "Add Task";
 
-            // Notify UI about all property changes after reset
+            // Important: Notify UI about all property changes after reset
             OnPropertyChanged(nameof(Title));
             OnPropertyChanged(nameof(IsTimeTypeNone));
             OnPropertyChanged(nameof(IsTimeTypeSpecificDate));
@@ -10794,6 +11196,7 @@ namespace Tickly.Views
             OnPropertyChanged(nameof(IsEditMode));
             OnPropertyChanged(nameof(PageTitle));
             OnPropertyChanged(nameof(ConfirmButtonText));
+            // Notify about collection changes if necessary (usually not needed for reset)
         }
     }
 
@@ -10802,42 +11205,52 @@ namespace Tickly.Views
     public partial class AddTaskPopupPage : ContentPage
     {
         private AddTaskPopupPageViewModel _viewModel;
+        // Remove _editingTask from code-behind, let ViewModel manage it
+        // private TaskItem? _editingTask = null;
 
+        // This property receives the TaskItem object during navigation for editing
         public TaskItem TaskToEdit
         {
             set
             {
-                if (value != null)
+                if (value != null) // If a TaskItem was passed
                 {
                     Debug.WriteLine($"AddTaskPopupPage: Received TaskToEdit with ID: {value.Id}");
-                    _viewModel.LoadFromTask(value);
+                    _viewModel.LoadFromTask(value); // Populate the ViewModel
                 }
-                else
+                else // Navigated without a TaskItem (e.g., adding new, or error)
                 {
                     Debug.WriteLine("AddTaskPopupPage: Navigated without TaskToEdit (Add Mode).");
-                    _viewModel.Reset();
+                    _viewModel.Reset(); // Reset ViewModel for adding
                 }
             }
         }
 
+        // Constructor
         public AddTaskPopupPage()
         {
-            InitializeComponent();
-            _viewModel = new AddTaskPopupPageViewModel();
-            BindingContext = _viewModel;
+            InitializeComponent(); // Standard MAUI XAML initialization
+            _viewModel = new AddTaskPopupPageViewModel(); // Create the associated ViewModel
+            BindingContext = _viewModel; // Set the page's BindingContext to the ViewModel
+            // Initial state is handled by ViewModel constructor and Reset/LoadFromTask
         }
 
+        // Remove PopulateFieldsFromTask - ViewModel handles loading now
+        // private void PopulateFieldsFromTask(TaskItem task) { ... }
+
+        // Handles the "Confirm" button click
         private async void OnConfirmClicked(object sender, EventArgs e)
         {
-            var taskItem = _viewModel.GetTaskItem();
+            var taskItem = _viewModel.GetTaskItem(); // Get the prepared TaskItem from ViewModel
 
             if (taskItem == null)
             {
+                // Validation failed in ViewModel, show alert
                 await DisplayAlert("Validation Error", "Task title cannot be empty.", "OK");
                 return;
             }
 
-            if (_viewModel.IsEditMode)
+            if (_viewModel.IsEditMode) // Check ViewModel's mode
             {
                 Debug.WriteLine($"Sending UpdateTaskMessage for Task ID: {taskItem.Id}");
                 WeakReferenceMessenger.Default.Send(new UpdateTaskMessage(taskItem));
@@ -10848,52 +11261,72 @@ namespace Tickly.Views
                 WeakReferenceMessenger.Default.Send(new AddTaskMessage(taskItem));
             }
 
+            // Close the Popup Page
             await Shell.Current.Navigation.PopModalAsync();
         }
 
+        // Handles the "Cancel" button click
         private async void OnCancelClicked(object sender, EventArgs e)
         {
+            // Simply close the popup page without saving/sending messages
             await Shell.Current.Navigation.PopModalAsync();
         }
 
+        // *** ADDED METHOD ***
+        // Handles the "Delete" button click (only visible in Edit mode)
         private async void OnDeleteClicked(object sender, EventArgs e)
         {
-            var taskToDelete = _viewModel.GetTaskItem();
+            // Get the task ID from the ViewModel (which holds the _originalTask)
+            var taskToDelete = _viewModel.GetTaskItem(); // GetTaskItem returns the *updated* item but with original ID if editing
 
             if (_viewModel.IsEditMode && taskToDelete != null)
             {
+                // Optional but recommended: Ask for confirmation before deleting
                 bool confirmed = await DisplayAlert("Confirm Delete", $"Are you sure you want to delete the task '{taskToDelete.Title}'?", "Yes", "No");
                 if (!confirmed)
                 {
-                    return;
+                    return; // User cancelled the deletion
                 }
 
                 Debug.WriteLine($"Sending DeleteTaskMessage for Task ID: {taskToDelete.Id}");
+                // Send a message to the MainViewModel to delete this task using its ID
                 WeakReferenceMessenger.Default.Send(new DeleteTaskMessage(taskToDelete.Id));
 
+                // Close the Popup Page after sending the message
                 await Shell.Current.Navigation.PopModalAsync();
             }
             else
             {
+                // This case should ideally not happen because the button's visibility
+                // is tied to IsEditMode (which implies _originalTask is not null in VM).
                 Debug.WriteLine("OnDeleteClicked triggered but not in Edit Mode or Task ID missing. Cannot delete.");
                 await DisplayAlert("Error", "Cannot delete task. No task loaded for editing.", "OK");
             }
         }
+        // *** END OF ADDED METHOD ***
 
+
+        // Optional: Called when navigating away from the page
         protected override void OnNavigatedFrom(NavigatedFromEventArgs args)
         {
             base.OnNavigatedFrom(args);
+            // Reset the ViewModel when navigating away, so it's clean for the next time
+            // unless navigation is due to Confirm/Delete (handled by PopModalAsync)
+            // It might be safer to reset only on 'Cancel' or back navigation if needed.
+            // For simplicity, we rely on the QueryProperty setter to manage state on next navigation.
+            // _viewModel.Reset(); // Uncomment cautiously if needed
             Debug.WriteLine("AddTaskPopupPage: Navigated From.");
         }
 
         protected override void OnNavigatedTo(NavigatedToEventArgs args)
         {
             base.OnNavigatedTo(args);
+            // The QueryProperty setter (TaskToEdit) handles setup based on navigation parameters.
             Debug.WriteLine($"AddTaskPopupPage: Navigated To. Edit Mode: {_viewModel.IsEditMode}");
         }
 
-    }
-}
+    } // End of AddTaskPopupPage class
+} // End of namespace
 </file>
 
 <file path="Source\Views\SettingsPage.xaml">
