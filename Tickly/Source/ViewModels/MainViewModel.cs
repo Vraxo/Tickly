@@ -10,9 +10,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.Diagnostics;
-using System.IO;
 using System.Linq;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Tickly.Messages;
@@ -32,11 +30,9 @@ public sealed partial class MainViewModel : ObservableObject
         set => SetProperty(ref _tasks, value);
     }
 
-    private readonly string _filePath;
-    private bool _isSaving = false;
-    private readonly object _saveLock = new();
     private Timer? _debounceTimer;
     private readonly TaskVisualStateService _taskVisualStateService;
+    private readonly TaskPersistenceService _taskPersistenceService;
 
     [ObservableProperty]
     private double taskProgress;
@@ -46,9 +42,9 @@ public sealed partial class MainViewModel : ObservableObject
 
     public MainViewModel()
     {
-        _filePath = Path.Combine(FileSystem.AppDataDirectory, "tasks.json");
         _tasks = new();
         _taskVisualStateService = new TaskVisualStateService();
+        _taskPersistenceService = new TaskPersistenceService();
 
         _ = LoadTasksAsync();
 
@@ -88,11 +84,7 @@ public sealed partial class MainViewModel : ObservableObject
     [RelayCommand]
     private async Task LoadTasksAsync()
     {
-        bool acquiredLock = false;
-        lock (_saveLock) { if (_isSaving) return; acquiredLock = true; }
-        if (!acquiredLock) return;
-
-        Debug.WriteLine($"LoadTasksAsync: Attempting to load tasks from: {_filePath}");
+        Debug.WriteLine($"MainViewModel.LoadTasksAsync: Requesting tasks from persistence service.");
         bool wasSubscribed = false;
         bool changesMade = false;
         List<TaskItem> loadedTasks = [];
@@ -101,15 +93,8 @@ public sealed partial class MainViewModel : ObservableObject
         {
             if (Tasks != null) { Tasks.CollectionChanged -= Tasks_CollectionChanged; wasSubscribed = true; }
 
-            if (File.Exists(_filePath))
-            {
-                string json = await File.ReadAllTextAsync(_filePath);
-                if (!string.IsNullOrWhiteSpace(json))
-                {
-                    try { loadedTasks = JsonSerializer.Deserialize<List<TaskItem>>(json) ?? []; }
-                    catch (JsonException jsonException) { Debug.WriteLine($"LoadTasksAsync: Error deserializing tasks JSON: {jsonException.Message}"); loadedTasks = []; }
-                }
-            }
+            loadedTasks = await _taskPersistenceService.LoadTasksAsync();
+            Debug.WriteLine($"MainViewModel.LoadTasksAsync: Received {loadedTasks.Count} tasks from service.");
 
             DateTime today = DateTime.Today;
             foreach (TaskItem task in loadedTasks)
@@ -120,7 +105,9 @@ public sealed partial class MainViewModel : ObservableObject
                     DateTime nextValidDueDate = CalculateNextValidDueDateForRepeatingTask(task, today, originalDueDate);
                     if (task.DueDate.Value.Date != nextValidDueDate)
                     {
-                        task.DueDate = nextValidDueDate; changesMade = true;
+                        task.DueDate = nextValidDueDate;
+                        changesMade = true;
+                        Debug.WriteLine($"MainViewModel.LoadTasksAsync: Updated repeating task '{task.Title}' due date to {nextValidDueDate:yyyy-MM-dd}");
                     }
                 }
                 task.IsFadingOut = false;
@@ -134,13 +121,18 @@ public sealed partial class MainViewModel : ObservableObject
                 Tasks.Clear();
                 foreach (var task in tasksToAdd) { Tasks.Add(task); }
                 UpdateUiVisualState();
+                Debug.WriteLine($"MainViewModel.LoadTasksAsync: Updated Tasks collection on UI thread.");
             });
 
-            if (changesMade) { TriggerSave(); }
+            if (changesMade)
+            {
+                Debug.WriteLine("MainViewModel.LoadTasksAsync: Changes made to due dates, triggering save.");
+                TriggerSave();
+            }
         }
         catch (Exception exception)
         {
-            Debug.WriteLine($"LoadTasksAsync: Error loading tasks: {exception.GetType().Name} - {exception.Message}");
+            Debug.WriteLine($"MainViewModel.LoadTasksAsync: Error during loading/processing: {exception.GetType().Name} - {exception.Message}");
             await MainThread.InvokeOnMainThreadAsync(() =>
             {
                 Tasks.Clear();
@@ -151,7 +143,7 @@ public sealed partial class MainViewModel : ObservableObject
         {
             if (Tasks != null && (wasSubscribed || Tasks.Any())) { Tasks.CollectionChanged -= Tasks_CollectionChanged; Tasks.CollectionChanged += Tasks_CollectionChanged; }
             else if (Tasks != null) { Tasks.CollectionChanged += Tasks_CollectionChanged; }
-            if (acquiredLock) { lock (_saveLock) { /* Release lock */ } }
+            Debug.WriteLine("MainViewModel.LoadTasksAsync: Finished.");
         }
     }
 
@@ -313,30 +305,14 @@ public sealed partial class MainViewModel : ObservableObject
 
     private async Task SaveTasks()
     {
-        bool acquiredLock = false;
-        List<TaskItem> tasksToSave = [];
-        try
+        Debug.WriteLine("MainViewModel.SaveTasks: Delegating save to TaskPersistenceService.");
+        List<TaskItem> currentTasks = []; // Initialize here
+        await MainThread.InvokeOnMainThreadAsync(() =>
         {
-            lock (_saveLock) { if (_isSaving) { return; } _isSaving = true; acquiredLock = true; }
-
-            await MainThread.InvokeOnMainThreadAsync(() =>
-            {
-                tasksToSave = new List<TaskItem>(Tasks);
-            });
-
-            if (tasksToSave != null && tasksToSave.Count > 0)
-            {
-                JsonSerializerOptions options = new() { WriteIndented = true };
-                string json = JsonSerializer.Serialize(tasksToSave, options);
-                await File.WriteAllTextAsync(_filePath, json);
-            }
-            else if (tasksToSave != null && tasksToSave.Count == 0)
-            {
-                if (File.Exists(_filePath)) { File.Delete(_filePath); }
-            }
-        }
-        catch (Exception exception) { Debug.WriteLine($"SaveTasks: Error saving tasks: {exception.Message}"); }
-        finally { if (acquiredLock) { lock (_saveLock) { _isSaving = false; } } }
+            currentTasks = new List<TaskItem>(Tasks);
+        });
+        await _taskPersistenceService.SaveTasksAsync(currentTasks);
+        Debug.WriteLine("MainViewModel.SaveTasks: Save delegation completed.");
     }
 
     private void TriggerSave()
