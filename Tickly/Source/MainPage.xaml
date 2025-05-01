@@ -1,115 +1,262 @@
 ﻿<?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
-             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-             xmlns:vm="clr-namespace:Tickly.ViewModels"
-             xmlns:model="clr-namespace:Tickly.Models"
-             x:Class="Tickly.Views.MainPage"
-             x:DataType="vm:MainViewModel"
-             Title="Tickly Tasks">
+         xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+         xmlns:vm="clr-namespace:Tickly.ViewModels"
+         xmlns:models="clr-namespace:Tickly.Models"
+         xmlns:converters="clr-namespace:Tickly.Converters"
+         xmlns:fonts="clr-namespace:Fonts"
+         x:Class="Tickly.MainPage"
+         x:Name="MainTasksPage"
+         BackgroundColor="Black"
+         Title="Tickly Tasks">
 
-    <!--
-    IMPORTANT: BindingContext is set in the MainPage.xaml.cs constructor via Dependency Injection.
-               Do NOT uncomment or add a BindingContext declaration here.
-    -->
+    <ContentPage.BindingContext>
+        <vm:MainViewModel />
+    </ContentPage.BindingContext>
 
-    <Grid RowDefinitions="Auto, *, Auto" Padding="10">
+    <Shell.TitleView>
+        <Grid ColumnDefinitions="*" VerticalOptions="FillAndExpand" Margin="0,0,10,0">
+            <Label Grid.Column="0"
+               Text="Tickly Tasks"
+               TextColor="{AppThemeBinding Light=Black, Dark=White}"
+               FontSize="18"
+               FontAttributes="Bold"
+               VerticalOptions="Center"
+               HorizontalOptions="Start"
+               Margin="10,0,0,0"/>
+        </Grid>
+    </Shell.TitleView>
 
-        <!-- Progress Bar at the Top -->
-        <ProgressBar Grid.Row="0"
+
+    <ContentPage.Resources>
+        <ResourceDictionary>
+            <converters:TaskTimeToStringConverter x:Key="TaskTimeConverter" />
+            <converters:InverseBooleanConverter x:Key="InverseBooleanConverter" />
+            <converters:FutureRepeatingTaskIsEnabledConverter x:Key="FutureRepeatingTaskIsEnabledConverter" />
+            <!-- *** ADD THE NEW CONVERTER *** -->
+            <converters:ResetDailyTaskIsEnabledConverter x:Key="ResetDailyTaskIsEnabledConverter" />
+
+            <Style TargetType="Frame" x:Key="PositionIndicatorFrameStyle">
+                <Setter Property="HeightRequest" Value="12"/>
+                <Setter Property="WidthRequest" Value="12"/>
+                <Setter Property="CornerRadius" Value="6"/>
+                <Setter Property="VerticalOptions" Value="Center"/>
+                <Setter Property="HorizontalOptions" Value="Center"/>
+                <Setter Property="BorderColor" Value="Transparent"/>
+                <Setter Property="Padding" Value="0"/>
+                <Setter Property="Margin" Value="0,5,0,0"/>
+            </Style>
+
+            <Style TargetType="Label" x:Key="TaskTitleLabelStyle">
+                <Setter Property="TextColor" Value="{AppThemeBinding Light=Black, Dark=White}"/>
+                <Setter Property="FontSize" Value="16"/>
+                <Setter Property="FontAttributes" Value="Bold"/>
+                <Setter Property="VerticalOptions" Value="Center"/>
+            </Style>
+            <Style TargetType="Label" x:Key="TaskTimeLabelStyle">
+                <Setter Property="TextColor" Value="Gray"/>
+                <Setter Property="FontSize" Value="12"/>
+                <Setter Property="VerticalOptions" Value="Center"/>
+            </Style>
+            <Style TargetType="StackLayout" x:Key="EmptyViewLayoutStyle">
+                <Setter Property="VerticalOptions" Value="Center"/>
+                <Setter Property="HorizontalOptions" Value="Center"/>
+                <Setter Property="Padding" Value="20"/>
+                <Setter Property="Spacing" Value="5"/>
+            </Style>
+            <Style TargetType="Label" x:Key="EmptyViewLabelStyle">
+                <Setter Property="TextColor" Value="Gray"/>
+                <Setter Property="HorizontalTextAlignment" Value="Center"/>
+            </Style>
+            <Style TargetType="Button" x:Key="AddButtonStyle">
+                <Setter Property="Text" Value="+"/>
+                <Setter Property="FontSize" Value="24"/>
+                <Setter Property="FontAttributes" Value="Bold"/>
+                <Setter Property="TextColor" Value="{AppThemeBinding Light=White, Dark=Black}"/>
+                <Setter Property="BackgroundColor" Value="{StaticResource Primary}"/>
+                <Setter Property="CornerRadius" Value="28"/>
+                <Setter Property="HeightRequest" Value="56"/>
+                <Setter Property="WidthRequest" Value="56"/>
+                <Setter Property="HorizontalOptions" Value="End"/>
+                <Setter Property="VerticalOptions" Value="End"/>
+                <Setter Property="Margin" Value="20"/>
+                <Setter Property="SemanticProperties.Hint" Value="Add a new task"/>
+            </Style>
+
+            <!-- *** ADD Style for the Reset Button *** -->
+            <Style TargetType="Button" x:Key="ResetDailyButtonStyle">
+                <Setter Property="FontFamily" Value="FluentUI"/>
+                <Setter Property="Text" Value="{x:Static fonts:FluentUI.arrow_counterclockwise_20_regular}"/>
+                <Setter Property="FontSize" Value="16"/>
+                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"/>
+                <Setter Property="BackgroundColor" Value="Transparent"/>
+                <Setter Property="Padding" Value="0"/>
+                <Setter Property="WidthRequest" Value="24"/>
+                <Setter Property="HeightRequest" Value="24"/>
+                <Setter Property="BorderWidth" Value="0"/>
+                <Setter Property="VerticalOptions" Value="Center"/>
+                <Setter Property="HorizontalOptions" Value="Center"/>
+                <Setter Property="VisualStateManager.VisualStateGroups">
+                    <VisualStateGroupList>
+                        <VisualStateGroup Name="CommonStates">
+                            <VisualState Name="Normal" />
+                            <VisualState Name="Disabled">
+                                <VisualState.Setters>
+                                    <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}"/>
+                                    <Setter Property="Opacity" Value="0.5"/>
+                                </VisualState.Setters>
+                            </VisualState>
+                            <VisualState x:Name="Pressed">
+                                <VisualState.Setters>
+                                    <Setter Property="Opacity" Value="0.8" />
+                                </VisualState.Setters>
+                            </VisualState>
+                        </VisualStateGroup>
+                    </VisualStateGroupList>
+                </Setter>
+            </Style>
+
+        </ResourceDictionary>
+    </ContentPage.Resources>
+
+    <Grid RowDefinitions="Auto,*" ColumnDefinitions="*">
+
+        <ProgressBar Grid.Row="0" Grid.Column="0"
                      Progress="{Binding TaskProgress}"
                      ProgressColor="{Binding TaskProgressColor}"
-                     HeightRequest="10"
-                     Margin="5, 10"/>
+                     BackgroundColor="#404040"
+                     HeightRequest="5"
+                     Margin="0,0,0,5"/>
 
-        <!-- List of Tasks -->
-        <CollectionView Grid.Row="1"
-                        ItemsSource="{Binding Tasks}"
-                        SelectionMode="None"
-                        EmptyView="No tasks yet! Add one below.">
+        <CollectionView x:Name="TasksCollectionView"
+                    Grid.Row="1" Grid.Column="0"
+                    ItemsSource="{Binding Tasks}"
+                    CanReorderItems="True"
+                    Margin="15,0,15,0"
+                    SelectionMode="None">
 
             <CollectionView.ItemTemplate>
-                <DataTemplate x:DataType="model:TaskItem">
-                    <SwipeView Threshold="100" BackgroundColor="Transparent">
-                        <SwipeView.RightItems>
-                            <SwipeItems Mode="Execute">
-                                <!-- Edit Swipe Item -->
-                                <SwipeItem Text="Edit"
-                                           BackgroundColor="LightGray"
-                                           Command="{Binding Source={RelativeSource AncestorType={x:Type vm:MainViewModel}}, Path=NavigateToEditPageCommand}"
-                                           CommandParameter="{Binding .}"/>
-
-                                <!-- Done Swipe Item -->
-                                <SwipeItem Text="Done"
-                                           BackgroundColor="{Binding PositionColor}"
-                                           Command="{Binding Source={RelativeSource AncestorType={x:Type vm:MainViewModel}}, Path=MarkTaskDoneCommand}"
-                                           CommandParameter="{Binding .}"/>
-
-                                <!-- Optional: Reset Daily Task (only makes sense if visible conditionaly) -->
-                                <!-- You might need a more complex trigger or visibility converter -->
-                                <!--
-                                <SwipeItem Text="Reset"
-                                           IsVisible="{Binding CanResetDaily}" // Need logic in TaskItem or converter
-                                           BackgroundColor="Orange"
-                                           Command="{Binding Source={RelativeSource AncestorType={x:Type vm:MainViewModel}}, Path=ResetDailyTaskCommand}"
-                                           CommandParameter="{Binding .}"/>
-                                -->
-                            </SwipeItems>
-                        </SwipeView.RightItems>
-
-                        <!-- Main Content of the Task Item -->
-                        <Border Stroke="{Binding PositionColor}"
-                                StrokeThickness="4"
-                                StrokeShape="RoundRectangle 4"
-                                Padding="0" Margin="5, 5">
-                            <Grid Padding="10, 5" ColumnDefinitions="*, Auto">
-                                <VerticalStackLayout Grid.Column="0" Spacing="2">
-                                    <Label Text="{Binding Title}"
-                                           FontSize="Medium"
-                                           FontAttributes="Bold"
-                                           VerticalOptions="Center"/>
-                                    <Label Text="{Binding DueDate, StringFormat='{0:ddd, MMM d}'}"
-                                           FontSize="Small"
-                                           TextColor="Gray"
-                                           IsVisible="{Binding DueDate.HasValue}"
-                                           VerticalOptions="Center"/>
-                                </VerticalStackLayout>
-
-                                <!-- Optional: Visual indicator like a checkmark if done today, etc. -->
-                                <!-- <Image Grid.Column="1" Source="check.png" IsVisible="{Binding IsDoneToday}" /> -->
-
-                                <VisualStateManager.VisualStateGroups>
-                                    <VisualStateGroup Name="CommonStates">
-                                        <VisualState Name="Normal"/>
-                                        <VisualState Name="FadingOut">
-                                            <VisualState.Setters>
-                                                <Setter Property="Opacity" Value="0" />
-                                                <!-- You might need an animation here -->
-                                            </VisualState.Setters>
-                                        </VisualState>
-                                    </VisualStateGroup>
-                                </VisualStateManager.VisualStateGroups>
-                                <!-- Trigger the FadingOut state -->
-                                <Grid.Triggers>
-                                    <DataTrigger TargetType="Grid"
-                                                  Binding="{Binding IsFadingOut}"
-                                                  Value="True">
-                                        <Setter Property="VisualStateManager.VisualStateGroups"
-                                                 Value="{StaticResource CommonStates.FadingOut}"/>
+                <DataTemplate x:DataType="models:TaskItem">
+                    <Grid Padding="10, 8">
+                        <Grid.Style>
+                            <Style TargetType="Grid">
+                                <Setter Property="Opacity" Value="1.0" />
+                                <Style.Triggers>
+                                    <DataTrigger TargetType="Grid" Value="False">
+                                        <DataTrigger.Binding>
+                                            <MultiBinding Converter="{StaticResource FutureRepeatingTaskIsEnabledConverter}">
+                                                <Binding Path="TimeType" />
+                                                <Binding Path="DueDate" />
+                                            </MultiBinding>
+                                        </DataTrigger.Binding>
+                                        <Setter Property="Opacity" Value="0.5" />
                                     </DataTrigger>
-                                </Grid.Triggers>
+                                    <DataTrigger TargetType="Grid" Binding="{Binding IsFadingOut}" Value="True">
+                                        <Setter Property="Opacity" Value="0.0"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Grid.Style>
+
+                        <Grid ColumnSpacing="10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <!-- Position Indicator -->
+                                <ColumnDefinition Width="*" />
+                                <!-- Task Title/Time -->
+                                <ColumnDefinition Width="Auto" />
+                                <!-- Checkmark Area -->
+                                <ColumnDefinition Width="Auto" />
+                                <!-- Reset Button Area -->
+                            </Grid.ColumnDefinitions>
+
+                            <!-- Position Indicator -->
+                            <Frame Grid.Column="0"
+                                   Style="{StaticResource PositionIndicatorFrameStyle}"
+                                   BackgroundColor="{Binding PositionColor}" />
+
+                            <!-- Task Title and Time -->
+                            <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
+                                <VerticalStackLayout.GestureRecognizers>
+                                    <TapGestureRecognizer
+                                    Command="{Binding Source={RelativeSource AncestorType={x:Type vm:MainViewModel}}, Path=NavigateToEditPageCommand}"
+                                    CommandParameter="{Binding .}" />
+                                </VerticalStackLayout.GestureRecognizers>
+                                <Label Text="{Binding Title}" Style="{StaticResource TaskTitleLabelStyle}" />
+                                <Label Text="{Binding ., Converter={StaticResource TaskTimeConverter}}" Style="{StaticResource TaskTimeLabelStyle}" />
+                            </VerticalStackLayout>
+
+                            <!-- Checkmark Area -->
+                            <Grid Grid.Column="2"
+                                  VerticalOptions="Center"
+                                  HorizontalOptions="Center"
+                                  Margin="5,0,0,0"
+                                  Padding="5">
+                                <Grid.IsEnabled>
+                                    <MultiBinding Converter="{StaticResource FutureRepeatingTaskIsEnabledConverter}">
+                                        <Binding Path="TimeType" />
+                                        <Binding Path="DueDate" />
+                                    </MultiBinding>
+                                </Grid.IsEnabled>
+                                <Grid.Background>
+                                    <SolidColorBrush Color="Transparent"/>
+                                </Grid.Background>
+                                <Grid.GestureRecognizers>
+                                    <TapGestureRecognizer
+                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:MainViewModel}}, Path=MarkTaskDoneCommand}"
+                                        CommandParameter="{Binding .}"/>
+                                </Grid.GestureRecognizers>
+                                <Border Stroke="{AppThemeBinding Light=Gray, Dark=LightGray}"
+                                        StrokeThickness="2"
+                                        HeightRequest="24"
+                                        WidthRequest="24"
+                                        VerticalOptions="Center"
+                                        HorizontalOptions="Center"
+                                        InputTransparent="True">
+                                    <Border.StrokeShape>
+                                        <Ellipse/>
+                                    </Border.StrokeShape>
+                                </Border>
                             </Grid>
-                        </Border>
-                    </SwipeView>
+
+                            <!-- Reset Daily Task Button -->
+                            <Button Grid.Column="3"
+                                    Style="{StaticResource ResetDailyButtonStyle}"
+                                    Command="{Binding Source={RelativeSource AncestorType={x:Type vm:MainViewModel}}, Path=ResetDailyTaskCommand}"
+                                    CommandParameter="{Binding .}"
+                                    SemanticProperties.Hint="Reset daily task to today"
+                                    Margin="2,0,0,0">
+                                <Button.IsEnabled>
+                                    <MultiBinding Converter="{StaticResource ResetDailyTaskIsEnabledConverter}">
+                                        <Binding Path="TimeType" />
+                                        <Binding Path="RepetitionType" />
+                                        <Binding Path="DueDate" />
+                                    </MultiBinding>
+                                </Button.IsEnabled>
+                            </Button>
+
+                        </Grid>
+                    </Grid>
                 </DataTemplate>
             </CollectionView.ItemTemplate>
+
+            <CollectionView.EmptyView>
+                <StackLayout Style="{StaticResource EmptyViewLayoutStyle}">
+                    <Label Text="No tasks yet!" Style="{StaticResource EmptyViewLabelStyle}" FontSize="16"/>
+                    <Label Text="Click the '+' button to add one." Style="{StaticResource EmptyViewLabelStyle}" FontSize="14"/>
+                </StackLayout>
+            </CollectionView.EmptyView>
+
+            <CollectionView.Footer>
+                <ContentView HeightRequest="90" BackgroundColor="Transparent"/>
+            </CollectionView.Footer>
+
         </CollectionView>
 
-        <!-- Add Task Button -->
-        <Button Grid.Row="2"
-                Text="Add New Task"
-                Command="{Binding NavigateToAddPageCommand}"
-                Margin="10"
-                HorizontalOptions="Fill"/>
+        <Button Grid.Row="1" Grid.Column="0"
+            Style="{StaticResource AddButtonStyle}"
+            Command="{Binding NavigateToAddPageCommand}"/>
 
     </Grid>
+
 </ContentPage>
