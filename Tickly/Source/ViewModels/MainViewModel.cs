@@ -16,7 +16,7 @@ using System.Threading.Tasks;
 using Tickly.Messages;
 using Tickly.Models;
 using Tickly.Services;
-using Tickly.Utils;
+using Tickly.Utils; // Keep for non-repeating date utils if any, or general utils
 using Tickly.Views;
 
 namespace Tickly.ViewModels;
@@ -33,6 +33,7 @@ public sealed partial class MainViewModel : ObservableObject
     private Timer? _debounceTimer;
     private readonly TaskVisualStateService _taskVisualStateService;
     private readonly TaskPersistenceService _taskPersistenceService;
+    private readonly RepeatingTaskService _repeatingTaskService; // ADDED
 
     [ObservableProperty]
     private double taskProgress;
@@ -45,6 +46,7 @@ public sealed partial class MainViewModel : ObservableObject
         _tasks = new();
         _taskVisualStateService = new TaskVisualStateService();
         _taskPersistenceService = new TaskPersistenceService();
+        _repeatingTaskService = new RepeatingTaskService(); // ADDED: Instantiate the service
 
         _ = LoadTasksAsync();
 
@@ -99,16 +101,10 @@ public sealed partial class MainViewModel : ObservableObject
             DateTime today = DateTime.Today;
             foreach (TaskItem task in loadedTasks)
             {
-                if (task.TimeType == TaskTimeType.Repeating && task.DueDate.HasValue && task.DueDate.Value.Date < today)
+                // Delegate repeating task date check to the service
+                if (_repeatingTaskService.EnsureCorrectDueDateOnLoad(task, today))
                 {
-                    DateTime originalDueDate = task.DueDate.Value.Date;
-                    DateTime nextValidDueDate = CalculateNextValidDueDateForRepeatingTask(task, today, originalDueDate);
-                    if (task.DueDate.Value.Date != nextValidDueDate)
-                    {
-                        task.DueDate = nextValidDueDate;
-                        changesMade = true;
-                        Debug.WriteLine($"MainViewModel.LoadTasksAsync: Updated repeating task '{task.Title}' due date to {nextValidDueDate:yyyy-MM-dd}");
-                    }
+                    changesMade = true;
                 }
                 task.IsFadingOut = false;
                 task.PositionColor = Colors.Transparent;
@@ -147,23 +143,7 @@ public sealed partial class MainViewModel : ObservableObject
         }
     }
 
-    private static DateTime CalculateNextValidDueDateForRepeatingTask(TaskItem task, DateTime today, DateTime originalDueDate)
-    {
-        DateTime nextValidDueDate = originalDueDate;
-        switch (task.RepetitionType)
-        {
-            case TaskRepetitionType.Daily: nextValidDueDate = today; break;
-            case TaskRepetitionType.AlternateDay:
-                double daysDifference = (today - originalDueDate).TotalDays;
-                nextValidDueDate = daysDifference % 2 == 0 ? today : today.AddDays(1);
-                break;
-            case TaskRepetitionType.Weekly:
-                if (task.RepetitionDayOfWeek.HasValue) nextValidDueDate = DateUtils.GetNextWeekday(today, task.RepetitionDayOfWeek.Value);
-                else while (nextValidDueDate < today) nextValidDueDate = nextValidDueDate.AddDays(7);
-                break;
-        }
-        return nextValidDueDate;
-    }
+    // REMOVED: CalculateNextValidDueDateForRepeatingTask (moved to service)
 
     [RelayCommand]
     private async Task MarkTaskDone(TaskItem? task)
@@ -172,6 +152,7 @@ public sealed partial class MainViewModel : ObservableObject
 
         if (task.TimeType == TaskTimeType.None || task.TimeType == TaskTimeType.SpecificDate)
         {
+            // Standard removal logic
             task.IsFadingOut = true;
             await Task.Delay(350);
             bool removedSuccessfully = false;
@@ -179,23 +160,26 @@ public sealed partial class MainViewModel : ObservableObject
             {
                 removedSuccessfully = Tasks.Remove(task);
                 if (removedSuccessfully) { UpdateUiVisualState(); TriggerSave(); }
-                else task.IsFadingOut = false;
+                else task.IsFadingOut = false; // Reset if removal failed unexpectedly
             });
         }
         else if (task.TimeType == TaskTimeType.Repeating)
         {
-            DateTime? nextDueDate = DateUtils.CalculateNextDueDate(task);
-            if (nextDueDate.HasValue)
+            // Delegate repeating task update to the service
+            bool dateUpdated = _repeatingTaskService.UpdateRepeatingTaskDueDate(task);
+
+            if (dateUpdated)
             {
+                // If the date was successfully updated, refresh UI and save
                 await MainThread.InvokeOnMainThreadAsync(() =>
                 {
-                    task.DueDate = nextDueDate;
                     UpdateUiVisualState();
                     TriggerSave();
                 });
             }
             else
             {
+                // If the service indicates the date couldn't be updated (e.g., error or no next date), remove the task
                 task.IsFadingOut = true;
                 await Task.Delay(350);
                 bool removedSuccessfully = false;
@@ -212,24 +196,21 @@ public sealed partial class MainViewModel : ObservableObject
     [RelayCommand]
     private async Task ResetDailyTask(TaskItem? task)
     {
-        if (task == null ||
-            task.TimeType != TaskTimeType.Repeating ||
-            task.RepetitionType != TaskRepetitionType.Daily ||
-            !task.DueDate.HasValue ||
-            task.DueDate.Value.Date != DateTime.Today.AddDays(1))
+        // Delegate reset logic to the service
+        bool resetSuccessful = _repeatingTaskService.ResetDailyTaskDueDate(task);
+
+        if (resetSuccessful)
         {
-            Debug.WriteLine($"ResetDailyTask: Task does not meet reset criteria (ID: {task?.Id}, Due: {task?.DueDate})");
-            return;
+            await MainThread.InvokeOnMainThreadAsync(() =>
+            {
+                UpdateUiVisualState();
+                TriggerSave();
+            });
         }
-
-        Debug.WriteLine($"ResetDailyTask: Resetting task '{task.Title}' (ID: {task.Id}) due date to today.");
-
-        await MainThread.InvokeOnMainThreadAsync(() =>
+        else
         {
-            task.DueDate = DateTime.Today;
-            UpdateUiVisualState();
-            TriggerSave();
-        });
+            Debug.WriteLine($"ResetDailyTask Command: Task '{task?.Title}' did not meet criteria or service failed.");
+        }
     }
 
     private async Task HandleCalendarSettingChanged() { await LoadTasksAsync(); }
@@ -240,9 +221,9 @@ public sealed partial class MainViewModel : ObservableObject
 
         await MainThread.InvokeOnMainThreadAsync(() =>
         {
-            newTask.Order = Tasks.Count;
+            newTask.Order = Tasks.Count; // Assign order before adding
             Tasks.Add(newTask);
-            UpdateUiVisualState();
+            UpdateUiVisualState(); // Update UI after adding
             TriggerSave();
         });
     }
@@ -256,10 +237,11 @@ public sealed partial class MainViewModel : ObservableObject
             int index = Tasks.ToList().FindIndex(task => task.Id == updatedTask.Id);
             if (index != -1)
             {
+                // Preserve original order and index during update
                 updatedTask.Order = Tasks[index].Order;
                 updatedTask.Index = index;
-                Tasks[index] = updatedTask;
-                UpdateUiVisualState();
+                Tasks[index] = updatedTask; // Replace item in the collection
+                UpdateUiVisualState(); // Update UI after replace
                 TriggerSave();
             }
             else Debug.WriteLine($"HandleUpdateTask: Task with ID {updatedTask.Id} not found.");
@@ -282,7 +264,9 @@ public sealed partial class MainViewModel : ObservableObject
 
     private void Tasks_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs eventArgs)
     {
+        // Always update UI state on any change
         UpdateUiVisualState();
+        // Only trigger save specifically on Move, as Add/Remove/Replace are handled by their respective message handlers/commands
         if (eventArgs.Action == NotifyCollectionChangedAction.Move)
         {
             TriggerSave();
@@ -306,7 +290,7 @@ public sealed partial class MainViewModel : ObservableObject
     private async Task SaveTasks()
     {
         Debug.WriteLine("MainViewModel.SaveTasks: Delegating save to TaskPersistenceService.");
-        List<TaskItem> currentTasks = []; // Initialize here
+        List<TaskItem> currentTasks = [];
         await MainThread.InvokeOnMainThreadAsync(() =>
         {
             currentTasks = new List<TaskItem>(Tasks);
