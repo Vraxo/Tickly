@@ -9786,10 +9786,11 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private Color taskProgressColor;
 
-    private const double ReferenceTaskCount = 10.0;
+    // REMOVED: Unused ReferenceTaskCount
+    // private const double ReferenceTaskCount = 10.0;
 
-    // Define the start (top) and end (bottom) colors for the gradient
     private static readonly Color StartColor = Colors.Red;
+    private static readonly Color MidColor = Colors.Yellow; // Added for smoother gradient
     private static readonly Color EndColor = Colors.LimeGreen;
 
     public MainViewModel()
@@ -9869,7 +9870,7 @@ public sealed partial class MainViewModel : ObservableObject
                     }
                 }
                 task.IsFadingOut = false;
-                task.PositionColor = Colors.Transparent; // Reset color before recalculation
+                task.PositionColor = Colors.Transparent;
             }
 
             List<TaskItem> tasksToAdd = loadedTasks.OrderBy(task => task.Order).ToList();
@@ -9878,7 +9879,7 @@ public sealed partial class MainViewModel : ObservableObject
             {
                 Tasks.Clear();
                 foreach (TaskItem task in tasksToAdd) { Tasks.Add(task); }
-                UpdateTaskIndexAndColorProperty(); // ** CALL THE UPDATED METHOD **
+                UpdateTaskIndexAndColorProperty();
                 UpdateTaskProgressAndColor();
             });
 
@@ -9891,7 +9892,7 @@ public sealed partial class MainViewModel : ObservableObject
             {
                 Tasks.Clear();
                 UpdateTaskProgressAndColor();
-                UpdateTaskIndexAndColorProperty(); // ** CALL THE UPDATED METHOD **
+                UpdateTaskIndexAndColorProperty();
             });
         }
         finally
@@ -9933,7 +9934,7 @@ public sealed partial class MainViewModel : ObservableObject
             await MainThread.InvokeOnMainThreadAsync(() =>
             {
                 removedSuccessfully = Tasks.Remove(task);
-                if (removedSuccessfully) { UpdateTaskIndexAndColorProperty(); UpdateTaskProgressAndColor(); TriggerSave(); } // ** CALL THE UPDATED METHOD **
+                if (removedSuccessfully) { UpdateTaskIndexAndColorProperty(); UpdateTaskProgressAndColor(); TriggerSave(); }
                 else task.IsFadingOut = false;
             });
         }
@@ -9945,12 +9946,8 @@ public sealed partial class MainViewModel : ObservableObject
                 await MainThread.InvokeOnMainThreadAsync(() =>
                 {
                     task.DueDate = nextDueDate;
-                    // Re-calculate color for potentially changed visibility/state
-                    UpdateTaskIndexAndColorProperty(); // ** CALL THE UPDATED METHOD **
+                    UpdateTaskIndexAndColorProperty();
                     UpdateTaskProgressAndColor();
-                    // --- REMOVED INVALID OnPropertyChanged calls ---
-                    // task.OnPropertyChanged(nameof(TaskItem.DueDate));
-                    // task.OnPropertyChanged(nameof(TaskItem.RepetitionType));
                     TriggerSave();
                 });
             }
@@ -9962,14 +9959,13 @@ public sealed partial class MainViewModel : ObservableObject
                 await MainThread.InvokeOnMainThreadAsync(() =>
                 {
                     removedSuccessfully = Tasks.Remove(task);
-                    if (removedSuccessfully) { UpdateTaskIndexAndColorProperty(); UpdateTaskProgressAndColor(); TriggerSave(); } // ** CALL THE UPDATED METHOD **
+                    if (removedSuccessfully) { UpdateTaskIndexAndColorProperty(); UpdateTaskProgressAndColor(); TriggerSave(); }
                     else task.IsFadingOut = false;
                 });
             }
         }
     }
 
-    // --- NEW COMMAND ---
     [RelayCommand]
     private async Task ResetDailyTask(TaskItem? task)
     {
@@ -9977,7 +9973,7 @@ public sealed partial class MainViewModel : ObservableObject
             task.TimeType != TaskTimeType.Repeating ||
             task.RepetitionType != TaskRepetitionType.Daily ||
             !task.DueDate.HasValue ||
-            task.DueDate.Value.Date != DateTime.Today.AddDays(1)) // Only reset if due date is tomorrow
+            task.DueDate.Value.Date != DateTime.Today.AddDays(1))
         {
             Debug.WriteLine($"ResetDailyTask: Task does not meet reset criteria (ID: {task?.Id}, Due: {task?.DueDate})");
             return;
@@ -9988,16 +9984,11 @@ public sealed partial class MainViewModel : ObservableObject
         await MainThread.InvokeOnMainThreadAsync(() =>
         {
             task.DueDate = DateTime.Today;
-            // Update properties that might affect UI state
-            UpdateTaskIndexAndColorProperty(); // Recalculate colors
-            UpdateTaskProgressAndColor();      // Update overall progress
-            // --- REMOVED INVALID OnPropertyChanged calls ---
-            // task.OnPropertyChanged(nameof(TaskItem.DueDate));
-            // task.OnPropertyChanged(nameof(TaskItem.RepetitionType));
+            UpdateTaskIndexAndColorProperty();
+            UpdateTaskProgressAndColor();
             TriggerSave();
         });
     }
-    // --- END NEW COMMAND ---
 
     private async Task HandleCalendarSettingChanged() { await LoadTasksAsync(); }
 
@@ -10008,7 +9999,7 @@ public sealed partial class MainViewModel : ObservableObject
         {
             newTask.Order = Tasks.Count;
             Tasks.Add(newTask);
-            UpdateTaskIndexAndColorProperty(); // ** CALL THE UPDATED METHOD **
+            UpdateTaskIndexAndColorProperty();
             UpdateTaskProgressAndColor();
             TriggerSave();
         });
@@ -10024,8 +10015,7 @@ public sealed partial class MainViewModel : ObservableObject
             {
                 updatedTask.Order = Tasks[index].Order;
                 updatedTask.Index = index;
-                // Recalculate color in case properties affecting it changed (though none currently do)
-                UpdateTaskIndexAndColorPropertyInternal(); // Can call internal directly as we are on main thread
+                UpdateTaskIndexAndColorPropertyInternal();
                 Tasks[index] = updatedTask;
                 UpdateTaskProgressAndColor();
                 TriggerSave();
@@ -10043,7 +10033,7 @@ public sealed partial class MainViewModel : ObservableObject
             if (taskToRemove is not null)
             {
                 removedSuccessfully = Tasks.Remove(taskToRemove);
-                if (removedSuccessfully) { UpdateTaskIndexAndColorProperty(); UpdateTaskProgressAndColor(); TriggerSave(); } // ** CALL THE UPDATED METHOD **
+                if (removedSuccessfully) { UpdateTaskIndexAndColorProperty(); UpdateTaskProgressAndColor(); TriggerSave(); }
             }
         });
     }
@@ -10057,12 +10047,11 @@ public sealed partial class MainViewModel : ObservableObject
             eventArgs.Action == NotifyCollectionChangedAction.Replace ||
             eventArgs.Action == NotifyCollectionChangedAction.Reset)
         {
-            UpdateTaskIndexAndColorProperty(); // ** CALL THE UPDATED METHOD **
+            UpdateTaskIndexAndColorProperty();
             if (eventArgs.Action == NotifyCollectionChangedAction.Move) { TriggerSave(); }
         }
     }
 
-    // ** RENAMED and UPDATED METHOD **
     private void UpdateTaskIndexAndColorProperty()
     {
         if (!MainThread.IsMainThread)
@@ -10073,7 +10062,6 @@ public sealed partial class MainViewModel : ObservableObject
         UpdateTaskIndexAndColorPropertyInternal();
     }
 
-    // ** RENAMED and UPDATED METHOD **
     private void UpdateTaskIndexAndColorPropertyInternal()
     {
         int totalCount = Tasks.Count;
@@ -10084,20 +10072,18 @@ public sealed partial class MainViewModel : ObservableObject
             TaskItem currentTask = Tasks[i];
             if (currentTask != null)
             {
-                // Update Order and Index
                 if (currentTask.Order != i) currentTask.Order = i;
                 if (currentTask.Index != i) currentTask.Index = i;
 
-                // Calculate and Set Color
                 Color newColor;
                 if (totalCount <= 1)
                 {
-                    newColor = StartColor; // Single item case
+                    newColor = StartColor;
                 }
                 else
                 {
                     double factor = (double)i / (totalCount - 1);
-                    factor = Math.Clamp(factor, 0.0, 1.0); // Ensure factor stays within [0, 1]
+                    factor = Math.Clamp(factor, 0.0, 1.0);
 
                     float r = (float)(StartColor.Red + factor * (EndColor.Red - StartColor.Red));
                     float g = (float)(StartColor.Green + factor * (EndColor.Green - StartColor.Green));
@@ -10106,11 +10092,9 @@ public sealed partial class MainViewModel : ObservableObject
                     newColor = new Color(r, g, b, a);
                 }
 
-                // Only update if the color actually changed to avoid unnecessary UI refreshes
                 if (currentTask.PositionColor != newColor)
                 {
                     currentTask.PositionColor = newColor;
-                    // Debug.WriteLine($"   - Task {i} ('{currentTask.Title}'): Set Color {newColor}");
                 }
             }
         }
@@ -10126,7 +10110,6 @@ public sealed partial class MainViewModel : ObservableObject
 
             await MainThread.InvokeOnMainThreadAsync(() =>
             {
-                // Order is already updated by UpdateTaskIndexAndColorPropertyInternal
                 tasksToSave = new List<TaskItem>(Tasks);
             });
 
@@ -10157,14 +10140,56 @@ public sealed partial class MainViewModel : ObservableObject
         await LoadTasksAsync();
     }
 
+    // *** UPDATED PROGRESS BAR LOGIC ***
     private void UpdateTaskProgressAndColor()
     {
-        double enabledTaskCount = Tasks?.Count(t => !(t.TimeType == TaskTimeType.Repeating && t.DueDate.HasValue && t.DueDate.Value.Date > DateTime.Today)) ?? 0;
-        double progressValue = ReferenceTaskCount <= 0 ? (enabledTaskCount > 0 ? 0.0 : 1.0) : Math.Clamp(1.0 - (enabledTaskCount / ReferenceTaskCount), 0.0, 1.0);
-        TaskProgress = progressValue;
-        float redComponent = (float)(1.0 - progressValue); float greenComponent = (float)progressValue; float blueComponent = 0.0f;
-        redComponent = Math.Clamp(redComponent, 0.0f, 1.0f); greenComponent = Math.Clamp(greenComponent, 0.0f, 1.0f);
-        TaskProgressColor = new Color(redComponent, greenComponent, blueComponent);
+        if (Tasks is null)
+        {
+            TaskProgress = 0.0; // Default to 0 if tasks collection is null
+            TaskProgressColor = StartColor; // Default color
+            return;
+        }
+
+        double totalTasks = Tasks.Count;
+        double tasksDueToday = Tasks.Count(t => t.DueDate.HasValue && t.DueDate.Value.Date == DateTime.Today);
+
+        double progressValue;
+        if (totalTasks == 0)
+        {
+            progressValue = 1.0; // 100% if no tasks exist
+        }
+        else
+        {
+            progressValue = (totalTasks - tasksDueToday) / totalTasks;
+        }
+
+        TaskProgress = Math.Clamp(progressValue, 0.0, 1.0); // Ensure it's between 0 and 1
+
+        // Interpolate color: Red -> Yellow -> Green
+        float r, g, b;
+        float factor = (float)TaskProgress;
+
+        if (factor < 0.5f) // Red to Yellow
+        {
+            r = 1.0f;
+            g = factor * 2.0f; // Gradually increase green
+            b = 0.0f;
+        }
+        else // Yellow to Green
+        {
+            r = 1.0f - (factor - 0.5f) * 2.0f; // Gradually decrease red
+            g = 1.0f;
+            b = 0.0f;
+        }
+
+        // Clamp final values just in case
+        r = Math.Clamp(r, 0.0f, 1.0f);
+        g = Math.Clamp(g, 0.0f, 1.0f);
+        b = Math.Clamp(b, 0.0f, 1.0f);
+
+        TaskProgressColor = new Color(r, g, b);
+
+        // Debug.WriteLine($"UpdateTaskProgress: Total={totalTasks}, DueToday={tasksDueToday}, Progress={TaskProgress:F2}, Color=R{r:F2} G{g:F2} B{b:F2}");
     }
 }
 </file>
