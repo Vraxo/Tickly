@@ -1,8 +1,4 @@
-﻿// Models/TaskItem.cs
-using CommunityToolkit.Mvvm.ComponentModel;
-using System;
-using Microsoft.Maui.Graphics; // <<== ADD THIS USING DIRECTIVE
-using Tickly.Models;
+﻿using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace Tickly.Models;
 
@@ -35,11 +31,9 @@ public partial class TaskItem : ObservableObject
     [ObservableProperty]
     private int _index;
 
-    // --- NEW Color Property ---
     [ObservableProperty]
-    private Color _positionColor = Colors.Transparent; // Initialize with a default
+    private Color _positionColor = Colors.Transparent;
 
-    // Parameterless constructor
     public TaskItem()
     {
         Id = Guid.NewGuid();
@@ -48,7 +42,6 @@ public partial class TaskItem : ObservableObject
         Index = -1;
     }
 
-    // Full constructor
     public TaskItem(
         string title,
         TaskTimeType timeType,

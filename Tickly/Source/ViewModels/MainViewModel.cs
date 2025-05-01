@@ -36,6 +36,7 @@ public sealed partial class MainViewModel : ObservableObject
     private bool _isSaving = false;
     private readonly object _saveLock = new();
     private Timer? _debounceTimer;
+    private readonly TaskVisualStateService _taskVisualStateService;
 
     [ObservableProperty]
     private double taskProgress;
@@ -43,14 +44,11 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private Color taskProgressColor;
 
-    private static readonly Color StartColor = Colors.Red;
-    private static readonly Color MidColor = Colors.Yellow;
-    private static readonly Color EndColor = Colors.LimeGreen;
-
     public MainViewModel()
     {
         _filePath = Path.Combine(FileSystem.AppDataDirectory, "tasks.json");
         _tasks = new();
+        _taskVisualStateService = new TaskVisualStateService();
 
         _ = LoadTasksAsync();
 
@@ -59,6 +57,8 @@ public sealed partial class MainViewModel : ObservableObject
         WeakReferenceMessenger.Default.Register<DeleteTaskMessage>(this, (recipient, message) => HandleDeleteTask(message.Value));
         WeakReferenceMessenger.Default.Register<CalendarSettingChangedMessage>(this, async (recipient, message) => await HandleCalendarSettingChanged());
         WeakReferenceMessenger.Default.Register<TasksReloadRequestedMessage>(this, async (recipient, message) => await HandleTasksReloadRequested());
+
+        UpdateUiVisualState();
     }
 
     [RelayCommand]
@@ -133,8 +133,7 @@ public sealed partial class MainViewModel : ObservableObject
             {
                 Tasks.Clear();
                 foreach (var task in tasksToAdd) { Tasks.Add(task); }
-                UpdateTaskIndexAndColorProperty();
-                UpdateTaskProgressAndColor();
+                UpdateUiVisualState();
             });
 
             if (changesMade) { TriggerSave(); }
@@ -145,8 +144,7 @@ public sealed partial class MainViewModel : ObservableObject
             await MainThread.InvokeOnMainThreadAsync(() =>
             {
                 Tasks.Clear();
-                UpdateTaskProgressAndColor();
-                UpdateTaskIndexAndColorProperty();
+                UpdateUiVisualState();
             });
         }
         finally
@@ -188,7 +186,7 @@ public sealed partial class MainViewModel : ObservableObject
             await MainThread.InvokeOnMainThreadAsync(() =>
             {
                 removedSuccessfully = Tasks.Remove(task);
-                if (removedSuccessfully) { UpdateTaskIndexAndColorProperty(); UpdateTaskProgressAndColor(); TriggerSave(); }
+                if (removedSuccessfully) { UpdateUiVisualState(); TriggerSave(); }
                 else task.IsFadingOut = false;
             });
         }
@@ -200,8 +198,7 @@ public sealed partial class MainViewModel : ObservableObject
                 await MainThread.InvokeOnMainThreadAsync(() =>
                 {
                     task.DueDate = nextDueDate;
-                    UpdateTaskIndexAndColorProperty();
-                    UpdateTaskProgressAndColor();
+                    UpdateUiVisualState();
                     TriggerSave();
                 });
             }
@@ -213,7 +210,7 @@ public sealed partial class MainViewModel : ObservableObject
                 await MainThread.InvokeOnMainThreadAsync(() =>
                 {
                     removedSuccessfully = Tasks.Remove(task);
-                    if (removedSuccessfully) { UpdateTaskIndexAndColorProperty(); UpdateTaskProgressAndColor(); TriggerSave(); }
+                    if (removedSuccessfully) { UpdateUiVisualState(); TriggerSave(); }
                     else task.IsFadingOut = false;
                 });
             }
@@ -238,8 +235,7 @@ public sealed partial class MainViewModel : ObservableObject
         await MainThread.InvokeOnMainThreadAsync(() =>
         {
             task.DueDate = DateTime.Today;
-            UpdateTaskIndexAndColorProperty();
-            UpdateTaskProgressAndColor();
+            UpdateUiVisualState();
             TriggerSave();
         });
     }
@@ -254,8 +250,7 @@ public sealed partial class MainViewModel : ObservableObject
         {
             newTask.Order = Tasks.Count;
             Tasks.Add(newTask);
-            UpdateTaskIndexAndColorProperty();
-            UpdateTaskProgressAndColor();
+            UpdateUiVisualState();
             TriggerSave();
         });
     }
@@ -271,9 +266,8 @@ public sealed partial class MainViewModel : ObservableObject
             {
                 updatedTask.Order = Tasks[index].Order;
                 updatedTask.Index = index;
-                UpdateTaskIndexAndColorPropertyInternal();
                 Tasks[index] = updatedTask;
-                UpdateTaskProgressAndColor();
+                UpdateUiVisualState();
                 TriggerSave();
             }
             else Debug.WriteLine($"HandleUpdateTask: Task with ID {updatedTask.Id} not found.");
@@ -289,92 +283,32 @@ public sealed partial class MainViewModel : ObservableObject
             if (taskToRemove is not null)
             {
                 removedSuccessfully = Tasks.Remove(taskToRemove);
-                if (removedSuccessfully) { UpdateTaskIndexAndColorProperty(); UpdateTaskProgressAndColor(); TriggerSave(); }
+                if (removedSuccessfully) { UpdateUiVisualState(); TriggerSave(); }
             }
         });
     }
 
     private void Tasks_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs eventArgs)
     {
-        UpdateTaskProgressAndColor();
-        if (eventArgs.Action == NotifyCollectionChangedAction.Move ||
-            eventArgs.Action == NotifyCollectionChangedAction.Add ||
-            eventArgs.Action == NotifyCollectionChangedAction.Remove ||
-            eventArgs.Action == NotifyCollectionChangedAction.Replace ||
-            eventArgs.Action == NotifyCollectionChangedAction.Reset)
+        UpdateUiVisualState();
+        if (eventArgs.Action == NotifyCollectionChangedAction.Move)
         {
-            UpdateTaskIndexAndColorProperty();
-            if (eventArgs.Action == NotifyCollectionChangedAction.Move) { TriggerSave(); }
+            TriggerSave();
         }
     }
 
-    private void UpdateTaskIndexAndColorProperty()
+    private void UpdateUiVisualState()
     {
         if (!MainThread.IsMainThread)
         {
-            MainThread.BeginInvokeOnMainThread(UpdateTaskIndexAndColorPropertyInternal);
+            MainThread.BeginInvokeOnMainThread(UpdateUiVisualState);
             return;
         }
-        UpdateTaskIndexAndColorPropertyInternal();
-    }
 
-    private void UpdateTaskIndexAndColorPropertyInternal()
-    {
-        int totalCount = Tasks.Count;
-        Debug.WriteLine($"UpdateTaskIndexAndColorPropertyInternal: Updating for {totalCount} tasks.");
-
-        for (int i = 0; i < totalCount; i++)
-        {
-            TaskItem currentTask = Tasks[i];
-            if (currentTask != null)
-            {
-                if (currentTask.Order != i) currentTask.Order = i;
-                if (currentTask.Index != i) currentTask.Index = i;
-
-                Color newColor;
-                if (totalCount <= 1)
-                {
-                    newColor = StartColor;
-                }
-                else
-                {
-                    double factor = (double)i / (totalCount - 1);
-                    factor = Math.Clamp(factor, 0.0, 1.0);
-
-                    float r, g, b, a;
-                    float currentFactor = (float)factor;
-
-                    if (currentFactor < 0.5f)
-                    {
-                        float localFactor = currentFactor * 2.0f;
-                        r = (float)(StartColor.Red + localFactor * (MidColor.Red - StartColor.Red));
-                        g = (float)(StartColor.Green + localFactor * (MidColor.Green - StartColor.Green));
-                        b = (float)(StartColor.Blue + localFactor * (MidColor.Blue - StartColor.Blue));
-                        a = (float)(StartColor.Alpha + localFactor * (MidColor.Alpha - StartColor.Alpha));
-                    }
-                    else
-                    {
-                        float localFactor = (currentFactor - 0.5f) * 2.0f;
-                        r = (float)(MidColor.Red + localFactor * (EndColor.Red - MidColor.Red));
-                        g = (float)(MidColor.Green + localFactor * (EndColor.Green - MidColor.Green));
-                        b = (float)(MidColor.Blue + localFactor * (EndColor.Blue - MidColor.Blue));
-                        a = (float)(MidColor.Alpha + localFactor * (EndColor.Alpha - MidColor.Alpha));
-                    }
-
-                    r = Math.Clamp(r, 0.0f, 1.0f);
-                    g = Math.Clamp(g, 0.0f, 1.0f);
-                    b = Math.Clamp(b, 0.0f, 1.0f);
-                    a = Math.Clamp(a, 0.0f, 1.0f);
-
-                    newColor = new Color(r, g, b, a);
-                }
-
-                if (currentTask.PositionColor != newColor)
-                {
-                    currentTask.PositionColor = newColor;
-                }
-            }
-        }
+        _taskVisualStateService.UpdateTaskIndicesAndColors(Tasks);
+        var progressResult = _taskVisualStateService.CalculateProgress(Tasks);
+        TaskProgress = progressResult.Progress;
+        TaskProgressColor = progressResult.ProgressColor;
     }
 
     private async Task SaveTasks()
@@ -415,52 +349,5 @@ public sealed partial class MainViewModel : ObservableObject
     {
         Debug.WriteLine("MainViewModel: Received TasksReloadRequestedMessage. Reloading tasks...");
         await LoadTasksAsync();
-    }
-
-    private void UpdateTaskProgressAndColor()
-    {
-        if (Tasks is null)
-        {
-            TaskProgress = 0.0;
-            TaskProgressColor = StartColor;
-            return;
-        }
-
-        double totalTasks = Tasks.Count;
-        double tasksDueToday = Tasks.Count(t => t.DueDate.HasValue && t.DueDate.Value.Date == DateTime.Today);
-
-        double progressValue;
-        if (totalTasks == 0)
-        {
-            progressValue = 1.0;
-        }
-        else
-        {
-            progressValue = (totalTasks - tasksDueToday) / totalTasks;
-        }
-
-        TaskProgress = Math.Clamp(progressValue, 0.0, 1.0);
-
-        float r, g, b;
-        float factor = (float)TaskProgress;
-
-        if (factor < 0.5f)
-        {
-            r = 1.0f;
-            g = factor * 2.0f;
-            b = 0.0f;
-        }
-        else
-        {
-            r = 1.0f - (factor - 0.5f) * 2.0f;
-            g = 1.0f;
-            b = 0.0f;
-        }
-
-        r = Math.Clamp(r, 0.0f, 1.0f);
-        g = Math.Clamp(g, 0.0f, 1.0f);
-        b = Math.Clamp(b, 0.0f, 1.0f);
-
-        TaskProgressColor = new Color(r, g, b);
     }
 }
