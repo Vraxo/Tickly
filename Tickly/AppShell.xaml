@@ -28,7 +28,7 @@
     <FlyoutItem Title="Tasks" Icon="icon_list.png">
         <ShellContent
             Title="Tasks"
-            ContentTemplate="{DataTemplate local:MainPage}"
+            ContentTemplate="{DataTemplate views:MainPage}"
             Route="MainPage" />
     </FlyoutItem>
 
