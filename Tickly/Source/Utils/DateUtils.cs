@@ -1,5 +1,6 @@
 ﻿// Utils/DateUtils.cs
 using System;
+using System.Globalization;
 
 namespace Tickly.Utils;
 
@@ -55,5 +56,26 @@ public static class DateUtils
             default:
                 return null; // Unknown repetition type
         }
+    }
+
+    /// <summary>
+    /// Converts a DateTime object to its Persian (Shamsi) date representation.
+    /// </summary>
+    /// <param name="date">The Gregorian date to convert.</param>
+    /// <returns>A string representing the date in "yyyy/MM/dd" format in Persian calendar.</returns>
+    public static string ToPersianDateString(DateTime date)
+    {
+        PersianCalendar pc = new();
+        return $"{pc.GetYear(date):0000}/{pc.GetMonth(date):00}/{pc.GetDayOfMonth(date):00}";
+    }
+
+    /// <summary>
+    /// Converts a DateTime object to its Gregorian date representation.
+    /// </summary>
+    /// <param name="date">The date to convert.</param>
+    /// <returns>A string representing the date in "yyyy/MM/dd" format in Gregorian calendar.</returns>
+    public static string ToGregorianDateString(DateTime date)
+    {
+        return date.ToString("yyyy/MM/dd", CultureInfo.InvariantCulture);
     }
 }

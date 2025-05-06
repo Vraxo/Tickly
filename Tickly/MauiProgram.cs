@@ -22,13 +22,20 @@ public static class MauiProgram
         builder.Logging.AddDebug();
 #endif
 
+        // Register Services
+        builder.Services.AddSingleton<TaskPersistenceService>();
+        builder.Services.AddSingleton<RepeatingTaskService>();    // Added
+        builder.Services.AddSingleton<TaskVisualStateService>(); // Added
+
         // Register ViewModels (Singleton for MainViewModel, Transient for Popup is fine)
         builder.Services.AddSingleton<MainViewModel>();
+        builder.Services.AddSingleton<SettingsViewModel>(); // Settings can also be singleton
         // No need to register AddTaskPopupPageViewModel if it's created within AddTaskPopupPage code-behind
 
         // Register Pages for Navigation
         builder.Services.AddSingleton<MainPage>(); // MainPage is usually Singleton
         builder.Services.AddTransient<AddTaskPopupPage>(); // Popup page should be Transient
+        builder.Services.AddSingleton<SettingsPage>();    // Register SettingsPage
 
         // Register Messenger (if not already implicitly available via CommunityToolkit)
         // builder.Services.AddSingleton<IMessenger>(WeakReferenceMessenger.Default); // Usually not needed explicitly

@@ -9531,11 +9531,7 @@ public enum CalendarSystemType
 </file>
 
 <file path="Source\Models\TaskItem.cs">
-// Models/TaskItem.cs
 using CommunityToolkit.Mvvm.ComponentModel;
-using System;
-using Microsoft.Maui.Graphics; // <<== ADD THIS USING DIRECTIVE
-using Tickly.Models;
 
 namespace Tickly.Models;
 
@@ -9568,11 +9564,9 @@ public partial class TaskItem : ObservableObject
     [ObservableProperty]
     private int _index;
 
-    // --- NEW Color Property ---
     [ObservableProperty]
-    private Color _positionColor = Colors.Transparent; // Initialize with a default
+    private Color _positionColor = Colors.Transparent;
 
-    // Parameterless constructor
     public TaskItem()
     {
         Id = Guid.NewGuid();
@@ -9581,7 +9575,6 @@ public partial class TaskItem : ObservableObject
         Index = -1;
     }
 
-    // Full constructor
     public TaskItem(
         string title,
         TaskTimeType timeType,
@@ -9678,6 +9671,348 @@ public static class AppSettings
 }
 </file>
 
+<file path="Source\Services\RepeatingTaskService.cs">
+using System.Diagnostics;
+using Tickly.Models;
+using Tickly.Utils;
+
+namespace Tickly.Services;
+
+public sealed class RepeatingTaskService
+{
+    public bool UpdateRepeatingTaskDueDate(TaskItem task)
+    {
+        if (task is null || task.TimeType != TaskTimeType.Repeating)
+        {
+            Debug.WriteLine("UpdateRepeatingTaskDueDate: Task is null or not repeating.");
+            return false; // Indicate no update or removal needed based on this logic
+        }
+
+        DateTime? nextDueDate = DateUtils.CalculateNextDueDate(task);
+        if (nextDueDate.HasValue)
+        {
+            task.DueDate = nextDueDate;
+            Debug.WriteLine($"UpdateRepeatingTaskDueDate: Updated task '{task.Title}' next due date to {nextDueDate.Value:yyyy-MM-dd}");
+            return true; // Indicate date was updated
+        }
+        else
+        {
+            Debug.WriteLine($"UpdateRepeatingTaskDueDate: Could not calculate next due date for task '{task.Title}'. Task might be removed.");
+            return false; // Indicate date was not updated, potentially signal removal
+        }
+    }
+
+    public bool ResetDailyTaskDueDate(TaskItem task)
+    {
+        if (task is null ||
+            task.TimeType != TaskTimeType.Repeating ||
+            task.RepetitionType != TaskRepetitionType.Daily ||
+            !task.DueDate.HasValue ||
+            task.DueDate.Value.Date != DateTime.Today.AddDays(1))
+        {
+            Debug.WriteLine($"ResetDailyTaskDueDate: Task '{task?.Title}' (ID: {task?.Id}) does not meet reset criteria.");
+            return false;
+        }
+
+        task.DueDate = DateTime.Today;
+        Debug.WriteLine($"ResetDailyTaskDueDate: Reset task '{task.Title}' (ID: {task.Id}) due date to today.");
+        return true;
+    }
+
+    public bool EnsureCorrectDueDateOnLoad(TaskItem task, DateTime today)
+    {
+        if (task is null || task.TimeType != TaskTimeType.Repeating || !task.DueDate.HasValue || task.DueDate.Value.Date >= today)
+        {
+            return false; // No update needed
+        }
+
+        DateTime originalDueDate = task.DueDate.Value.Date;
+        DateTime nextValidDueDate = CalculateNextValidDueDateForRepeatingTask(task, today, originalDueDate);
+
+        if (originalDueDate != nextValidDueDate)
+        {
+            task.DueDate = nextValidDueDate;
+            Debug.WriteLine($"EnsureCorrectDueDateOnLoad: Updated task '{task.Title}' due date from {originalDueDate:yyyy-MM-dd} to {nextValidDueDate:yyyy-MM-dd}");
+            return true; // Date was changed
+        }
+
+        return false; // Date was already correct
+    }
+
+    private DateTime CalculateNextValidDueDateForRepeatingTask(TaskItem task, DateTime today, DateTime originalDueDate)
+    {
+        // This logic remains the same as it was in MainViewModel
+        DateTime nextValidDueDate = originalDueDate;
+        switch (task.RepetitionType)
+        {
+            case TaskRepetitionType.Daily:
+                nextValidDueDate = today;
+                break;
+            case TaskRepetitionType.AlternateDay:
+                // If the difference in days is even, the next due date is today.
+                // If odd, it should be tomorrow relative to today.
+                double daysDifference = (today - originalDueDate).TotalDays;
+                nextValidDueDate = daysDifference % 2 == 0 ? today : today.AddDays(1);
+                break;
+            case TaskRepetitionType.Weekly:
+                if (task.RepetitionDayOfWeek.HasValue)
+                {
+                    // Ensure we get the *next* occurrence including today if it matches
+                    nextValidDueDate = DateUtils.GetNextWeekday(today, task.RepetitionDayOfWeek.Value);
+                }
+                else
+                {
+                    // Fallback if day is somehow missing (shouldn't happen with UI)
+                    // Keep advancing by 7 days until it's today or later
+                    while (nextValidDueDate < today)
+                    {
+                        nextValidDueDate = nextValidDueDate.AddDays(7);
+                    }
+                }
+                break;
+        }
+        return nextValidDueDate.Date; // Ensure time component is stripped
+    }
+}
+</file>
+
+<file path="Source\Services\TaskPersistenceService.cs">
+using System.Diagnostics;
+using System.Text.Json;
+using Tickly.Models;
+
+namespace Tickly.Services;
+
+public sealed class TaskPersistenceService
+{
+    private readonly string _filePath;
+    private readonly object _saveLock = new();
+    private bool _isSaving = false; // Internal flag to prevent concurrent saves
+
+    public TaskPersistenceService()
+    {
+        _filePath = Path.Combine(FileSystem.AppDataDirectory, "tasks.json");
+        Debug.WriteLine($"TaskPersistenceService: Initialized with file path: {_filePath}");
+    }
+
+    public async Task<List<TaskItem>> LoadTasksAsync()
+    {
+        Debug.WriteLine($"TaskPersistenceService.LoadTasksAsync: Attempting to load from: {_filePath}");
+        if (!File.Exists(_filePath))
+        {
+            Debug.WriteLine("TaskPersistenceService.LoadTasksAsync: File not found, returning empty list.");
+            return [];
+        }
+
+        try
+        {
+            string json = await File.ReadAllTextAsync(_filePath);
+            if (string.IsNullOrWhiteSpace(json))
+            {
+                Debug.WriteLine("TaskPersistenceService.LoadTasksAsync: File exists but is empty, returning empty list.");
+                return [];
+            }
+
+            List<TaskItem>? loadedTasks = JsonSerializer.Deserialize<List<TaskItem>>(json);
+            Debug.WriteLine($"TaskPersistenceService.LoadTasksAsync: Successfully deserialized {(loadedTasks?.Count ?? 0)} tasks.");
+            return loadedTasks ?? [];
+        }
+        catch (JsonException jsonEx)
+        {
+            Debug.WriteLine($"TaskPersistenceService.LoadTasksAsync: Error deserializing JSON: {jsonEx.Message}. Returning empty list.");
+            return []; // Return empty list on error
+        }
+        catch (IOException ioEx)
+        {
+            Debug.WriteLine($"TaskPersistenceService.LoadTasksAsync: IO Error reading file: {ioEx.Message}. Returning empty list.");
+            return []; // Return empty list on error
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"TaskPersistenceService.LoadTasksAsync: Unexpected error: {ex.GetType().Name} - {ex.Message}. Returning empty list.");
+            return []; // Return empty list on other errors
+        }
+    }
+
+    public async Task SaveTasksAsync(IEnumerable<TaskItem> tasks)
+    {
+        bool acquiredLock = false;
+        lock (_saveLock)
+        {
+            if (_isSaving)
+            {
+                Debug.WriteLine("TaskPersistenceService.SaveTasksAsync: Save already in progress, skipping.");
+                return; // Prevent concurrent saves
+            }
+            _isSaving = true;
+            acquiredLock = true;
+        }
+
+        if (!acquiredLock) return;
+
+        Debug.WriteLine("TaskPersistenceService.SaveTasksAsync: Starting save operation.");
+        try
+        {
+            List<TaskItem> tasksToSave = tasks?.ToList() ?? [];
+            if (tasksToSave.Count > 0)
+            {
+                Debug.WriteLine($"TaskPersistenceService.SaveTasksAsync: Serializing {tasksToSave.Count} tasks.");
+                JsonSerializerOptions options = new() { WriteIndented = true };
+                string json = JsonSerializer.Serialize(tasksToSave, options);
+
+                Debug.WriteLine($"TaskPersistenceService.SaveTasksAsync: Writing JSON ({json.Length} chars) to {_filePath}");
+                await File.WriteAllTextAsync(_filePath, json);
+                Debug.WriteLine("TaskPersistenceService.SaveTasksAsync: Write operation completed.");
+            }
+            else
+            {
+                if (File.Exists(_filePath))
+                {
+                    Debug.WriteLine($"TaskPersistenceService.SaveTasksAsync: Task list is empty, deleting file: {_filePath}");
+                    File.Delete(_filePath);
+                    Debug.WriteLine("TaskPersistenceService.SaveTasksAsync: File deleted.");
+                }
+                else
+                {
+                    Debug.WriteLine("TaskPersistenceService.SaveTasksAsync: Task list is empty, file already doesn't exist.");
+                }
+            }
+        }
+        catch (IOException ioEx)
+        {
+            Debug.WriteLine($"TaskPersistenceService.SaveTasksAsync: IO Error writing file: {ioEx.Message}");
+            // Consider how to handle save errors (e.g., retry, notify user)
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"TaskPersistenceService.SaveTasksAsync: Unexpected error: {ex.GetType().Name} - {ex.Message}");
+            // Consider how to handle save errors
+        }
+        finally
+        {
+            lock (_saveLock)
+            {
+                _isSaving = false; // Release the lock
+                Debug.WriteLine("TaskPersistenceService.SaveTasksAsync: Save lock released.");
+            }
+        }
+    }
+}
+</file>
+
+<file path="Source\Services\TaskVisualStateService.cs">
+using System.Collections.ObjectModel;
+using System.Diagnostics;
+using Microsoft.Maui.Graphics; // Required for Color
+using Tickly.Models;
+
+namespace Tickly.Services;
+
+public sealed class TaskVisualStateService
+{
+    private static readonly Color StartColor = Colors.Red;
+    private static readonly Color MidColor = Colors.Yellow;
+    private static readonly Color EndColor = Colors.LimeGreen;
+
+    public TaskProgressResult CalculateProgress(ObservableCollection<TaskItem> tasks)
+    {
+        if (tasks is null)
+        {
+            return new TaskProgressResult(0.0, StartColor);
+        }
+
+        var totalTasks = (double)tasks.Count;
+        var tasksDueToday = (double)tasks.Count(t => t.DueDate.HasValue && t.DueDate.Value.Date == DateTime.Today);
+
+        var progressValue = (totalTasks == 0) ? 1.0 : (totalTasks - tasksDueToday) / totalTasks;
+        progressValue = Math.Clamp(progressValue, 0.0, 1.0);
+
+        float r, g, b;
+        var factor = (float)progressValue;
+
+        if (factor < 0.5f)
+        {
+            r = 1.0f;
+            g = factor * 2.0f;
+            b = 0.0f;
+        }
+        else
+        {
+            r = 1.0f - (factor - 0.5f) * 2.0f;
+            g = 1.0f;
+            b = 0.0f;
+        }
+
+        r = float.Clamp(r, 0.0f, 1.0f);
+        g = float.Clamp(g, 0.0f, 1.0f);
+        b = float.Clamp(b, 0.0f, 1.0f);
+
+        var progressColor = new Color(r, g, b);
+
+        return new TaskProgressResult(progressValue, progressColor);
+    }
+
+    public void UpdateTaskIndicesAndColors(ObservableCollection<TaskItem> tasks)
+    {
+        var totalCount = tasks?.Count ?? 0;
+        Debug.WriteLine($"TaskVisualStateService.UpdateTaskIndicesAndColors: Updating for {totalCount} tasks.");
+
+        if (tasks == null) return;
+
+        for (var i = 0; i < totalCount; i++)
+        {
+            TaskItem? currentTask = tasks[i];
+            if (currentTask is not null)
+            {
+                if (currentTask.Order != i) currentTask.Order = i;
+                if (currentTask.Index != i) currentTask.Index = i;
+
+                var factor = totalCount <= 1 ? 0.0 : (double)i / (totalCount - 1);
+                Color newColor = InterpolateColor(factor);
+
+                if (currentTask.PositionColor != newColor)
+                {
+                    currentTask.PositionColor = newColor;
+                }
+            }
+        }
+    }
+
+    private static Color InterpolateColor(double factor)
+    {
+        factor = Math.Clamp(factor, 0.0, 1.0);
+        float r, g, b, a;
+        var currentFactor = (float)factor;
+
+        if (currentFactor < 0.5f)
+        {
+            var localFactor = currentFactor * 2.0f;
+            r = StartColor.Red + localFactor * (MidColor.Red - StartColor.Red);
+            g = StartColor.Green + localFactor * (MidColor.Green - StartColor.Green);
+            b = StartColor.Blue + localFactor * (MidColor.Blue - StartColor.Blue);
+            a = StartColor.Alpha + localFactor * (MidColor.Alpha - StartColor.Alpha);
+        }
+        else
+        {
+            var localFactor = (currentFactor - 0.5f) * 2.0f;
+            r = MidColor.Red + localFactor * (EndColor.Red - MidColor.Red);
+            g = MidColor.Green + localFactor * (EndColor.Green - MidColor.Green);
+            b = MidColor.Blue + localFactor * (EndColor.Blue - MidColor.Blue);
+            a = MidColor.Alpha + localFactor * (EndColor.Alpha - MidColor.Alpha);
+        }
+
+        r = float.Clamp(r, 0.0f, 1.0f);
+        g = float.Clamp(g, 0.0f, 1.0f);
+        b = float.Clamp(b, 0.0f, 1.0f);
+        a = float.Clamp(a, 0.0f, 1.0f);
+
+        return new(r, g, b, a);
+    }
+}
+
+public readonly record struct TaskProgressResult(double Progress, Color ProgressColor);
+</file>
+
 <file path="Source\Utils\DateUtils.cs">
 // Utils/DateUtils.cs
 using System;
@@ -9753,15 +10088,13 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.Diagnostics;
-using System.IO;
 using System.Linq;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Tickly.Messages;
 using Tickly.Models;
 using Tickly.Services;
-using Tickly.Utils;
+using Tickly.Utils; // Keep for non-repeating date utils if any, or general utils
 using Tickly.Views;
 
 namespace Tickly.ViewModels;
@@ -9775,10 +10108,10 @@ public sealed partial class MainViewModel : ObservableObject
         set => SetProperty(ref _tasks, value);
     }
 
-    private readonly string _filePath;
-    private bool _isSaving = false;
-    private readonly object _saveLock = new();
     private Timer? _debounceTimer;
+    private readonly TaskVisualStateService _taskVisualStateService;
+    private readonly TaskPersistenceService _taskPersistenceService;
+    private readonly RepeatingTaskService _repeatingTaskService; // ADDED
 
     [ObservableProperty]
     private double taskProgress;
@@ -9786,14 +10119,12 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private Color taskProgressColor;
 
-    private static readonly Color StartColor = Colors.Red;
-    private static readonly Color MidColor = Colors.Yellow;
-    private static readonly Color EndColor = Colors.LimeGreen;
-
     public MainViewModel()
     {
-        _filePath = Path.Combine(FileSystem.AppDataDirectory, "tasks.json");
         _tasks = new();
+        _taskVisualStateService = new TaskVisualStateService();
+        _taskPersistenceService = new TaskPersistenceService();
+        _repeatingTaskService = new RepeatingTaskService(); // ADDED: Instantiate the service
 
         _ = LoadTasksAsync();
 
@@ -9802,6 +10133,8 @@ public sealed partial class MainViewModel : ObservableObject
         WeakReferenceMessenger.Default.Register<DeleteTaskMessage>(this, (recipient, message) => HandleDeleteTask(message.Value));
         WeakReferenceMessenger.Default.Register<CalendarSettingChangedMessage>(this, async (recipient, message) => await HandleCalendarSettingChanged());
         WeakReferenceMessenger.Default.Register<TasksReloadRequestedMessage>(this, async (recipient, message) => await HandleTasksReloadRequested());
+
+        UpdateUiVisualState();
     }
 
     [RelayCommand]
@@ -9831,11 +10164,7 @@ public sealed partial class MainViewModel : ObservableObject
     [RelayCommand]
     private async Task LoadTasksAsync()
     {
-        bool acquiredLock = false;
-        lock (_saveLock) { if (_isSaving) return; acquiredLock = true; }
-        if (!acquiredLock) return;
-
-        Debug.WriteLine($"LoadTasksAsync: Attempting to load tasks from: {_filePath}");
+        Debug.WriteLine($"MainViewModel.LoadTasksAsync: Requesting tasks from persistence service.");
         bool wasSubscribed = false;
         bool changesMade = false;
         List<TaskItem> loadedTasks = [];
@@ -9844,27 +10173,16 @@ public sealed partial class MainViewModel : ObservableObject
         {
             if (Tasks != null) { Tasks.CollectionChanged -= Tasks_CollectionChanged; wasSubscribed = true; }
 
-            if (File.Exists(_filePath))
-            {
-                string json = await File.ReadAllTextAsync(_filePath);
-                if (!string.IsNullOrWhiteSpace(json))
-                {
-                    try { loadedTasks = JsonSerializer.Deserialize<List<TaskItem>>(json) ?? []; }
-                    catch (JsonException jsonException) { Debug.WriteLine($"LoadTasksAsync: Error deserializing tasks JSON: {jsonException.Message}"); loadedTasks = []; }
-                }
-            }
+            loadedTasks = await _taskPersistenceService.LoadTasksAsync();
+            Debug.WriteLine($"MainViewModel.LoadTasksAsync: Received {loadedTasks.Count} tasks from service.");
 
             DateTime today = DateTime.Today;
             foreach (TaskItem task in loadedTasks)
             {
-                if (task.TimeType == TaskTimeType.Repeating && task.DueDate.HasValue && task.DueDate.Value.Date < today)
+                // Delegate repeating task date check to the service
+                if (_repeatingTaskService.EnsureCorrectDueDateOnLoad(task, today))
                 {
-                    DateTime originalDueDate = task.DueDate.Value.Date;
-                    DateTime nextValidDueDate = CalculateNextValidDueDateForRepeatingTask(task, today, originalDueDate);
-                    if (task.DueDate.Value.Date != nextValidDueDate)
-                    {
-                        task.DueDate = nextValidDueDate; changesMade = true;
-                    }
+                    changesMade = true;
                 }
                 task.IsFadingOut = false;
                 task.PositionColor = Colors.Transparent;
@@ -9876,47 +10194,34 @@ public sealed partial class MainViewModel : ObservableObject
             {
                 Tasks.Clear();
                 foreach (var task in tasksToAdd) { Tasks.Add(task); }
-                UpdateTaskIndexAndColorProperty();
-                UpdateTaskProgressAndColor();
+                UpdateUiVisualState();
+                Debug.WriteLine($"MainViewModel.LoadTasksAsync: Updated Tasks collection on UI thread.");
             });
 
-            if (changesMade) { TriggerSave(); }
+            if (changesMade)
+            {
+                Debug.WriteLine("MainViewModel.LoadTasksAsync: Changes made to due dates, triggering save.");
+                TriggerSave();
+            }
         }
         catch (Exception exception)
         {
-            Debug.WriteLine($"LoadTasksAsync: Error loading tasks: {exception.GetType().Name} - {exception.Message}");
+            Debug.WriteLine($"MainViewModel.LoadTasksAsync: Error during loading/processing: {exception.GetType().Name} - {exception.Message}");
             await MainThread.InvokeOnMainThreadAsync(() =>
             {
                 Tasks.Clear();
-                UpdateTaskProgressAndColor();
-                UpdateTaskIndexAndColorProperty();
+                UpdateUiVisualState();
             });
         }
         finally
         {
             if (Tasks != null && (wasSubscribed || Tasks.Any())) { Tasks.CollectionChanged -= Tasks_CollectionChanged; Tasks.CollectionChanged += Tasks_CollectionChanged; }
             else if (Tasks != null) { Tasks.CollectionChanged += Tasks_CollectionChanged; }
-            if (acquiredLock) { lock (_saveLock) { /* Release lock */ } }
+            Debug.WriteLine("MainViewModel.LoadTasksAsync: Finished.");
         }
     }
 
-    private static DateTime CalculateNextValidDueDateForRepeatingTask(TaskItem task, DateTime today, DateTime originalDueDate)
-    {
-        DateTime nextValidDueDate = originalDueDate;
-        switch (task.RepetitionType)
-        {
-            case TaskRepetitionType.Daily: nextValidDueDate = today; break;
-            case TaskRepetitionType.AlternateDay:
-                double daysDifference = (today - originalDueDate).TotalDays;
-                nextValidDueDate = daysDifference % 2 == 0 ? today : today.AddDays(1);
-                break;
-            case TaskRepetitionType.Weekly:
-                if (task.RepetitionDayOfWeek.HasValue) nextValidDueDate = DateUtils.GetNextWeekday(today, task.RepetitionDayOfWeek.Value);
-                else while (nextValidDueDate < today) nextValidDueDate = nextValidDueDate.AddDays(7);
-                break;
-        }
-        return nextValidDueDate;
-    }
+    // REMOVED: CalculateNextValidDueDateForRepeatingTask (moved to service)
 
     [RelayCommand]
     private async Task MarkTaskDone(TaskItem? task)
@@ -9925,38 +10230,41 @@ public sealed partial class MainViewModel : ObservableObject
 
         if (task.TimeType == TaskTimeType.None || task.TimeType == TaskTimeType.SpecificDate)
         {
+            // Standard removal logic
             task.IsFadingOut = true;
             await Task.Delay(350);
             bool removedSuccessfully = false;
             await MainThread.InvokeOnMainThreadAsync(() =>
             {
                 removedSuccessfully = Tasks.Remove(task);
-                if (removedSuccessfully) { UpdateTaskIndexAndColorProperty(); UpdateTaskProgressAndColor(); TriggerSave(); }
-                else task.IsFadingOut = false;
+                if (removedSuccessfully) { UpdateUiVisualState(); TriggerSave(); }
+                else task.IsFadingOut = false; // Reset if removal failed unexpectedly
             });
         }
         else if (task.TimeType == TaskTimeType.Repeating)
         {
-            DateTime? nextDueDate = DateUtils.CalculateNextDueDate(task);
-            if (nextDueDate.HasValue)
+            // Delegate repeating task update to the service
+            bool dateUpdated = _repeatingTaskService.UpdateRepeatingTaskDueDate(task);
+
+            if (dateUpdated)
             {
+                // If the date was successfully updated, refresh UI and save
                 await MainThread.InvokeOnMainThreadAsync(() =>
                 {
-                    task.DueDate = nextDueDate;
-                    UpdateTaskIndexAndColorProperty();
-                    UpdateTaskProgressAndColor();
+                    UpdateUiVisualState();
                     TriggerSave();
                 });
             }
             else
             {
+                // If the service indicates the date couldn't be updated (e.g., error or no next date), remove the task
                 task.IsFadingOut = true;
                 await Task.Delay(350);
                 bool removedSuccessfully = false;
                 await MainThread.InvokeOnMainThreadAsync(() =>
                 {
                     removedSuccessfully = Tasks.Remove(task);
-                    if (removedSuccessfully) { UpdateTaskIndexAndColorProperty(); UpdateTaskProgressAndColor(); TriggerSave(); }
+                    if (removedSuccessfully) { UpdateUiVisualState(); TriggerSave(); }
                     else task.IsFadingOut = false;
                 });
             }
@@ -9966,25 +10274,21 @@ public sealed partial class MainViewModel : ObservableObject
     [RelayCommand]
     private async Task ResetDailyTask(TaskItem? task)
     {
-        if (task == null ||
-            task.TimeType != TaskTimeType.Repeating ||
-            task.RepetitionType != TaskRepetitionType.Daily ||
-            !task.DueDate.HasValue ||
-            task.DueDate.Value.Date != DateTime.Today.AddDays(1))
+        // Delegate reset logic to the service
+        bool resetSuccessful = _repeatingTaskService.ResetDailyTaskDueDate(task);
+
+        if (resetSuccessful)
         {
-            Debug.WriteLine($"ResetDailyTask: Task does not meet reset criteria (ID: {task?.Id}, Due: {task?.DueDate})");
-            return;
+            await MainThread.InvokeOnMainThreadAsync(() =>
+            {
+                UpdateUiVisualState();
+                TriggerSave();
+            });
         }
-
-        Debug.WriteLine($"ResetDailyTask: Resetting task '{task.Title}' (ID: {task.Id}) due date to today.");
-
-        await MainThread.InvokeOnMainThreadAsync(() =>
+        else
         {
-            task.DueDate = DateTime.Today;
-            UpdateTaskIndexAndColorProperty();
-            UpdateTaskProgressAndColor();
-            TriggerSave();
-        });
+            Debug.WriteLine($"ResetDailyTask Command: Task '{task?.Title}' did not meet criteria or service failed.");
+        }
     }
 
     private async Task HandleCalendarSettingChanged() { await LoadTasksAsync(); }
@@ -9995,10 +10299,9 @@ public sealed partial class MainViewModel : ObservableObject
 
         await MainThread.InvokeOnMainThreadAsync(() =>
         {
-            newTask.Order = Tasks.Count;
+            newTask.Order = Tasks.Count; // Assign order before adding
             Tasks.Add(newTask);
-            UpdateTaskIndexAndColorProperty();
-            UpdateTaskProgressAndColor();
+            UpdateUiVisualState(); // Update UI after adding
             TriggerSave();
         });
     }
@@ -10012,11 +10315,11 @@ public sealed partial class MainViewModel : ObservableObject
             int index = Tasks.ToList().FindIndex(task => task.Id == updatedTask.Id);
             if (index != -1)
             {
+                // Preserve original order and index during update
                 updatedTask.Order = Tasks[index].Order;
                 updatedTask.Index = index;
-                UpdateTaskIndexAndColorPropertyInternal();
-                Tasks[index] = updatedTask;
-                UpdateTaskProgressAndColor();
+                Tasks[index] = updatedTask; // Replace item in the collection
+                UpdateUiVisualState(); // Update UI after replace
                 TriggerSave();
             }
             else Debug.WriteLine($"HandleUpdateTask: Task with ID {updatedTask.Id} not found.");
@@ -10032,120 +10335,46 @@ public sealed partial class MainViewModel : ObservableObject
             if (taskToRemove is not null)
             {
                 removedSuccessfully = Tasks.Remove(taskToRemove);
-                if (removedSuccessfully) { UpdateTaskIndexAndColorProperty(); UpdateTaskProgressAndColor(); TriggerSave(); }
+                if (removedSuccessfully) { UpdateUiVisualState(); TriggerSave(); }
             }
         });
     }
 
     private void Tasks_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs eventArgs)
     {
-        UpdateTaskProgressAndColor();
-        if (eventArgs.Action == NotifyCollectionChangedAction.Move ||
-            eventArgs.Action == NotifyCollectionChangedAction.Add ||
-            eventArgs.Action == NotifyCollectionChangedAction.Remove ||
-            eventArgs.Action == NotifyCollectionChangedAction.Replace ||
-            eventArgs.Action == NotifyCollectionChangedAction.Reset)
+        // Always update UI state on any change
+        UpdateUiVisualState();
+        // Only trigger save specifically on Move, as Add/Remove/Replace are handled by their respective message handlers/commands
+        if (eventArgs.Action == NotifyCollectionChangedAction.Move)
         {
-            UpdateTaskIndexAndColorProperty();
-            if (eventArgs.Action == NotifyCollectionChangedAction.Move) { TriggerSave(); }
+            TriggerSave();
         }
     }
 
-    private void UpdateTaskIndexAndColorProperty()
+    private void UpdateUiVisualState()
     {
         if (!MainThread.IsMainThread)
         {
-            MainThread.BeginInvokeOnMainThread(UpdateTaskIndexAndColorPropertyInternal);
+            MainThread.BeginInvokeOnMainThread(UpdateUiVisualState);
             return;
         }
-        UpdateTaskIndexAndColorPropertyInternal();
-    }
 
-    private void UpdateTaskIndexAndColorPropertyInternal()
-    {
-        int totalCount = Tasks.Count;
-        Debug.WriteLine($"UpdateTaskIndexAndColorPropertyInternal: Updating for {totalCount} tasks.");
-
-        for (int i = 0; i < totalCount; i++)
-        {
-            TaskItem currentTask = Tasks[i];
-            if (currentTask != null)
-            {
-                if (currentTask.Order != i) currentTask.Order = i;
-                if (currentTask.Index != i) currentTask.Index = i;
-
-                Color newColor;
-                if (totalCount <= 1)
-                {
-                    newColor = StartColor;
-                }
-                else
-                {
-                    double factor = (double)i / (totalCount - 1);
-                    factor = Math.Clamp(factor, 0.0, 1.0);
-
-                    float r, g, b, a;
-                    float currentFactor = (float)factor;
-
-                    if (currentFactor < 0.5f)
-                    {
-                        float localFactor = currentFactor * 2.0f;
-                        r = (float)(StartColor.Red + localFactor * (MidColor.Red - StartColor.Red));
-                        g = (float)(StartColor.Green + localFactor * (MidColor.Green - StartColor.Green));
-                        b = (float)(StartColor.Blue + localFactor * (MidColor.Blue - StartColor.Blue));
-                        a = (float)(StartColor.Alpha + localFactor * (MidColor.Alpha - StartColor.Alpha));
-                    }
-                    else
-                    {
-                        float localFactor = (currentFactor - 0.5f) * 2.0f;
-                        r = (float)(MidColor.Red + localFactor * (EndColor.Red - MidColor.Red));
-                        g = (float)(MidColor.Green + localFactor * (EndColor.Green - MidColor.Green));
-                        b = (float)(MidColor.Blue + localFactor * (EndColor.Blue - MidColor.Blue));
-                        a = (float)(MidColor.Alpha + localFactor * (EndColor.Alpha - MidColor.Alpha));
-                    }
-
-                    r = Math.Clamp(r, 0.0f, 1.0f);
-                    g = Math.Clamp(g, 0.0f, 1.0f);
-                    b = Math.Clamp(b, 0.0f, 1.0f);
-                    a = Math.Clamp(a, 0.0f, 1.0f);
-
-                    newColor = new Color(r, g, b, a);
-                }
-
-                if (currentTask.PositionColor != newColor)
-                {
-                    currentTask.PositionColor = newColor;
-                }
-            }
-        }
+        _taskVisualStateService.UpdateTaskIndicesAndColors(Tasks);
+        var progressResult = _taskVisualStateService.CalculateProgress(Tasks);
+        TaskProgress = progressResult.Progress;
+        TaskProgressColor = progressResult.ProgressColor;
     }
 
     private async Task SaveTasks()
     {
-        bool acquiredLock = false;
-        List<TaskItem> tasksToSave = [];
-        try
+        Debug.WriteLine("MainViewModel.SaveTasks: Delegating save to TaskPersistenceService.");
+        List<TaskItem> currentTasks = [];
+        await MainThread.InvokeOnMainThreadAsync(() =>
         {
-            lock (_saveLock) { if (_isSaving) { return; } _isSaving = true; acquiredLock = true; }
-
-            await MainThread.InvokeOnMainThreadAsync(() =>
-            {
-                tasksToSave = new List<TaskItem>(Tasks);
-            });
-
-            if (tasksToSave != null && tasksToSave.Count > 0)
-            {
-                JsonSerializerOptions options = new() { WriteIndented = true };
-                string json = JsonSerializer.Serialize(tasksToSave, options);
-                await File.WriteAllTextAsync(_filePath, json);
-            }
-            else if (tasksToSave != null && tasksToSave.Count == 0)
-            {
-                if (File.Exists(_filePath)) { File.Delete(_filePath); }
-            }
-        }
-        catch (Exception exception) { Debug.WriteLine($"SaveTasks: Error saving tasks: {exception.Message}"); }
-        finally { if (acquiredLock) { lock (_saveLock) { _isSaving = false; } } }
+            currentTasks = new List<TaskItem>(Tasks);
+        });
+        await _taskPersistenceService.SaveTasksAsync(currentTasks);
+        Debug.WriteLine("MainViewModel.SaveTasks: Save delegation completed.");
     }
 
     private void TriggerSave()
@@ -10158,53 +10387,6 @@ public sealed partial class MainViewModel : ObservableObject
     {
         Debug.WriteLine("MainViewModel: Received TasksReloadRequestedMessage. Reloading tasks...");
         await LoadTasksAsync();
-    }
-
-    private void UpdateTaskProgressAndColor()
-    {
-        if (Tasks is null)
-        {
-            TaskProgress = 0.0;
-            TaskProgressColor = StartColor;
-            return;
-        }
-
-        double totalTasks = Tasks.Count;
-        double tasksDueToday = Tasks.Count(t => t.DueDate.HasValue && t.DueDate.Value.Date == DateTime.Today);
-
-        double progressValue;
-        if (totalTasks == 0)
-        {
-            progressValue = 1.0;
-        }
-        else
-        {
-            progressValue = (totalTasks - tasksDueToday) / totalTasks;
-        }
-
-        TaskProgress = Math.Clamp(progressValue, 0.0, 1.0);
-
-        float r, g, b;
-        float factor = (float)TaskProgress;
-
-        if (factor < 0.5f)
-        {
-            r = 1.0f;
-            g = factor * 2.0f;
-            b = 0.0f;
-        }
-        else
-        {
-            r = 1.0f - (factor - 0.5f) * 2.0f;
-            g = 1.0f;
-            b = 0.0f;
-        }
-
-        r = Math.Clamp(r, 0.0f, 1.0f);
-        g = Math.Clamp(g, 0.0f, 1.0f);
-        b = Math.Clamp(b, 0.0f, 1.0f);
-
-        TaskProgressColor = new Color(r, g, b);
     }
 }
 </file>

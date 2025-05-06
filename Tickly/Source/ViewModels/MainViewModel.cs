@@ -30,10 +30,11 @@ public sealed partial class MainViewModel : ObservableObject
         set => SetProperty(ref _tasks, value);
     }
 
-    private Timer? _debounceTimer;
+    private Timer? _debounceTaskSaveTimer; // Renamed for clarity
+    private Timer? _debounceProgressSaveTimer;
     private readonly TaskVisualStateService _taskVisualStateService;
-    private readonly TaskPersistenceService _taskPersistenceService;
-    private readonly RepeatingTaskService _repeatingTaskService; // ADDED
+    private readonly TaskPersistenceService _taskPersistenceService; // Will be injected
+    private readonly RepeatingTaskService _repeatingTaskService;
 
     [ObservableProperty]
     private double taskProgress;
@@ -41,12 +42,12 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private Color taskProgressColor;
 
-    public MainViewModel()
+    public MainViewModel(TaskPersistenceService taskPersistenceService, RepeatingTaskService repeatingTaskService, TaskVisualStateService taskVisualStateService)
     {
         _tasks = new();
-        _taskVisualStateService = new TaskVisualStateService();
-        _taskPersistenceService = new TaskPersistenceService();
-        _repeatingTaskService = new RepeatingTaskService(); // ADDED: Instantiate the service
+        _taskPersistenceService = taskPersistenceService; // Injected
+        _repeatingTaskService = repeatingTaskService;     // Injected
+        _taskVisualStateService = taskVisualStateService; // Injected
 
         _ = LoadTasksAsync();
 
@@ -285,6 +286,9 @@ public sealed partial class MainViewModel : ObservableObject
         var progressResult = _taskVisualStateService.CalculateProgress(Tasks);
         TaskProgress = progressResult.Progress;
         TaskProgressColor = progressResult.ProgressColor;
+
+        // After updating progress, trigger save for daily progress
+        TriggerSaveDailyProgress();
     }
 
     private async Task SaveTasks()
@@ -301,8 +305,46 @@ public sealed partial class MainViewModel : ObservableObject
 
     private void TriggerSave()
     {
-        _debounceTimer?.Dispose();
-        _debounceTimer = new Timer(async (state) => { await SaveTasks(); _debounceTimer?.Dispose(); _debounceTimer = null; }, null, TimeSpan.FromMilliseconds(500), Timeout.InfiniteTimeSpan);
+        _debounceTaskSaveTimer?.Dispose();
+        _debounceTaskSaveTimer = new Timer(async (state) => { await SaveTasks(); _debounceTaskSaveTimer?.Dispose(); _debounceTaskSaveTimer = null; }, null, TimeSpan.FromMilliseconds(500), Timeout.InfiniteTimeSpan);
+    }
+
+    private async Task SaveCurrentDayProgressAsync()
+    {
+        if (_taskPersistenceService != null)
+        {
+            // Ensure we are using the Date part only for consistency.
+            DateTime todayDate = DateTime.Today;
+            double currentProgress = TaskProgress; // Capture current progress
+
+            Debug.WriteLine($"MainViewModel.SaveCurrentDayProgressAsync: Saving progress for {todayDate:yyyy-MM-dd} - {currentProgress:P2}");
+            var progressEntry = new DailyProgress(todayDate, currentProgress);
+            await _taskPersistenceService.AddDailyProgressEntryAsync(progressEntry);
+            Debug.WriteLine($"MainViewModel.SaveCurrentDayProgressAsync: Progress for {todayDate:yyyy-MM-dd} saved/updated.");
+        }
+        else
+        {
+            Debug.WriteLine("MainViewModel.SaveCurrentDayProgressAsync: TaskPersistenceService is null. Cannot save progress.");
+        }
+    }
+
+    private void TriggerSaveDailyProgress()
+    {
+        _debounceProgressSaveTimer?.Dispose();
+        _debounceProgressSaveTimer = new Timer(async (state) =>
+        {
+            await SaveCurrentDayProgressAsync();
+            _debounceProgressSaveTimer?.Dispose();
+            _debounceProgressSaveTimer = null;
+        }, null, TimeSpan.FromMilliseconds(1000), Timeout.InfiniteTimeSpan); // Slightly longer debounce for progress
+    }
+
+    public async Task FinalizeAndSaveProgressAsync()
+    {
+        _debounceProgressSaveTimer?.Dispose(); // Cancel any pending debounced save
+        _debounceProgressSaveTimer = null;
+        await SaveCurrentDayProgressAsync(); // Save immediately
+        Debug.WriteLine("MainViewModel.FinalizeAndSaveProgressAsync: Final progress save executed for today.");
     }
 
     private async Task HandleTasksReloadRequested()

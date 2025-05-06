@@ -1,5 +1,8 @@
 ﻿// App.xaml.cs
 using Microsoft.Maui.LifecycleEvents; // Might be needed depending on exact MAUI version/setup
+using Tickly.ViewModels;
+using Tickly.Services; // Added for TaskPersistenceService if directly used, or for general service access
+using System.Diagnostics;
 
 namespace Tickly; // Make sure this namespace matches your project
 
@@ -14,6 +17,47 @@ public partial class App : Application
         InitializeComponent();
 
         MainPage = new AppShell();
+    }
+
+    protected override async void OnStart()
+    {
+        base.OnStart();
+        // Optional: Logic to check and save progress for a missed day could go here,
+        // but it's complex as we wouldn't know the percentage.
+        // The current MainViewModel logic aims to keep today's progress up-to-date.
+        Debug.WriteLine("App.OnStart: Application started.");
+    }
+
+    protected override async void OnSleep()
+    {
+        base.OnSleep();
+        Debug.WriteLine("App.OnSleep: Application is going to sleep. Saving final progress.");
+        try
+        {
+            var mainViewModel = IPlatformApplication.Current?.Services?.GetService<MainViewModel>();
+            if (mainViewModel != null)
+            {
+                await mainViewModel.FinalizeAndSaveProgressAsync();
+                Debug.WriteLine("App.OnSleep: FinalizeAndSaveProgressAsync completed.");
+            }
+            else
+            {
+                Debug.WriteLine("App.OnSleep: MainViewModel not resolved. Cannot save progress.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"App.OnSleep: Error during saving progress: {ex.Message}");
+        }
+    }
+
+    protected override async void OnResume()
+    {
+        base.OnResume();
+        Debug.WriteLine("App.OnResume: Application is resuming.");
+        // Optional: Could trigger a progress check/update here if the day might have changed
+        // while the app was asleep for an extended period.
+        // However, MainViewModel's continuous updates should handle this if it's running.
     }
 
     protected override Window CreateWindow(IActivationState activationState)
