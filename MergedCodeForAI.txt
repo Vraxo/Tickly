@@ -16,92 +16,112 @@
 </file>
 
 <file path="App.xaml.cs">
-// App.xaml.cs
-using Microsoft.Maui.LifecycleEvents; // Might be needed depending on exact MAUI version/setup
+using Microsoft.Maui.LifecycleEvents;
+using Tickly.ViewModels;
+using Tickly.Services;
+using System.Diagnostics;
 
-namespace Tickly; // Make sure this namespace matches your project
+namespace Tickly;
 
 public partial class App : Application
 {
-    // Define desired size constants
-    const int WindowWidth = 450;
-    const int WindowHeight = 800;
+    private const int WindowWidth = 450;
+    private const int WindowHeight = 800;
 
     public App()
     {
         InitializeComponent();
-
         MainPage = new AppShell();
+    }
+
+    protected override async void OnStart()
+    {
+        base.OnStart();
+        Debug.WriteLine("App.OnStart: Application started.");
+    }
+
+    protected override async void OnSleep()
+    {
+        base.OnSleep();
+        Debug.WriteLine("App.OnSleep: Application is going to sleep. Saving final progress.");
+        try
+        {
+            var mainViewModel = IPlatformApplication.Current?.Services?.GetService<MainViewModel>();
+            if (mainViewModel is not null)
+            {
+                await mainViewModel.FinalizeAndSaveProgressAsync();
+                Debug.WriteLine("App.OnSleep: FinalizeAndSaveProgressAsync completed.");
+            }
+            else
+            {
+                Debug.WriteLine("App.OnSleep: MainViewModel not resolved. Cannot save progress.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"App.OnSleep: Error during saving progress: {ex.Message}");
+        }
+    }
+
+    protected override async void OnResume()
+    {
+        base.OnResume();
+        Debug.WriteLine("App.OnResume: Application is resuming.");
     }
 
     protected override Window CreateWindow(IActivationState activationState)
     {
         Window window = base.CreateWindow(activationState);
 
-        // --- WINDOWS SPECIFIC RESIZING ---
 #if WINDOWS
         window.Created += (s, e) =>
         {
-            // Ensure sender is a Window
             var mauiWindow = s as Window;
             if (mauiWindow == null) return;
 
-            // Get the Handler and Platform Window (Microsoft.UI.Xaml.Window)
             var handler = mauiWindow.Handler;
             if (handler?.PlatformView is Microsoft.UI.Xaml.Window nativeWindow)
             {
                 try
                 {
-                    // Get the HWND (Window Handle) for the WinUI window
                     var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(nativeWindow);
                     if (hwnd == IntPtr.Zero) return;
 
-                    // Get the WindowId from the HWND
                     Microsoft.UI.WindowId windowId = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(hwnd);
-                    if (windowId.Value == 0) return; // Invalid WindowId
+                    if (windowId.Value == 0) return;
 
-                    // Get the AppWindow from the WindowId
                     Microsoft.UI.Windowing.AppWindow appWindow = Microsoft.UI.Windowing.AppWindow.GetFromWindowId(windowId);
                     if (appWindow != null)
                     {
-                         // Get the primary display area
-                         Microsoft.UI.Windowing.DisplayArea displayArea = Microsoft.UI.Windowing.DisplayArea.GetFromWindowId(windowId, Microsoft.UI.Windowing.DisplayAreaFallback.Nearest);
+                        Microsoft.UI.Windowing.DisplayArea displayArea = Microsoft.UI.Windowing.DisplayArea.GetFromWindowId(windowId, Microsoft.UI.Windowing.DisplayAreaFallback.Nearest);
                         if (displayArea != null)
                         {
-                            // Calculate centered position
                             var mainMonitorWorkArea = displayArea.WorkArea;
                             var centeredX = (mainMonitorWorkArea.Width - WindowWidth) / 2;
                             var centeredY = (mainMonitorWorkArea.Height - WindowHeight) / 2;
 
-                            // Move and resize the window
                             appWindow.MoveAndResize(new Windows.Graphics.RectInt32(centeredX, centeredY, WindowWidth, WindowHeight));
                         }
                         else
                         {
-                            // Fallback if display area info not available - just resize
                             appWindow.ResizeClient(new Windows.Graphics.SizeInt32(WindowWidth, WindowHeight));
                         }
 
-                        // --- Optional: Prevent User Resizing ---
-                        // If you want to lock the window size:
+                        // Optional resizing lock (kept original commented-out state)
                         // if (appWindow.Presenter is Microsoft.UI.Windowing.OverlappedPresenter p)
                         // {
                         //     p.IsResizable = false;
                         //     p.IsMaximizable = false;
                         // }
-                        // --- End Optional ---
                     }
                 }
                 catch (Exception ex)
                 {
-                    // Log or handle potential exceptions during window manipulation
                     System.Diagnostics.Debug.WriteLine($"Error resizing window: {ex.Message}");
                 }
             }
         };
 #endif
-        // --- END WINDOWS SPECIFIC ---
-
         return window;
     }
 }
@@ -142,6 +162,13 @@ public partial class App : Application
             Route="MainPage" />
     </FlyoutItem>
 
+    <FlyoutItem Title="Progress" Icon="icon_progress.png"> <!-- TODO: Replace with actual progress icon -->
+        <ShellContent
+            Title="Progress"
+            ContentTemplate="{DataTemplate views:ProgressPage}"
+            Route="ProgressPage" />
+    </FlyoutItem>
+
     <FlyoutItem Title="Settings" Icon="icon_settings.png">
         <ShellContent
             Title="Settings"
@@ -153,8 +180,7 @@ public partial class App : Application
 </file>
 
 <file path="AppShell.xaml.cs">
-// AppShell.xaml.cs
-using Tickly.Views; // Add this using
+using Tickly.Views;
 
 namespace Tickly;
 
@@ -163,8 +189,6 @@ public partial class AppShell : Shell
     public AppShell()
     {
         InitializeComponent();
-
-        // Register the route for the modal popup page
         Routing.RegisterRoute(nameof(AddTaskPopupPage), typeof(AddTaskPopupPage));
     }
 }
@@ -174,7 +198,10 @@ public partial class AppShell : Shell
 using Microsoft.Extensions.Logging;
 using Tickly.ViewModels; // Add using for ViewModels
 using Tickly.Views;     // Add using for Views
-using CommunityToolkit.Mvvm.Messaging; // If not already present
+using CommunityToolkit.Mvvm.Messaging;
+using Tickly.Services; // If not already present
+using CommunityToolkit.Maui; // Added for Community Toolkit MAUI extension
+using Microcharts.Maui; // Added for Microcharts MAUI extension
 
 namespace Tickly;
 
@@ -185,6 +212,8 @@ public static class MauiProgram
         var builder = MauiApp.CreateBuilder();
         builder
             .UseMauiApp<App>()
+            .UseMauiCommunityToolkit() // Added Community Toolkit
+            .UseMicrocharts() // Configure Microcharts
             .ConfigureFonts(fonts =>
             {
                 fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
@@ -195,13 +224,22 @@ public static class MauiProgram
         builder.Logging.AddDebug();
 #endif
 
+        // Register Services
+        builder.Services.AddSingleton<TaskPersistenceService>();
+        builder.Services.AddSingleton<RepeatingTaskService>();    // Added
+        builder.Services.AddSingleton<TaskVisualStateService>(); // Added
+
         // Register ViewModels (Singleton for MainViewModel, Transient for Popup is fine)
         builder.Services.AddSingleton<MainViewModel>();
+        builder.Services.AddSingleton<SettingsViewModel>(); // Settings can also be singleton
+        builder.Services.AddSingleton<ProgressViewModel>(); // Register ProgressViewModel
         // No need to register AddTaskPopupPageViewModel if it's created within AddTaskPopupPage code-behind
 
         // Register Pages for Navigation
         builder.Services.AddSingleton<MainPage>(); // MainPage is usually Singleton
         builder.Services.AddTransient<AddTaskPopupPage>(); // Popup page should be Transient
+        builder.Services.AddSingleton<SettingsPage>();    // Register SettingsPage
+        builder.Services.AddSingleton<ProgressPage>();    // Register ProgressPage
 
         // Register Messenger (if not already implicitly available via CommunityToolkit)
         // builder.Services.AddSingleton<IMessenger>(WeakReferenceMessenger.Default); // Usually not needed explicitly
@@ -223,10 +261,6 @@ public static class MauiProgram
          x:Name="MainTasksPage"
          BackgroundColor="Black"
          Title="Tickly Tasks">
-
-    <ContentPage.BindingContext>
-        <vm:MainViewModel />
-    </ContentPage.BindingContext>
 
     <Shell.TitleView>
         <Grid ColumnDefinitions="*" VerticalOptions="FillAndExpand" Margin="0,0,10,0">
@@ -9519,6 +9553,22 @@ public class UpdateTaskMessage(TaskItem value) : ValueChangedMessage<TaskItem>(v
 }
 </file>
 
+<file path="Source\Models\DailyProgress.cs">
+namespace Tickly.Models;
+
+public class DailyProgress
+{
+    public DateTime Date { get; set; }
+    public double PercentageCompleted { get; set; }
+
+    public DailyProgress(DateTime date, double percentageCompleted)
+    {
+        Date = date;
+        PercentageCompleted = percentageCompleted;
+    }
+}
+</file>
+
 <file path="Source\Models\Settings.cs">
 // Models/Settings.cs (New File or add to existing Models)
 namespace Tickly.Models;
@@ -9785,20 +9835,25 @@ namespace Tickly.Services;
 
 public sealed class TaskPersistenceService
 {
-    private readonly string _filePath;
-    private readonly object _saveLock = new();
-    private bool _isSaving = false; // Internal flag to prevent concurrent saves
+    private readonly string _tasksFilePath;
+    private readonly string _progressFilePath;
+    private readonly object _tasksSaveLock = new();
+    private readonly object _progressSaveLock = new();
+    private bool _isSavingTasks = false; // Internal flag to prevent concurrent saves for tasks
+    private bool _isSavingProgress = false; // Internal flag to prevent concurrent saves for progress
 
     public TaskPersistenceService()
     {
-        _filePath = Path.Combine(FileSystem.AppDataDirectory, "tasks.json");
-        Debug.WriteLine($"TaskPersistenceService: Initialized with file path: {_filePath}");
+        _tasksFilePath = Path.Combine(FileSystem.AppDataDirectory, "tasks.json");
+        _progressFilePath = Path.Combine(FileSystem.AppDataDirectory, "dailyProgress.json");
+        Debug.WriteLine($"TaskPersistenceService: Initialized with tasks file path: {_tasksFilePath}");
+        Debug.WriteLine($"TaskPersistenceService: Initialized with progress file path: {_progressFilePath}");
     }
 
     public async Task<List<TaskItem>> LoadTasksAsync()
     {
-        Debug.WriteLine($"TaskPersistenceService.LoadTasksAsync: Attempting to load from: {_filePath}");
-        if (!File.Exists(_filePath))
+        Debug.WriteLine($"TaskPersistenceService.LoadTasksAsync: Attempting to load from: {_tasksFilePath}");
+        if (!File.Exists(_tasksFilePath))
         {
             Debug.WriteLine("TaskPersistenceService.LoadTasksAsync: File not found, returning empty list.");
             return [];
@@ -9806,7 +9861,7 @@ public sealed class TaskPersistenceService
 
         try
         {
-            string json = await File.ReadAllTextAsync(_filePath);
+            string json = await File.ReadAllTextAsync(_tasksFilePath);
             if (string.IsNullOrWhiteSpace(json))
             {
                 Debug.WriteLine("TaskPersistenceService.LoadTasksAsync: File exists but is empty, returning empty list.");
@@ -9837,14 +9892,14 @@ public sealed class TaskPersistenceService
     public async Task SaveTasksAsync(IEnumerable<TaskItem> tasks)
     {
         bool acquiredLock = false;
-        lock (_saveLock)
+        lock (_tasksSaveLock)
         {
-            if (_isSaving)
+            if (_isSavingTasks)
             {
                 Debug.WriteLine("TaskPersistenceService.SaveTasksAsync: Save already in progress, skipping.");
                 return; // Prevent concurrent saves
             }
-            _isSaving = true;
+            _isSavingTasks = true;
             acquiredLock = true;
         }
 
@@ -9860,16 +9915,16 @@ public sealed class TaskPersistenceService
                 JsonSerializerOptions options = new() { WriteIndented = true };
                 string json = JsonSerializer.Serialize(tasksToSave, options);
 
-                Debug.WriteLine($"TaskPersistenceService.SaveTasksAsync: Writing JSON ({json.Length} chars) to {_filePath}");
-                await File.WriteAllTextAsync(_filePath, json);
+                Debug.WriteLine($"TaskPersistenceService.SaveTasksAsync: Writing JSON ({json.Length} chars) to {_tasksFilePath}");
+                await File.WriteAllTextAsync(_tasksFilePath, json);
                 Debug.WriteLine("TaskPersistenceService.SaveTasksAsync: Write operation completed.");
             }
             else
             {
-                if (File.Exists(_filePath))
+                if (File.Exists(_tasksFilePath))
                 {
-                    Debug.WriteLine($"TaskPersistenceService.SaveTasksAsync: Task list is empty, deleting file: {_filePath}");
-                    File.Delete(_filePath);
+                    Debug.WriteLine($"TaskPersistenceService.SaveTasksAsync: Task list is empty, deleting file: {_tasksFilePath}");
+                    File.Delete(_tasksFilePath);
                     Debug.WriteLine("TaskPersistenceService.SaveTasksAsync: File deleted.");
                 }
                 else
@@ -9890,12 +9945,120 @@ public sealed class TaskPersistenceService
         }
         finally
         {
-            lock (_saveLock)
+            lock (_tasksSaveLock)
             {
-                _isSaving = false; // Release the lock
+                _isSavingTasks = false; // Release the lock
                 Debug.WriteLine("TaskPersistenceService.SaveTasksAsync: Save lock released.");
             }
         }
+    }
+
+    public async Task<List<DailyProgress>> LoadDailyProgressAsync()
+    {
+        Debug.WriteLine($"TaskPersistenceService.LoadDailyProgressAsync: Attempting to load from: {_progressFilePath}");
+        if (!File.Exists(_progressFilePath))
+        {
+            Debug.WriteLine("TaskPersistenceService.LoadDailyProgressAsync: File not found, returning empty list.");
+            return [];
+        }
+
+        try
+        {
+            string json = await File.ReadAllTextAsync(_progressFilePath);
+            if (string.IsNullOrWhiteSpace(json))
+            {
+                Debug.WriteLine("TaskPersistenceService.LoadDailyProgressAsync: File exists but is empty, returning empty list.");
+                return [];
+            }
+
+            List<DailyProgress>? loadedProgress = JsonSerializer.Deserialize<List<DailyProgress>>(json);
+            Debug.WriteLine($"TaskPersistenceService.LoadDailyProgressAsync: Successfully deserialized {(loadedProgress?.Count ?? 0)} progress entries.");
+            return loadedProgress ?? [];
+        }
+        catch (JsonException jsonEx)
+        {
+            Debug.WriteLine($"TaskPersistenceService.LoadDailyProgressAsync: Error deserializing JSON: {jsonEx.Message}. Returning empty list.");
+            return [];
+        }
+        catch (IOException ioEx)
+        {
+            Debug.WriteLine($"TaskPersistenceService.LoadDailyProgressAsync: IO Error reading file: {ioEx.Message}. Returning empty list.");
+            return [];
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"TaskPersistenceService.LoadDailyProgressAsync: Unexpected error: {ex.GetType().Name} - {ex.Message}. Returning empty list.");
+            return [];
+        }
+    }
+
+    private async Task SaveDailyProgressListAsync(List<DailyProgress> progressList)
+    {
+        bool acquiredLock = false;
+        lock (_progressSaveLock)
+        {
+            if (_isSavingProgress)
+            {
+                Debug.WriteLine("TaskPersistenceService.SaveDailyProgressListAsync: Save already in progress, skipping.");
+                return;
+            }
+            _isSavingProgress = true;
+            acquiredLock = true;
+        }
+
+        if (!acquiredLock) return;
+
+        Debug.WriteLine("TaskPersistenceService.SaveDailyProgressListAsync: Starting save operation.");
+        try
+        {
+            List<DailyProgress> progressToSave = progressList?.ToList() ?? [];
+            JsonSerializerOptions options = new() { WriteIndented = true };
+            string json = JsonSerializer.Serialize(progressToSave, options);
+
+            Debug.WriteLine($"TaskPersistenceService.SaveDailyProgressListAsync: Writing JSON ({json.Length} chars) to {_progressFilePath}");
+            await File.WriteAllTextAsync(_progressFilePath, json);
+            Debug.WriteLine("TaskPersistenceService.SaveDailyProgressListAsync: Write operation completed.");
+        }
+        catch (IOException ioEx)
+        {
+            Debug.WriteLine($"TaskPersistenceService.SaveDailyProgressListAsync: IO Error writing file: {ioEx.Message}");
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"TaskPersistenceService.SaveDailyProgressListAsync: Unexpected error: {ex.GetType().Name} - {ex.Message}");
+        }
+        finally
+        {
+            lock (_progressSaveLock)
+            {
+                _isSavingProgress = false; // Release the lock
+                Debug.WriteLine("TaskPersistenceService.SaveDailyProgressListAsync: Save lock released.");
+            }
+        }
+    }
+    
+    public async Task AddDailyProgressEntryAsync(DailyProgress newEntry)
+    {
+        Debug.WriteLine($"TaskPersistenceService.AddDailyProgressEntryAsync: Adding new entry for date: {newEntry.Date}");
+        List<DailyProgress> currentProgress = await LoadDailyProgressAsync();
+        
+        // Optional: Check if an entry for this date already exists and update it, or add new.
+        // For simplicity, this example just adds. If multiple entries per day are not desired,
+        // you might want to remove existing entries for the same date before adding the new one.
+        var existingEntry = currentProgress.FirstOrDefault(p => p.Date.Date == newEntry.Date.Date);
+        if (existingEntry != null)
+        {
+            Debug.WriteLine($"TaskPersistenceService.AddDailyProgressEntryAsync: Updating existing entry for date: {newEntry.Date}");
+            existingEntry.PercentageCompleted = newEntry.PercentageCompleted;
+        }
+        else
+        {
+            Debug.WriteLine($"TaskPersistenceService.AddDailyProgressEntryAsync: Adding as new entry for date: {newEntry.Date}");
+            currentProgress.Add(newEntry);
+        }
+
+        await SaveDailyProgressListAsync(currentProgress);
+        Debug.WriteLine($"TaskPersistenceService.AddDailyProgressEntryAsync: Successfully added/updated and saved entry for date: {newEntry.Date}");
     }
 }
 </file>
@@ -10016,6 +10179,7 @@ public readonly record struct TaskProgressResult(double Progress, Color Progress
 <file path="Source\Utils\DateUtils.cs">
 // Utils/DateUtils.cs
 using System;
+using System.Globalization;
 
 namespace Tickly.Utils;
 
@@ -10072,6 +10236,27 @@ public static class DateUtils
                 return null; // Unknown repetition type
         }
     }
+
+    /// <summary>
+    /// Converts a DateTime object to its Persian (Shamsi) date representation.
+    /// </summary>
+    /// <param name="date">The Gregorian date to convert.</param>
+    /// <returns>A string representing the date in "yyyy/MM/dd" format in Persian calendar.</returns>
+    public static string ToPersianDateString(DateTime date)
+    {
+        PersianCalendar pc = new();
+        return $"{pc.GetYear(date):0000}/{pc.GetMonth(date):00}/{pc.GetDayOfMonth(date):00}";
+    }
+
+    /// <summary>
+    /// Converts a DateTime object to its Gregorian date representation.
+    /// </summary>
+    /// <param name="date">The date to convert.</param>
+    /// <returns>A string representing the date in "yyyy/MM/dd" format in Gregorian calendar.</returns>
+    public static string ToGregorianDateString(DateTime date)
+    {
+        return date.ToString("yyyy/MM/dd", CultureInfo.InvariantCulture);
+    }
 }
 </file>
 
@@ -10108,10 +10293,11 @@ public sealed partial class MainViewModel : ObservableObject
         set => SetProperty(ref _tasks, value);
     }
 
-    private Timer? _debounceTimer;
+    private Timer? _debounceTaskSaveTimer; // Renamed for clarity
+    private Timer? _debounceProgressSaveTimer;
     private readonly TaskVisualStateService _taskVisualStateService;
-    private readonly TaskPersistenceService _taskPersistenceService;
-    private readonly RepeatingTaskService _repeatingTaskService; // ADDED
+    private readonly TaskPersistenceService _taskPersistenceService; // Will be injected
+    private readonly RepeatingTaskService _repeatingTaskService;
 
     [ObservableProperty]
     private double taskProgress;
@@ -10119,12 +10305,12 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private Color taskProgressColor;
 
-    public MainViewModel()
+    public MainViewModel(TaskPersistenceService taskPersistenceService, RepeatingTaskService repeatingTaskService, TaskVisualStateService taskVisualStateService)
     {
         _tasks = new();
-        _taskVisualStateService = new TaskVisualStateService();
-        _taskPersistenceService = new TaskPersistenceService();
-        _repeatingTaskService = new RepeatingTaskService(); // ADDED: Instantiate the service
+        _taskPersistenceService = taskPersistenceService; // Injected
+        _repeatingTaskService = repeatingTaskService;     // Injected
+        _taskVisualStateService = taskVisualStateService; // Injected
 
         _ = LoadTasksAsync();
 
@@ -10363,6 +10549,9 @@ public sealed partial class MainViewModel : ObservableObject
         var progressResult = _taskVisualStateService.CalculateProgress(Tasks);
         TaskProgress = progressResult.Progress;
         TaskProgressColor = progressResult.ProgressColor;
+
+        // After updating progress, trigger save for daily progress
+        TriggerSaveDailyProgress();
     }
 
     private async Task SaveTasks()
@@ -10379,8 +10568,46 @@ public sealed partial class MainViewModel : ObservableObject
 
     private void TriggerSave()
     {
-        _debounceTimer?.Dispose();
-        _debounceTimer = new Timer(async (state) => { await SaveTasks(); _debounceTimer?.Dispose(); _debounceTimer = null; }, null, TimeSpan.FromMilliseconds(500), Timeout.InfiniteTimeSpan);
+        _debounceTaskSaveTimer?.Dispose();
+        _debounceTaskSaveTimer = new Timer(async (state) => { await SaveTasks(); _debounceTaskSaveTimer?.Dispose(); _debounceTaskSaveTimer = null; }, null, TimeSpan.FromMilliseconds(500), Timeout.InfiniteTimeSpan);
+    }
+
+    private async Task SaveCurrentDayProgressAsync()
+    {
+        if (_taskPersistenceService != null)
+        {
+            // Ensure we are using the Date part only for consistency.
+            DateTime todayDate = DateTime.Today;
+            double currentProgress = TaskProgress; // Capture current progress
+
+            Debug.WriteLine($"MainViewModel.SaveCurrentDayProgressAsync: Saving progress for {todayDate:yyyy-MM-dd} - {currentProgress:P2}");
+            var progressEntry = new DailyProgress(todayDate, currentProgress);
+            await _taskPersistenceService.AddDailyProgressEntryAsync(progressEntry);
+            Debug.WriteLine($"MainViewModel.SaveCurrentDayProgressAsync: Progress for {todayDate:yyyy-MM-dd} saved/updated.");
+        }
+        else
+        {
+            Debug.WriteLine("MainViewModel.SaveCurrentDayProgressAsync: TaskPersistenceService is null. Cannot save progress.");
+        }
+    }
+
+    private void TriggerSaveDailyProgress()
+    {
+        _debounceProgressSaveTimer?.Dispose();
+        _debounceProgressSaveTimer = new Timer(async (state) =>
+        {
+            await SaveCurrentDayProgressAsync();
+            _debounceProgressSaveTimer?.Dispose();
+            _debounceProgressSaveTimer = null;
+        }, null, TimeSpan.FromMilliseconds(1000), Timeout.InfiniteTimeSpan); // Slightly longer debounce for progress
+    }
+
+    public async Task FinalizeAndSaveProgressAsync()
+    {
+        _debounceProgressSaveTimer?.Dispose(); // Cancel any pending debounced save
+        _debounceProgressSaveTimer = null;
+        await SaveCurrentDayProgressAsync(); // Save immediately
+        Debug.WriteLine("MainViewModel.FinalizeAndSaveProgressAsync: Final progress save executed for today.");
     }
 
     private async Task HandleTasksReloadRequested()
@@ -10391,20 +10618,252 @@ public sealed partial class MainViewModel : ObservableObject
 }
 </file>
 
-<file path="Source\ViewModels\SettingsViewModel.cs">
+<file path="Source\ViewModels\ProgressViewModel.cs">
+using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.Globalization;
+using System.Text;
+using CommunityToolkit.Maui.Storage;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using Tickly.Models;
+using Tickly.Services;
+using Tickly.Utils; // Added for DateUtils
+using Microcharts; // Added for Microcharts
+using SkiaSharp; // Added for SkiaSharp colors
+
+namespace Tickly.ViewModels;
+
+public sealed partial class ProgressViewModel : ObservableObject
+{
+    private readonly TaskPersistenceService _taskPersistenceService;
+
+    // Properties for Progress Export
+    public ObservableCollection<string> ExportSortOrders { get; }
+    [ObservableProperty]
+    private string _selectedExportSortOrder;
+
+    public ObservableCollection<string> ExportCalendarTypes { get; }
+    [ObservableProperty]
+    private string _selectedExportCalendarType;
+
+    // Property for chart data
+    [ObservableProperty]
+    private LineChart _progressChart;
+
+    public ProgressViewModel(TaskPersistenceService taskPersistenceService)
+    {
+        _taskPersistenceService = taskPersistenceService;
+
+        // Initialize Progress Export Options
+        ExportSortOrders = new ObservableCollection<string>
+        {
+            "Ascending by Date",
+            "Descending by Date"
+        };
+        _selectedExportSortOrder = ExportSortOrders.FirstOrDefault() ?? "Ascending by Date";
+
+        ExportCalendarTypes = new ObservableCollection<string>
+        {
+            "Gregorian",
+            "Persian"
+        };
+        _selectedExportCalendarType = ExportCalendarTypes.FirstOrDefault() ?? "Gregorian";
+
+        // Load data for the plot when the ViewModel is created
+        LoadProgressDataForPlotAsync();
+    }
+
+    // Method to load and prepare data for the plot
+    private async Task LoadProgressDataForPlotAsync()
+    {
+        List<DailyProgress> dailyProgressList = await _taskPersistenceService.LoadDailyProgressAsync();
+
+        if (dailyProgressList == null || !dailyProgressList.Any())
+        {
+            ProgressChart = null; // Or set to an empty chart/message
+            return;
+        }
+
+        // Sort data by date ascending for the chart
+        var sortedProgress = dailyProgressList.OrderBy(p => p.Date).ToList();
+
+        var entries = new List<ChartEntry>();
+
+        foreach (var progress in sortedProgress)
+        {
+            // Use Gregorian date for chart labels for consistency, or add a setting later
+            string dateLabel = progress.Date.ToString("MM/dd"); // Example format
+
+            entries.Add(new ChartEntry((float)progress.PercentageCompleted * 100) // Convert 0-1 to 0-100
+            {
+                Label = dateLabel,
+                ValueLabel = progress.PercentageCompleted.ToString("P0", CultureInfo.InvariantCulture), // e.g., "75%"
+                Color = SKColor.Parse("#266489") // Example color
+            });
+        }
+
+        ProgressChart = new LineChart
+        {
+            Entries = entries,
+            LineMode = LineMode.Spline,
+            PointMode = PointMode.Circle,
+            LabelTextSize = 20f,
+            LabelColor = SKColor.Parse("#FFFFFF"), // White labels
+            ValueLabelOrientation = Orientation.Horizontal,
+            LabelOrientation = Orientation.Horizontal,
+            ShowYAxisText = true,
+            ShowYAxisLines = true,
+            LineAreaAlpha = 0, // No fill under the line
+            LineSize = 3,
+            PointSize = 8,
+            BackgroundColor = SKColor.Parse("#000000") // Black background
+        };
+    }
+
+    [RelayCommand]
+    private async Task ExportProgressAsync()
+    {
+        Debug.WriteLine("ProgressViewModel.ExportProgressAsync: Starting progress export.");
+        try
+        {
+            List<DailyProgress> dailyProgressList = await _taskPersistenceService.LoadDailyProgressAsync();
+
+            if (dailyProgressList == null || !dailyProgressList.Any())
+            {
+                Debug.WriteLine("ProgressViewModel.ExportProgressAsync: No progress data to export.");
+                await ShowAlertAsync("Export Progress", "No daily progress data found to export.", "OK");
+                return;
+            }
+
+            Debug.WriteLine($"ProgressViewModel.ExportProgressAsync: Loaded {dailyProgressList.Count} progress entries.");
+
+            // Sort
+            IEnumerable<DailyProgress> sortedProgress;
+            if (SelectedExportSortOrder == "Ascending by Date")
+            {
+                sortedProgress = dailyProgressList.OrderBy(p => p.Date);
+                Debug.WriteLine("ProgressViewModel.ExportProgressAsync: Sorting by date ascending.");
+            }
+            else
+            {
+                sortedProgress = dailyProgressList.OrderByDescending(p => p.Date);
+                Debug.WriteLine("ProgressViewModel.ExportProgressAsync: Sorting by date descending.");
+            }
+
+            // Format
+            StringBuilder sb = new();
+            Debug.WriteLine($"ProgressViewModel.ExportProgressAsync: Formatting using {SelectedExportCalendarType} calendar.");
+            foreach (var progress in sortedProgress)
+            {
+                string dateString;
+                if (SelectedExportCalendarType == "Persian")
+                {
+                    dateString = DateUtils.ToPersianDateString(progress.Date);
+                }
+                else
+                {
+                    dateString = DateUtils.ToGregorianDateString(progress.Date);
+                }
+                // Format percentage as "XX%" (e.g., 0.75 -> "75%")
+                string percentageString = progress.PercentageCompleted.ToString("P0", CultureInfo.InvariantCulture);
+                sb.AppendLine($"{dateString}-{percentageString}");
+            }
+
+            string fileContent = sb.ToString();
+            if (string.IsNullOrWhiteSpace(fileContent))
+            {
+                Debug.WriteLine("ProgressViewModel.ExportProgressAsync: Formatted content is empty.");
+                await ShowAlertAsync("Export Progress", "Failed to generate export content.", "OK");
+                return;
+            }
+
+            string fileName = $"Tickly-Progress-Export-{DateTime.Now:yyyyMMddHHmmss}.txt";
+            Debug.WriteLine($"ProgressViewModel.ExportProgressAsync: Preparing to save file: {fileName}");
+
+            using var stream = new MemoryStream(Encoding.UTF8.GetBytes(fileContent));
+
+            var fileSaverResult = await FileSaver.Default.SaveAsync(fileName, stream, CancellationToken.None);
+
+            if (fileSaverResult.IsSuccessful)
+            {
+                Debug.WriteLine($"ProgressViewModel.ExportProgressAsync: File saved successfully to: {fileSaverResult.FilePath ?? "N/A"}");
+                await ShowAlertAsync("Export Successful", $"Progress data exported successfully to {Path.GetFileName(fileSaverResult.FilePath ?? fileName)}", "OK");
+            }
+            else
+            {
+                Debug.WriteLine($"ProgressViewModel.ExportProgressAsync: File save failed. Error: {fileSaverResult.Exception?.Message ?? "Unknown error"}");
+                await ShowAlertAsync("Export Failed", $"Could not save the file: {fileSaverResult.Exception?.Message ?? "An unknown error occurred."}", "OK");
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"ProgressViewModel.ExportProgressAsync: Exception caught: {ex.GetType().Name} - {ex.Message}\nStackTrace: {ex.StackTrace}");
+            await ShowAlertAsync("Export Error", $"An unexpected error occurred during progress export: {ex.Message}", "OK");
+        }
+    }
+
+    // Static helper to display alerts using the current page context
+    private static async Task ShowAlertAsync(string title, string message, string cancelAction)
+    {
+        if (!MainThread.IsMainThread)
+        {
+            await MainThread.InvokeOnMainThreadAsync(() => ShowAlertAsync(title, message, cancelAction));
+            return;
+        }
+
+        Page? currentPage = GetCurrentPage();
+
+        if (currentPage is not null)
+        {
+            await currentPage.DisplayAlert(title, message, cancelAction);
+        }
+        else
+        {
+            Debug.WriteLine($"ShowAlert: Could not find current page to display alert: {title}");
+        }
+    }
+
+    private static Page? GetCurrentPage()
+    {
+        if (Application.Current?.MainPage is Shell shell && shell.CurrentPage is not null)
+        {
+            return shell.CurrentPage;
+        }
+        if (Application.Current?.MainPage is Page mainPage)
+        {
+            return mainPage;
+        }
+        if (Application.Current?.Windows is { Count: > 0 } windows && windows[0].Page is not null)
+        {
+            return windows[0].Page;
+        }
+        Debug.WriteLine("GetCurrentPage: Could not determine the current page.");
+        return null;
+    }
+}
+</file>
+
+<file path="Source\ViewModels\SettingsViewModel.cs">
+using System.Collections.ObjectModel;
+using System.Diagnostics;
+using System.Globalization;
+using System.Text;
 using System.Text.Json;
+using CommunityToolkit.Maui.Storage;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using Tickly.Messages;
 using Tickly.Models;
 using Tickly.Services;
+using Tickly.Utils; // Added for DateUtils
 
 namespace Tickly.ViewModels;
 
 public sealed partial class SettingsViewModel : ObservableObject
 {
+    private readonly TaskPersistenceService _taskPersistenceService; // Added
     private bool _isGregorianSelected;
     private bool _isPersianSelected;
     private readonly string _applicationTasksFilePath;
@@ -10434,10 +10893,12 @@ public sealed partial class SettingsViewModel : ObservableObject
         }
     }
 
-    public SettingsViewModel()
+    public SettingsViewModel(TaskPersistenceService taskPersistenceService) // Injected
     {
+        _taskPersistenceService = taskPersistenceService; // Store injected service
         _applicationTasksFilePath = Path.Combine(FileSystem.AppDataDirectory, "tasks.json");
         Debug.WriteLine($"SettingsViewModel: Tasks file path is set to: {_applicationTasksFilePath}");
+
         LoadSettings();
     }
 
@@ -10696,21 +11157,20 @@ public sealed partial class SettingsViewModel : ObservableObject
                 File.Copy(result.FullPath, _applicationTasksFilePath, true);
                 Debug.WriteLine("ImportTasksAsync: File copy successful. Sending reload message.");
                 WeakReferenceMessenger.Default.Send(new TasksReloadRequestedMessage());
-                await SettingsViewModel.ShowAlertAsync("Import Successful", "Tasks imported successfully. The task list has been updated.", "OK");
+                await ShowAlertAsync("Import Successful", "Tasks imported successfully. The task list has been updated.", "OK");
             }
             catch (Exception copyException)
             {
                 Debug.WriteLine($"ImportTasksAsync: Error copying imported file: {copyException.GetType().Name} - {copyException.Message}");
-                await SettingsViewModel.ShowAlertAsync("Import Failed", $"Could not replace the tasks file: {copyException.Message}", "OK");
+                await ShowAlertAsync("Import Failed", $"Could not replace the tasks file: {copyException.Message}", "OK");
             }
         }
         catch (Exception exception)
         {
             Debug.WriteLine($"ImportTasksAsync: General error during import: {exception.GetType().Name} - {exception.Message}\nStackTrace: {exception.StackTrace}");
-            await SettingsViewModel.ShowAlertAsync("Import Error", $"An unexpected error occurred during import: {exception.Message}", "OK");
+            await ShowAlertAsync("Import Error", $"An unexpected error occurred during import: {exception.Message}", "OK");
         }
     }
-
 
     // Static helper to display alerts using the current page context
     private static async Task ShowAlertAsync(string title, string message, string cancelAction)
@@ -10722,6 +11182,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         }
 
         Page? currentPage = GetCurrentPage();
+
         if (currentPage is not null)
         {
             await currentPage.DisplayAlert(title, message, cancelAction);
@@ -11243,83 +11704,184 @@ namespace Tickly.Views
 }
 </file>
 
-<file path="Source\Views\SettingsPage.xaml">
+<file path="Source\Views\ProgressPage.xaml">
 <?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-             xmlns:vm="clr-namespace:Tickly.ViewModels"
-             x:Class="Tickly.Views.SettingsPage"
-             Title="Settings"
-             BackgroundColor="Black">
-
-    <ContentPage.BindingContext>
-        <vm:SettingsViewModel />
-    </ContentPage.BindingContext>
+             xmlns:viewModels="clr-namespace:Tickly.ViewModels"
+             xmlns:microcharts="clr-namespace:Microcharts.Maui;assembly=Microcharts.Maui"
+             x:Class="Tickly.Views.ProgressPage"
+             Title="Progress Report">
 
     <ScrollView>
-        <VerticalStackLayout Padding="20" Spacing="15">
+        <VerticalStackLayout Spacing="20" Padding="20">
 
-            <Label Text="Calendar Settings"
-                   TextColor="WhiteSmoke"
-                   FontSize="Large"
-                   FontAttributes="Bold"
-                   Margin="0,0,0,10"/>
+            <Label Text="Progress Data" FontSize="Large" FontAttributes="Bold" HorizontalOptions="Center" />
 
-            <Label Text="Choose the calendar system for displaying dates:"
-                   TextColor="LightGray"
-                   FontSize="Small"/>
+            <!-- Section for Exporting Progress -->
+            <Frame Padding="10" CornerRadius="5" BorderColor="LightGray">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="Export Progress Data" FontSize="Medium" FontAttributes="Bold" />
 
-            <RadioButton GroupName="CalendarGroup"
-                         Content="Gregorian Calendar"
-                         TextColor="WhiteSmoke"
-                         IsChecked="{Binding IsGregorianSelected}" />
+                    <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto" ColumnSpacing="10" RowSpacing="5">
+                        <Label Text="Sort Order:" VerticalOptions="Center" Grid.Row="0" Grid.Column="0"/>
+                        <Picker ItemsSource="{Binding ExportSortOrders}"
+                                SelectedItem="{Binding SelectedExportSortOrder}"
+                                Grid.Row="0" Grid.Column="1"/>
 
-            <RadioButton GroupName="CalendarGroup"
-                         Content="Persian (Shamsi) Calendar"
-                         TextColor="WhiteSmoke"
-                         IsChecked="{Binding IsPersianSelected}" />
+                        <Label Text="Calendar Type:" VerticalOptions="Center" Grid.Row="1" Grid.Column="0"/>
+                        <Picker ItemsSource="{Binding ExportCalendarTypes}"
+                                SelectedItem="{Binding SelectedExportCalendarType}"
+                                Grid.Row="1" Grid.Column="1"/>
+                    </Grid>
 
-            <!-- Separator -->
-            <BoxView HeightRequest="1" Color="#333333" Margin="0,15,0,15"/>
+                    <Button Text="Export Progress"
+                            Command="{Binding ExportProgressCommand}"
+                            HorizontalOptions="FillAndExpand" />
+                </VerticalStackLayout>
+            </Frame>
 
-            <!-- Data Management Section -->
-            <Label Text="Data Management"
-                   TextColor="WhiteSmoke"
-                   FontSize="Large"
-                   FontAttributes="Bold"
-                   Margin="0,0,0,10"/>
-
-            <Label Text="Export your current tasks to a JSON file or import tasks from a previously exported file (this will replace current tasks)."
-                    TextColor="LightGray"
-                    FontSize="Small"
-                    LineBreakMode="WordWrap"/>
-
-            <HorizontalStackLayout Spacing="10" Margin="0,10,0,0">
-                <Button Text="Export Tasks"
-                         Command="{Binding ExportTasksCommand}"
-                         BackgroundColor="#005A9C"
-                         TextColor="WhiteSmoke"/>
-
-                <Button Text="Import Tasks"
-                         Command="{Binding ImportTasksCommand}"
-                         BackgroundColor="#008000"
-                         TextColor="WhiteSmoke"/>
-            </HorizontalStackLayout>
+            <!-- Progress Plot -->
+            <Frame Padding="10" CornerRadius="5" BorderColor="LightGray" Margin="0,20,0,0">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="Progress Over Time" FontSize="Medium" FontAttributes="Bold" />
+                    <microcharts:ChartView Chart="{Binding ProgressChart}"
+                                           HeightRequest="300"
+                                           HorizontalOptions="FillAndExpand" />
+                </VerticalStackLayout>
+            </Frame>
 
         </VerticalStackLayout>
     </ScrollView>
-
 </ContentPage>
 </file>
 
-<file path="Source\Views\SettingsPage.xaml.cs">
+<file path="Source\Views\ProgressPage.xaml.cs">
+using Tickly.ViewModels;
+
 namespace Tickly.Views;
 
-public partial class SettingsPage : ContentPage
+public partial class ProgressPage : ContentPage
 {
-    public SettingsPage()
+    public ProgressPage(ProgressViewModel viewModel)
     {
         InitializeComponent();
+        BindingContext = viewModel;
+    }
+}
+</file>
+
+<file path="Source\Views\SettingsPage.cs">
+using CommunityToolkit.Maui.Markup;
+using Microsoft.Maui.Controls;
+using Microsoft.Maui.Graphics;
+using Tickly.ViewModels;
+
+namespace Tickly.Views;
+
+public sealed class SettingsPage : ContentPage
+{
+    // Define font sizes for consistency
+    private const double LargeFontSize = 20; // Example value for Large
+    private const double SmallFontSize = 12; // Example value for Small
+
+    public SettingsPage(SettingsViewModel viewModel) // ViewModel injected
+    {
+        BindingContext = viewModel; // Use injected ViewModel
+
+        Title = "Settings";
+        BackgroundColor = Colors.Black;
+
+        Content = new ScrollView
+        {
+            Content = new VerticalStackLayout
+            {
+                Padding = 20,
+                Spacing = 15,
+                Children =
+                {
+                    new Label
+                    {
+                        Text = "Calendar Settings",
+                        TextColor = Colors.WhiteSmoke,
+                        FontSize = LargeFontSize, // Use numeric value
+                        FontAttributes = FontAttributes.Bold,
+                        Margin = new(0, 0, 0, 10)
+                    },
+
+                    new Label
+                    {
+                        Text = "Choose the calendar system for displaying dates:",
+                        TextColor = Colors.LightGray,
+                        FontSize = SmallFontSize // Use numeric value
+                    },
+
+                    new RadioButton
+                    {
+                        GroupName = "CalendarGroup",
+                        Content = "Gregorian Calendar",
+                        TextColor = Colors.WhiteSmoke
+                    }
+                    .Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsGregorianSelected)),
+
+                    new RadioButton
+                    {
+                        GroupName = "CalendarGroup",
+                        Content = "Persian (Shamsi) Calendar",
+                        TextColor = Colors.WhiteSmoke
+                    }
+                    .Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsPersianSelected)),
+
+                    new BoxView
+                    {
+                        HeightRequest = 1,
+                        BackgroundColor = Color.FromArgb("#333333"),
+                        Margin = new(0, 15, 0, 15)
+                    },
+
+                    new Label
+                    {
+                        Text = "Data Management",
+                        TextColor = Colors.WhiteSmoke,
+                        FontSize = LargeFontSize, // Use numeric value
+                        FontAttributes = FontAttributes.Bold,
+                        Margin = new(0, 0, 0, 10)
+                    },
+
+                    new Label
+                    {
+                        Text = "Export your current tasks to a JSON file or import tasks from a previously exported file (this will replace current tasks).",
+                        TextColor = Colors.LightGray,
+                        FontSize = SmallFontSize, // Use numeric value
+                        LineBreakMode = LineBreakMode.WordWrap
+                    },
+
+                    new HorizontalStackLayout
+                    {
+                        Spacing = 10,
+                        Margin = new(0, 10, 0, 0),
+                        Children =
+                        {
+                            new Button
+                            {
+                                Text = "Export Tasks",
+                                BackgroundColor = Color.FromArgb("#005A9C"),
+                                TextColor = Colors.WhiteSmoke
+                            }
+                            .BindCommand(nameof(SettingsViewModel.ExportTasksCommand)),
+
+                            new Button
+                            {
+                                Text = "Import Tasks",
+                                BackgroundColor = Color.FromArgb("#008000"),
+                                TextColor = Colors.WhiteSmoke
+                            }
+                            .BindCommand(nameof(SettingsViewModel.ImportTasksCommand))
+                        }
+                    }
+                }
+            }
+        };
     }
 }
 </file>

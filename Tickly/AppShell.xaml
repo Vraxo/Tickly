@@ -32,6 +32,13 @@
             Route="MainPage" />
     </FlyoutItem>
 
+    <FlyoutItem Title="Progress" Icon="icon_progress.png"> <!-- TODO: Replace with actual progress icon -->
+        <ShellContent
+            Title="Progress"
+            ContentTemplate="{DataTemplate views:ProgressPage}"
+            Route="ProgressPage" />
+    </FlyoutItem>
+
     <FlyoutItem Title="Settings" Icon="icon_settings.png">
         <ShellContent
             Title="Settings"

@@ -10,10 +10,6 @@
          BackgroundColor="Black"
          Title="Tickly Tasks">
 
-    <ContentPage.BindingContext>
-        <vm:MainViewModel />
-    </ContentPage.BindingContext>
-
     <Shell.TitleView>
         <Grid ColumnDefinitions="*" VerticalOptions="FillAndExpand" Margin="0,0,10,0">
             <Label Grid.Column="0"

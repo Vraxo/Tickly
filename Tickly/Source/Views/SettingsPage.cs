@@ -104,77 +104,7 @@ public sealed class SettingsPage : ContentPage
                             }
                             .BindCommand(nameof(SettingsViewModel.ImportTasksCommand))
                         }
-                    },
-
-                    // --- New Section for Exporting Daily Progress ---
-                    new BoxView
-                    {
-                        HeightRequest = 1,
-                        BackgroundColor = Color.FromArgb("#333333"),
-                        Margin = new(0, 15, 0, 15)
-                    },
-
-                    new Label
-                    {
-                        Text = "Export Daily Progress",
-                        TextColor = Colors.WhiteSmoke,
-                        FontSize = LargeFontSize,
-                        FontAttributes = FontAttributes.Bold,
-                        Margin = new(0, 0, 0, 10)
-                    },
-
-                    new Label
-                    {
-                        Text = "Export your daily task completion percentages to a .txt file.",
-                        TextColor = Colors.LightGray,
-                        FontSize = SmallFontSize,
-                        LineBreakMode = LineBreakMode.WordWrap,
-                        Margin = new(0,0,0,10)
-                    },
-
-                    new Label
-                    {
-                        Text = "Sort Order:",
-                        TextColor = Colors.WhiteSmoke,
-                        FontSize = SmallFontSize,
-                        Margin = new(0,5,0,0)
-                    },
-                    new Picker
-                    {
-                        Title = "Select Sort Order",
-                        TextColor = Colors.WhiteSmoke,
-                        TitleColor = Colors.LightGray,
-                        BackgroundColor = Color.FromArgb("#1e1e1e")
                     }
-                    .Bind(Picker.ItemsSourceProperty, nameof(SettingsViewModel.ExportSortOrders))
-                    .Bind(Picker.SelectedItemProperty, nameof(SettingsViewModel.SelectedExportSortOrder)),
-
-                    new Label
-                    {
-                        Text = "Calendar For Dates:",
-                        TextColor = Colors.WhiteSmoke,
-                        FontSize = SmallFontSize,
-                        Margin = new(0,10,0,0)
-                    },
-                    new Picker
-                    {
-                        Title = "Select Calendar Type",
-                        TextColor = Colors.WhiteSmoke,
-                        TitleColor = Colors.LightGray,
-                        BackgroundColor = Color.FromArgb("#1e1e1e")
-                    }
-                    .Bind(Picker.ItemsSourceProperty, nameof(SettingsViewModel.ExportCalendarTypes))
-                    .Bind(Picker.SelectedItemProperty, nameof(SettingsViewModel.SelectedExportCalendarType)),
-                    
-                    new Button
-                    {
-                        Text = "Export Daily Progress",
-                        BackgroundColor = Color.FromArgb("#3B71CA"), // A different blue
-                        TextColor = Colors.WhiteSmoke,
-                        Margin = new(0, 15, 0, 0)
-                    }
-                    .BindCommand(nameof(SettingsViewModel.ExportProgressCommand))
-                    // --- End New Section ---
                 }
             }
         };
