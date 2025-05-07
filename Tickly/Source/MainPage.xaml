@@ -10,9 +10,10 @@
          BackgroundColor="Black"
          Title="Tickly Tasks">
 
-    <ContentPage.BindingContext>
-        <vm:MainViewModel />
-    </ContentPage.BindingContext>
+    <!-- REMOVED: Direct ViewModel instantiation -->
+    <!-- <ContentPage.BindingContext> -->
+    <!--     <vm:MainViewModel /> -->
+    <!-- </ContentPage.BindingContext> -->
 
     <Shell.TitleView>
         <Grid ColumnDefinitions="*" VerticalOptions="FillAndExpand" Margin="0,0,10,0">
@@ -33,7 +34,6 @@
             <converters:TaskTimeToStringConverter x:Key="TaskTimeConverter" />
             <converters:InverseBooleanConverter x:Key="InverseBooleanConverter" />
             <converters:FutureRepeatingTaskIsEnabledConverter x:Key="FutureRepeatingTaskIsEnabledConverter" />
-            <!-- *** ADD THE NEW CONVERTER *** -->
             <converters:ResetDailyTaskIsEnabledConverter x:Key="ResetDailyTaskIsEnabledConverter" />
 
             <Style TargetType="Frame" x:Key="PositionIndicatorFrameStyle">
@@ -83,7 +83,6 @@
                 <Setter Property="SemanticProperties.Hint" Value="Add a new task"/>
             </Style>
 
-            <!-- *** ADD Style for the Reset Button *** -->
             <Style TargetType="Button" x:Key="ResetDailyButtonStyle">
                 <Setter Property="FontFamily" Value="FluentUI"/>
                 <Setter Property="Text" Value="{x:Static fonts:FluentUI.arrow_counterclockwise_20_regular}"/>

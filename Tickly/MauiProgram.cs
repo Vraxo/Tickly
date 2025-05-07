@@ -1,7 +1,8 @@
 ﻿using Microsoft.Extensions.Logging;
 using Tickly.ViewModels; // Add using for ViewModels
 using Tickly.Views;     // Add using for Views
-using CommunityToolkit.Mvvm.Messaging; // If not already present
+using CommunityToolkit.Mvvm.Messaging;
+using Tickly.Services; // If not already present
 
 namespace Tickly;
 
