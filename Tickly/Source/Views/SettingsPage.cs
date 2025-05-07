@@ -7,13 +7,12 @@ namespace Tickly.Views;
 
 public sealed class SettingsPage : ContentPage
 {
-    // Define font sizes for consistency
-    private const double LargeFontSize = 20; // Example value for Large
-    private const double SmallFontSize = 12; // Example value for Small
+    private const double LargeFontSize = 20;
+    private const double SmallFontSize = 12;
 
-    public SettingsPage(SettingsViewModel viewModel) // ViewModel injected
+    public SettingsPage(SettingsViewModel viewModel)
     {
-        BindingContext = viewModel; // Use injected ViewModel
+        BindingContext = viewModel;
 
         Title = "Settings";
         BackgroundColor = Colors.Black;
@@ -30,7 +29,7 @@ public sealed class SettingsPage : ContentPage
                     {
                         Text = "Calendar Settings",
                         TextColor = Colors.WhiteSmoke,
-                        FontSize = LargeFontSize, // Use numeric value
+                        FontSize = LargeFontSize,
                         FontAttributes = FontAttributes.Bold,
                         Margin = new(0, 0, 0, 10)
                     },
@@ -39,7 +38,7 @@ public sealed class SettingsPage : ContentPage
                     {
                         Text = "Choose the calendar system for displaying dates:",
                         TextColor = Colors.LightGray,
-                        FontSize = SmallFontSize // Use numeric value
+                        FontSize = SmallFontSize
                     },
 
                     new RadioButton
@@ -69,7 +68,7 @@ public sealed class SettingsPage : ContentPage
                     {
                         Text = "Data Management",
                         TextColor = Colors.WhiteSmoke,
-                        FontSize = LargeFontSize, // Use numeric value
+                        FontSize = LargeFontSize,
                         FontAttributes = FontAttributes.Bold,
                         Margin = new(0, 0, 0, 10)
                     },
@@ -78,7 +77,7 @@ public sealed class SettingsPage : ContentPage
                     {
                         Text = "Export your current tasks to a JSON file or import tasks from a previously exported file (this will replace current tasks).",
                         TextColor = Colors.LightGray,
-                        FontSize = SmallFontSize, // Use numeric value
+                        FontSize = SmallFontSize,
                         LineBreakMode = LineBreakMode.WordWrap
                     },
 
@@ -104,77 +103,7 @@ public sealed class SettingsPage : ContentPage
                             }
                             .BindCommand(nameof(SettingsViewModel.ImportTasksCommand))
                         }
-                    },
-
-                    // --- New Section for Exporting Daily Progress ---
-                    new BoxView
-                    {
-                        HeightRequest = 1,
-                        BackgroundColor = Color.FromArgb("#333333"),
-                        Margin = new(0, 15, 0, 15)
-                    },
-
-                    new Label
-                    {
-                        Text = "Export Daily Progress",
-                        TextColor = Colors.WhiteSmoke,
-                        FontSize = LargeFontSize,
-                        FontAttributes = FontAttributes.Bold,
-                        Margin = new(0, 0, 0, 10)
-                    },
-
-                    new Label
-                    {
-                        Text = "Export your daily task completion percentages to a .txt file.",
-                        TextColor = Colors.LightGray,
-                        FontSize = SmallFontSize,
-                        LineBreakMode = LineBreakMode.WordWrap,
-                        Margin = new(0,0,0,10)
-                    },
-
-                    new Label
-                    {
-                        Text = "Sort Order:",
-                        TextColor = Colors.WhiteSmoke,
-                        FontSize = SmallFontSize,
-                        Margin = new(0,5,0,0)
-                    },
-                    new Picker
-                    {
-                        Title = "Select Sort Order",
-                        TextColor = Colors.WhiteSmoke,
-                        TitleColor = Colors.LightGray,
-                        BackgroundColor = Color.FromArgb("#1e1e1e")
                     }
-                    .Bind(Picker.ItemsSourceProperty, nameof(SettingsViewModel.ExportSortOrders))
-                    .Bind(Picker.SelectedItemProperty, nameof(SettingsViewModel.SelectedExportSortOrder)),
-
-                    new Label
-                    {
-                        Text = "Calendar For Dates:",
-                        TextColor = Colors.WhiteSmoke,
-                        FontSize = SmallFontSize,
-                        Margin = new(0,10,0,0)
-                    },
-                    new Picker
-                    {
-                        Title = "Select Calendar Type",
-                        TextColor = Colors.WhiteSmoke,
-                        TitleColor = Colors.LightGray,
-                        BackgroundColor = Color.FromArgb("#1e1e1e")
-                    }
-                    .Bind(Picker.ItemsSourceProperty, nameof(SettingsViewModel.ExportCalendarTypes))
-                    .Bind(Picker.SelectedItemProperty, nameof(SettingsViewModel.SelectedExportCalendarType)),
-                    
-                    new Button
-                    {
-                        Text = "Export Daily Progress",
-                        BackgroundColor = Color.FromArgb("#3B71CA"), // A different blue
-                        TextColor = Colors.WhiteSmoke,
-                        Margin = new(0, 15, 0, 0)
-                    }
-                    .BindCommand(nameof(SettingsViewModel.ExportProgressCommand))
-                    // --- End New Section ---
                 }
             }
         };

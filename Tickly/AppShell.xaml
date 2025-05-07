@@ -32,6 +32,14 @@
             Route="MainPage" />
     </FlyoutItem>
 
+    <FlyoutItem Title="Stats" Icon="icon_stats.png">
+        <!-- Added Stats Page -->
+        <ShellContent
+            Title="Stats"
+            ContentTemplate="{DataTemplate views:StatsPage}"
+            Route="StatsPage" />
+    </FlyoutItem>
+
     <FlyoutItem Title="Settings" Icon="icon_settings.png">
         <ShellContent
             Title="Settings"

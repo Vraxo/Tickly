@@ -3,15 +3,16 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
-// REMOVED: using CommunityToolkit.Maui.Storage; // This was causing issues
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
-using Microsoft.Maui.ApplicationModel.DataTransfer; // Use this for Share
+using Microsoft.Maui.ApplicationModel.DataTransfer;
+using Microsoft.Maui.Controls;
 using Tickly.Messages;
 using Tickly.Models;
 using Tickly.Services;
-using Tickly.Utils; // Added for DateUtils
+using Tickly.Utils;
+using Tickly.Views; // Needed for GetCurrentPage
 
 namespace Tickly.ViewModels;
 
@@ -21,18 +22,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     private bool _isGregorianSelected;
     private bool _isPersianSelected;
     private readonly string _applicationTasksFilePath;
-    private const string TaskExportFilePrefix = "Tickly-Tasks-Export-"; // Differentiated prefix
-    private const string ProgressExportFilePrefix = "Tickly-Progress-Export-"; // Differentiated prefix
-
-    // Properties for Progress Export
-    public ObservableCollection<string> ExportSortOrders { get; }
-    [ObservableProperty]
-    private string _selectedExportSortOrder;
-
-    public ObservableCollection<string> ExportCalendarTypes { get; }
-    [ObservableProperty]
-    private string _selectedExportCalendarType;
-
+    private const string TaskExportFilePrefix = "Tickly-Tasks-Export-";
 
     public bool IsGregorianSelected
     {
@@ -63,21 +53,6 @@ public sealed partial class SettingsViewModel : ObservableObject
         _taskPersistenceService = taskPersistenceService;
         _applicationTasksFilePath = Path.Combine(FileSystem.AppDataDirectory, "tasks.json");
         Debug.WriteLine($"SettingsViewModel: Tasks file path is set to: {_applicationTasksFilePath}");
-
-        // Initialize Progress Export Options
-        ExportSortOrders = new ObservableCollection<string>
-        {
-            "Ascending by Date",
-            "Descending by Date"
-        };
-        _selectedExportSortOrder = ExportSortOrders.FirstOrDefault() ?? "Ascending by Date";
-
-        ExportCalendarTypes = new ObservableCollection<string>
-        {
-            "Gregorian",
-            "Persian"
-        };
-        _selectedExportCalendarType = ExportCalendarTypes.FirstOrDefault() ?? "Gregorian";
 
         LoadSettings();
     }
@@ -143,13 +118,10 @@ public sealed partial class SettingsViewModel : ObservableObject
             }
             Debug.WriteLine("ExportTasksAsync: Source tasks file found.");
 
-            // Step 1: Clean up OLD task export files
             CleanUpOldExportFiles(TaskExportFilePrefix, ".json");
 
-            // Log source file size
             LogFileInfo(_applicationTasksFilePath, "Source Task");
 
-            // Step 2: Create the NEW temporary task file
             string exportFilename = $"{TaskExportFilePrefix}{DateTime.Now:yyyy-MM-dd_HH-mm-ss}.json";
             temporaryExportPath = Path.Combine(FileSystem.CacheDirectory, exportFilename);
             Debug.WriteLine($"ExportTasksAsync: Temporary task export path set to: {temporaryExportPath}");
@@ -160,7 +132,6 @@ public sealed partial class SettingsViewModel : ObservableObject
             File.Copy(_applicationTasksFilePath, temporaryExportPath, true);
             Debug.WriteLine("ExportTasksAsync: Task file copy successful.");
 
-            // Verify temporary file
             if (!File.Exists(temporaryExportPath))
             {
                 Debug.WriteLine($"ExportTasksAsync: ERROR - Temporary task file does not exist after copy attempt: {temporaryExportPath}");
@@ -169,11 +140,10 @@ public sealed partial class SettingsViewModel : ObservableObject
             }
             LogFileInfo(temporaryExportPath, "Temporary Task");
 
-            // Step 3: Share the NEW task file
             ShareFileRequest request = new()
             {
                 Title = "Export Tickly Tasks",
-                File = new ShareFile(temporaryExportPath, "application/json") // Ensure correct MimeType
+                File = new ShareFile(temporaryExportPath, "application/json")
             };
             Debug.WriteLine("ExportTasksAsync: ShareFileRequest created for tasks. Title: " + request.Title + ", File Path: " + request.File.FullPath);
 
@@ -181,7 +151,6 @@ public sealed partial class SettingsViewModel : ObservableObject
             await Share.RequestAsync(request);
             Debug.WriteLine("ExportTasksAsync: Share.RequestAsync for tasks completed.");
 
-            // Step 4: Task export file remains in cache for next cleanup.
         }
         catch (Exception exception)
         {
@@ -190,115 +159,12 @@ public sealed partial class SettingsViewModel : ObservableObject
         }
     }
 
-    [RelayCommand]
-    private async Task ExportProgressAsync()
-    {
-        Debug.WriteLine("ExportProgressAsync: Starting progress export process.");
-        string temporaryExportPath = string.Empty;
-
-        try
-        {
-            List<DailyProgress> dailyProgressList = await _taskPersistenceService.LoadDailyProgressAsync();
-
-            if (dailyProgressList == null || !dailyProgressList.Any())
-            {
-                Debug.WriteLine("ExportProgressAsync: No progress data to export.");
-                await ShowAlertAsync("Export Progress", "No daily progress data found to export.", "OK");
-                return;
-            }
-            Debug.WriteLine($"ExportProgressAsync: Loaded {dailyProgressList.Count} progress entries.");
-
-            // Sort
-            IEnumerable<DailyProgress> sortedProgress;
-            if (SelectedExportSortOrder == "Ascending by Date")
-            {
-                sortedProgress = dailyProgressList.OrderBy(p => p.Date);
-                Debug.WriteLine("ExportProgressAsync: Sorting progress by date ascending.");
-            }
-            else
-            {
-                sortedProgress = dailyProgressList.OrderByDescending(p => p.Date);
-                Debug.WriteLine("ExportProgressAsync: Sorting progress by date descending.");
-            }
-
-            // Format
-            StringBuilder sb = new();
-            Debug.WriteLine($"ExportProgressAsync: Formatting progress using {SelectedExportCalendarType} calendar.");
-            foreach (var progress in sortedProgress)
-            {
-                string dateString;
-                if (SelectedExportCalendarType == "Persian")
-                {
-                    dateString = DateUtils.ToPersianDateString(progress.Date);
-                }
-                else
-                {
-                    dateString = DateUtils.ToGregorianDateString(progress.Date);
-                }
-                string percentageString = progress.PercentageCompleted.ToString("P0", CultureInfo.InvariantCulture);
-                sb.AppendLine($"{dateString}-{percentageString}");
-            }
-
-            string fileContent = sb.ToString();
-            if (string.IsNullOrWhiteSpace(fileContent))
-            {
-                Debug.WriteLine("ExportProgressAsync: Formatted content is empty.");
-                await ShowAlertAsync("Export Progress", "Failed to generate export content.", "OK");
-                return;
-            }
-
-            // Step 1: Clean up OLD progress export files
-            CleanUpOldExportFiles(ProgressExportFilePrefix, ".txt");
-
-            // Step 2: Create the NEW temporary progress file
-            string exportFilename = $"{ProgressExportFilePrefix}{DateTime.Now:yyyy-MM-dd_HH-mm-ss}.txt";
-            temporaryExportPath = Path.Combine(FileSystem.CacheDirectory, exportFilename);
-            Debug.WriteLine($"ExportProgressAsync: Temporary progress export path set to: {temporaryExportPath}");
-
-            EnsureDirectoryExists(temporaryExportPath);
-
-            Debug.WriteLine($"ExportProgressAsync: Writing progress content ({fileContent.Length} chars) to '{temporaryExportPath}'");
-            await File.WriteAllTextAsync(temporaryExportPath, fileContent);
-            Debug.WriteLine("ExportProgressAsync: Progress file write successful.");
-
-            // Verify temporary file
-            if (!File.Exists(temporaryExportPath))
-            {
-                Debug.WriteLine($"ExportProgressAsync: ERROR - Temporary progress file does not exist after write attempt: {temporaryExportPath}");
-                await SettingsViewModel.ShowAlertAsync("Export Error", "Failed to create temporary export file.", "OK");
-                return;
-            }
-            LogFileInfo(temporaryExportPath, "Temporary Progress");
-
-            // Step 3: Share the NEW progress file
-            ShareFileRequest request = new()
-            {
-                Title = "Export Tickly Progress",
-                File = new ShareFile(temporaryExportPath, "text/plain") // Correct MimeType for text
-            };
-            Debug.WriteLine("ExportProgressAsync: ShareFileRequest created for progress. Title: " + request.Title + ", File Path: " + request.File.FullPath);
-
-            Debug.WriteLine("ExportProgressAsync: Calling Share.RequestAsync for progress...");
-            await Share.RequestAsync(request);
-            Debug.WriteLine("ExportProgressAsync: Share.RequestAsync for progress completed.");
-
-            // Step 4: Progress export file remains in cache for next cleanup.
-        }
-        catch (Exception ex)
-        {
-            Debug.WriteLine($"ExportProgressAsync: Exception caught: {ex.GetType().Name} - {ex.Message}\nStackTrace: {ex.StackTrace}");
-            await ShowAlertAsync("Export Error", $"An unexpected error occurred during progress export: {ex.Message}", "OK");
-        }
-    }
-
-
-    // *** UPDATED METHOD for cleanup ***
     private void CleanUpOldExportFiles(string prefix, string extension)
     {
         try
         {
             string cacheDir = FileSystem.CacheDirectory;
-            string searchPattern = $"{prefix}*{extension}"; // Use prefix and extension
+            string searchPattern = $"{prefix}*{extension}";
             Debug.WriteLine($"CleanUpOldExportFiles: Searching for old files in '{cacheDir}' with pattern '{searchPattern}'");
 
             if (!Directory.Exists(cacheDir))
@@ -373,7 +239,7 @@ public sealed partial class SettingsViewModel : ObservableObject
             FilePickerFileType customFileType = new(
                 new Dictionary<DevicePlatform, IEnumerable<string>>
                 {
-                    [DevicePlatform.iOS] = ["public.json", "public.text"], // Allow JSON or text (some systems might save as .txt)
+                    [DevicePlatform.iOS] = ["public.json", "public.text"],
                     [DevicePlatform.Android] = ["application/json", "text/plain"],
                     [DevicePlatform.WinUI] = [".json", ".txt"],
                     [DevicePlatform.MacCatalyst] = ["json", "txt"]
@@ -409,7 +275,7 @@ public sealed partial class SettingsViewModel : ObservableObject
                 {
                     throw new JsonException("Imported file content is empty or whitespace.");
                 }
-                // Attempt to deserialize to validate structure
+
                 var validationList = JsonSerializer.Deserialize<List<TaskItem>>(fileContent);
                 if (validationList == null)
                 {
@@ -445,7 +311,6 @@ public sealed partial class SettingsViewModel : ObservableObject
             try
             {
                 Debug.WriteLine($"ImportTasksAsync: Writing imported content to '{_applicationTasksFilePath}'");
-                // Write the validated content to the application's task file
                 await File.WriteAllTextAsync(_applicationTasksFilePath, fileContent);
                 Debug.WriteLine("ImportTasksAsync: File write successful. Sending reload message.");
                 WeakReferenceMessenger.Default.Send(new TasksReloadRequestedMessage());
@@ -464,8 +329,6 @@ public sealed partial class SettingsViewModel : ObservableObject
         }
     }
 
-
-    // Static helper to display alerts using the current page context
     private static async Task ShowAlertAsync(string title, string message, string cancelAction)
     {
         if (!MainThread.IsMainThread)
@@ -486,7 +349,6 @@ public sealed partial class SettingsViewModel : ObservableObject
         }
     }
 
-    // Static helper to display confirmations using the current page context
     private static async Task<bool> ShowConfirmationAsync(string title, string message, string acceptAction, string cancelAction)
     {
         if (!MainThread.IsMainThread)
@@ -502,10 +364,9 @@ public sealed partial class SettingsViewModel : ObservableObject
         else
         {
             Debug.WriteLine($"ShowConfirmation: Could not find current page to display confirmation: {title}");
-            return false; // Assume cancellation if page not found
+            return false;
         }
     }
-
 
     private static Page? GetCurrentPage()
     {
@@ -515,23 +376,18 @@ public sealed partial class SettingsViewModel : ObservableObject
         }
         if (Application.Current?.MainPage is Page mainPage)
         {
-            // Check if it's a NavigationPage
             if (mainPage is NavigationPage navPage && navPage.CurrentPage != null)
             {
                 return navPage.CurrentPage;
             }
-            // Check if it's a TabbedPage (though less likely as root with Shell)
             if (mainPage is TabbedPage tabbedPage && tabbedPage.CurrentPage != null)
             {
                 return tabbedPage.CurrentPage;
             }
-            // Otherwise, return the main page itself
             return mainPage;
         }
-        // Fallback for multi-window scenarios or other setups
         if (Application.Current?.Windows is { Count: > 0 } windows && windows[0].Page is not null)
         {
-            // Similar checks for NavigationPage/TabbedPage might be needed here too if the root is complex
             if (windows[0].Page is NavigationPage navPage && navPage.CurrentPage != null)
             {
                 return navPage.CurrentPage;
