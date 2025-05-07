@@ -1,6 +1,4 @@
 ﻿using CommunityToolkit.Maui.Markup;
-
-using CommunityToolkit.Maui.Markup;
 using Microsoft.Maui.Controls;
 using Microsoft.Maui.Graphics;
 using Tickly.ViewModels;
@@ -9,15 +7,16 @@ namespace Tickly.Views;
 
 public sealed class SettingsPage : ContentPage
 {
-    private const double LargeFontSize = 20;
-    private const double SmallFontSize = 12;
+    // Define font sizes for consistency
+    private const double LargeFontSize = 20; // Example value for Large
+    private const double SmallFontSize = 12; // Example value for Small
 
-    public SettingsPage(SettingsViewModel viewModel)
+    public SettingsPage(SettingsViewModel viewModel) // ViewModel injected
     {
-        BindingContext = viewModel;
+        BindingContext = viewModel; // Use injected ViewModel
 
         Title = "Settings";
-        // REMOVED: BackgroundColor = Colors.Black; // Now handled by style
+        BackgroundColor = Colors.Black;
 
         Content = new ScrollView
         {
@@ -27,12 +26,11 @@ public sealed class SettingsPage : ContentPage
                 Spacing = 15,
                 Children =
                 {
-                    // --- Calendar Settings ---
                     new Label
                     {
                         Text = "Calendar Settings",
                         TextColor = Colors.WhiteSmoke,
-                        FontSize = LargeFontSize,
+                        FontSize = LargeFontSize, // Use numeric value
                         FontAttributes = FontAttributes.Bold,
                         Margin = new(0, 0, 0, 10)
                     },
@@ -41,7 +39,7 @@ public sealed class SettingsPage : ContentPage
                     {
                         Text = "Choose the calendar system for displaying dates:",
                         TextColor = Colors.LightGray,
-                        FontSize = SmallFontSize
+                        FontSize = SmallFontSize // Use numeric value
                     },
 
                     new RadioButton
@@ -60,47 +58,18 @@ public sealed class SettingsPage : ContentPage
                     }
                     .Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsPersianSelected)),
 
-                    new BoxView { HeightRequest = 1, BackgroundColor = Color.FromArgb("#333333"), Margin = new(0, 15) },
-
-                    // --- Dark Mode Background Setting ---
-                    new Label
+                    new BoxView
                     {
-                        Text = "Dark Mode Background",
-                        TextColor = Colors.WhiteSmoke,
-                        FontSize = LargeFontSize,
-                        FontAttributes = FontAttributes.Bold,
-                        Margin = new(0, 0, 0, 10)
+                        HeightRequest = 1,
+                        BackgroundColor = Color.FromArgb("#333333"),
+                        Margin = new(0, 15, 0, 15)
                     },
-                    new Label
-                    {
-                        Text = "Choose the background color for dark mode:",
-                        TextColor = Colors.LightGray,
-                        FontSize = SmallFontSize
-                    },
-                     new RadioButton
-                    {
-                        GroupName = "DarkModeBgGroup",
-                        Content = "Off-Black (Default Dark)",
-                        TextColor = Colors.WhiteSmoke
-                    }
-                    .Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsDarkModeOffBlackSelected)),
 
-                    new RadioButton
-                    {
-                        GroupName = "DarkModeBgGroup",
-                        Content = "Pure Black",
-                        TextColor = Colors.WhiteSmoke
-                    }
-                    .Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsDarkModePureBlackSelected)),
-
-                    new BoxView { HeightRequest = 1, BackgroundColor = Color.FromArgb("#333333"), Margin = new(0, 15) },
-
-                    // --- Data Management ---
                     new Label
                     {
                         Text = "Data Management",
                         TextColor = Colors.WhiteSmoke,
-                        FontSize = LargeFontSize,
+                        FontSize = LargeFontSize, // Use numeric value
                         FontAttributes = FontAttributes.Bold,
                         Margin = new(0, 0, 0, 10)
                     },
@@ -109,7 +78,7 @@ public sealed class SettingsPage : ContentPage
                     {
                         Text = "Export your current tasks to a JSON file or import tasks from a previously exported file (this will replace current tasks).",
                         TextColor = Colors.LightGray,
-                        FontSize = SmallFontSize,
+                        FontSize = SmallFontSize, // Use numeric value
                         LineBreakMode = LineBreakMode.WordWrap
                     },
 
@@ -135,7 +104,77 @@ public sealed class SettingsPage : ContentPage
                             }
                             .BindCommand(nameof(SettingsViewModel.ImportTasksCommand))
                         }
+                    },
+
+                    // --- New Section for Exporting Daily Progress ---
+                    new BoxView
+                    {
+                        HeightRequest = 1,
+                        BackgroundColor = Color.FromArgb("#333333"),
+                        Margin = new(0, 15, 0, 15)
+                    },
+
+                    new Label
+                    {
+                        Text = "Export Daily Progress",
+                        TextColor = Colors.WhiteSmoke,
+                        FontSize = LargeFontSize,
+                        FontAttributes = FontAttributes.Bold,
+                        Margin = new(0, 0, 0, 10)
+                    },
+
+                    new Label
+                    {
+                        Text = "Export your daily task completion percentages to a .txt file.",
+                        TextColor = Colors.LightGray,
+                        FontSize = SmallFontSize,
+                        LineBreakMode = LineBreakMode.WordWrap,
+                        Margin = new(0,0,0,10)
+                    },
+
+                    new Label
+                    {
+                        Text = "Sort Order:",
+                        TextColor = Colors.WhiteSmoke,
+                        FontSize = SmallFontSize,
+                        Margin = new(0,5,0,0)
+                    },
+                    new Picker
+                    {
+                        Title = "Select Sort Order",
+                        TextColor = Colors.WhiteSmoke,
+                        TitleColor = Colors.LightGray,
+                        BackgroundColor = Color.FromArgb("#1e1e1e")
                     }
+                    .Bind(Picker.ItemsSourceProperty, nameof(SettingsViewModel.ExportSortOrders))
+                    .Bind(Picker.SelectedItemProperty, nameof(SettingsViewModel.SelectedExportSortOrder)),
+
+                    new Label
+                    {
+                        Text = "Calendar For Dates:",
+                        TextColor = Colors.WhiteSmoke,
+                        FontSize = SmallFontSize,
+                        Margin = new(0,10,0,0)
+                    },
+                    new Picker
+                    {
+                        Title = "Select Calendar Type",
+                        TextColor = Colors.WhiteSmoke,
+                        TitleColor = Colors.LightGray,
+                        BackgroundColor = Color.FromArgb("#1e1e1e")
+                    }
+                    .Bind(Picker.ItemsSourceProperty, nameof(SettingsViewModel.ExportCalendarTypes))
+                    .Bind(Picker.SelectedItemProperty, nameof(SettingsViewModel.SelectedExportCalendarType)),
+                    
+                    new Button
+                    {
+                        Text = "Export Daily Progress",
+                        BackgroundColor = Color.FromArgb("#3B71CA"), // A different blue
+                        TextColor = Colors.WhiteSmoke,
+                        Margin = new(0, 15, 0, 0)
+                    }
+                    .BindCommand(nameof(SettingsViewModel.ExportProgressCommand))
+                    // --- End New Section ---
                 }
             }
         };

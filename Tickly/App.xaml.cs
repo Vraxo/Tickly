@@ -1,27 +1,14 @@
-﻿using Microsoft.Maui.LifecycleEvents;
+﻿// App.xaml.cs
+using Microsoft.Maui.LifecycleEvents; // Might be needed depending on exact MAUI version/setup
 using Tickly.ViewModels;
-using Tickly.Services;
+using Tickly.Services; // Added for TaskPersistenceService if directly used, or for general service access
 using System.Diagnostics;
-using Microsoft.Maui.Controls;
-using Microsoft.Maui;
-using System;
-using System.IO; // Required for Path
-using System.Threading.Tasks; // Required for Task
 
-#if WINDOWS
-using Microsoft.UI;
-using Microsoft.UI.Windowing;
-using Windows.Graphics;
-using WinRT.Interop;
-#elif MACCATALYST
-using Foundation;
-using AppKit;
-#endif
-
-namespace Tickly;
+namespace Tickly; // Make sure this namespace matches your project
 
 public partial class App : Application
 {
+    // Define desired size constants
     const int WindowWidth = 450;
     const int WindowHeight = 800;
 
@@ -35,11 +22,10 @@ public partial class App : Application
     protected override async void OnStart()
     {
         base.OnStart();
+        // Optional: Logic to check and save progress for a missed day could go here,
+        // but it's complex as we wouldn't know the percentage.
+        // The current MainViewModel logic aims to keep today's progress up-to-date.
         Debug.WriteLine("App.OnStart: Application started.");
-
-#if DEBUG
-        await OpenDataDirectory();
-#endif
     }
 
     protected override async void OnSleep()
@@ -69,115 +55,78 @@ public partial class App : Application
     {
         base.OnResume();
         Debug.WriteLine("App.OnResume: Application is resuming.");
+        // Optional: Could trigger a progress check/update here if the day might have changed
+        // while the app was asleep for an extended period.
+        // However, MainViewModel's continuous updates should handle this if it's running.
     }
-
-    private async Task OpenDataDirectory()
-    {
-        string dataPath = FileSystem.AppDataDirectory;
-        Debug.WriteLine($"[DEBUG] Application Data Directory: {dataPath}");
-
-        if (!Directory.Exists(dataPath))
-        {
-            Debug.WriteLine($"[DEBUG] Data directory does not exist. Creating: {dataPath}");
-            try
-            {
-                Directory.CreateDirectory(dataPath);
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"[DEBUG] Failed to create data directory: {ex.Message}");
-                return; // Cannot open if creation failed
-            }
-        }
-
-        try
-        {
-#if WINDOWS
-            Debug.WriteLine("[DEBUG] Attempting to open directory on Windows...");
-            Process.Start("explorer.exe", $"\"{dataPath}\"");
-            await Task.CompletedTask; // Keep async signature
-#elif MACCATALYST
-            Debug.WriteLine("[DEBUG] Attempting to open directory on MacCatalyst...");
-            Process.Start("open", $"\"{dataPath}\"");
-             await Task.CompletedTask; // Keep async signature
-#elif ANDROID || IOS
-            Debug.WriteLine("[DEBUG] Opening data directory automatically is not supported on this mobile platform.");
-            await Task.CompletedTask; // Keep async signature
-#else
-            Debug.WriteLine("[DEBUG] Platform not configured for opening data directory automatically.");
-             await Task.CompletedTask; // Keep async signature
-#endif
-        }
-        catch (Exception ex)
-        {
-            Debug.WriteLine($"[DEBUG] Failed to open data directory: {ex.Message}");
-            // Optionally show an alert to the user in debug mode if it fails
-        }
-    }
-
 
     protected override Window CreateWindow(IActivationState activationState)
     {
         Window window = base.CreateWindow(activationState);
 
+        // --- WINDOWS SPECIFIC RESIZING ---
 #if WINDOWS
         window.Created += (s, e) =>
         {
+            // Ensure sender is a Window
             var mauiWindow = s as Window;
-            if (mauiWindow == null)
-            {
-                return;
-            }
+            if (mauiWindow == null) return;
 
+            // Get the Handler and Platform Window (Microsoft.UI.Xaml.Window)
             var handler = mauiWindow.Handler;
             if (handler?.PlatformView is Microsoft.UI.Xaml.Window nativeWindow)
             {
                 try
                 {
-                    var hwnd = WindowNative.GetWindowHandle(nativeWindow);
-                    if (hwnd == IntPtr.Zero)
-                    {
-                        return;
-                    }
+                    // Get the HWND (Window Handle) for the WinUI window
+                    var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(nativeWindow);
+                    if (hwnd == IntPtr.Zero) return;
 
-                    Microsoft.UI.WindowId windowId = Win32Interop.GetWindowIdFromWindow(hwnd);
-                    if (windowId.Value == 0)
-                    {
-                        return;
-                    }
+                    // Get the WindowId from the HWND
+                    Microsoft.UI.WindowId windowId = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(hwnd);
+                    if (windowId.Value == 0) return; // Invalid WindowId
 
+                    // Get the AppWindow from the WindowId
                     Microsoft.UI.Windowing.AppWindow appWindow = Microsoft.UI.Windowing.AppWindow.GetFromWindowId(windowId);
                     if (appWindow != null)
                     {
-                        Microsoft.UI.Windowing.DisplayArea displayArea = Microsoft.UI.Windowing.DisplayArea.GetFromWindowId(windowId, Microsoft.UI.Windowing.DisplayAreaFallback.Nearest);
+                         // Get the primary display area
+                         Microsoft.UI.Windowing.DisplayArea displayArea = Microsoft.UI.Windowing.DisplayArea.GetFromWindowId(windowId, Microsoft.UI.Windowing.DisplayAreaFallback.Nearest);
                         if (displayArea != null)
                         {
+                            // Calculate centered position
                             var mainMonitorWorkArea = displayArea.WorkArea;
                             var centeredX = (mainMonitorWorkArea.Width - WindowWidth) / 2;
                             var centeredY = (mainMonitorWorkArea.Height - WindowHeight) / 2;
 
+                            // Move and resize the window
                             appWindow.MoveAndResize(new Windows.Graphics.RectInt32(centeredX, centeredY, WindowWidth, WindowHeight));
                         }
                         else
                         {
+                            // Fallback if display area info not available - just resize
                             appWindow.ResizeClient(new Windows.Graphics.SizeInt32(WindowWidth, WindowHeight));
                         }
-                        appWindow.Title = "Tickly Task Manager";
+
+                        // --- Optional: Prevent User Resizing ---
+                        // If you want to lock the window size:
+                        // if (appWindow.Presenter is Microsoft.UI.Windowing.OverlappedPresenter p)
+                        // {
+                        //     p.IsResizable = false;
+                        //     p.IsMaximizable = false;
+                        // }
+                        // --- End Optional ---
                     }
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"Error resizing or setting title for window: {ex.Message}");
+                    // Log or handle potential exceptions during window manipulation
+                    System.Diagnostics.Debug.WriteLine($"Error resizing window: {ex.Message}");
                 }
             }
         };
-#elif MACCATALYST
-        // You might need to handle window creation/sizing differently for MacCatalyst if needed
-        // Example: Setting a fixed size (may require additional checks for handler availability)
-        // window.Width = WindowWidth;
-        // window.Height = WindowHeight;
-        // Consider centering logic similar to Windows if desired
 #endif
+        // --- END WINDOWS SPECIFIC ---
 
         return window;
     }

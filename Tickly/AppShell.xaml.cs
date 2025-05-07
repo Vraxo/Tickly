@@ -1,4 +1,5 @@
-﻿using Tickly.Views;
+﻿// AppShell.xaml.cs
+using Tickly.Views; // Add this using
 
 namespace Tickly;
 
@@ -8,7 +9,7 @@ public partial class AppShell : Shell
     {
         InitializeComponent();
 
+        // Register the route for the modal popup page
         Routing.RegisterRoute(nameof(AddTaskPopupPage), typeof(AddTaskPopupPage));
-        Routing.RegisterRoute(nameof(StatisticsPage), typeof(StatisticsPage));
     }
 }

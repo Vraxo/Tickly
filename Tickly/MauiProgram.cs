@@ -1,9 +1,8 @@
 ﻿using Microsoft.Extensions.Logging;
-using Tickly.ViewModels;
-using Tickly.Views;
+using Tickly.ViewModels; // Add using for ViewModels
+using Tickly.Views;     // Add using for Views
 using CommunityToolkit.Mvvm.Messaging;
-using Tickly.Services;
-using Tickly.Views.Plotting;
+using Tickly.Services; // If not already present
 
 namespace Tickly;
 
@@ -24,20 +23,23 @@ public static class MauiProgram
         builder.Logging.AddDebug();
 #endif
 
+        // Register Services
         builder.Services.AddSingleton<TaskPersistenceService>();
-        builder.Services.AddSingleton<RepeatingTaskService>();
-        builder.Services.AddSingleton<TaskVisualStateService>();
+        builder.Services.AddSingleton<RepeatingTaskService>();    // Added
+        builder.Services.AddSingleton<TaskVisualStateService>(); // Added
 
+        // Register ViewModels (Singleton for MainViewModel, Transient for Popup is fine)
         builder.Services.AddSingleton<MainViewModel>();
-        builder.Services.AddSingleton<SettingsViewModel>();
-        builder.Services.AddSingleton<StatisticsViewModel>();
+        builder.Services.AddSingleton<SettingsViewModel>(); // Settings can also be singleton
+        // No need to register AddTaskPopupPageViewModel if it's created within AddTaskPopupPage code-behind
 
-        builder.Services.AddSingleton<MainPage>();
-        builder.Services.AddTransient<AddTaskPopupPage>();
-        builder.Services.AddSingleton<SettingsPage>();
-        builder.Services.AddSingleton<StatisticsPage>();
+        // Register Pages for Navigation
+        builder.Services.AddSingleton<MainPage>(); // MainPage is usually Singleton
+        builder.Services.AddTransient<AddTaskPopupPage>(); // Popup page should be Transient
+        builder.Services.AddSingleton<SettingsPage>();    // Register SettingsPage
 
-        builder.Services.AddTransient<BarChartDrawable>();
+        // Register Messenger (if not already implicitly available via CommunityToolkit)
+        // builder.Services.AddSingleton<IMessenger>(WeakReferenceMessenger.Default); // Usually not needed explicitly
 
         return builder.Build();
     }

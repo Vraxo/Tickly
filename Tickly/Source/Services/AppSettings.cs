@@ -1,19 +1,19 @@
 ﻿using System.Diagnostics;
-
-using System.Diagnostics;
 using Tickly.Models;
 
 namespace Tickly.Services;
 
 public static class AppSettings
 {
-    // Keys for storing the settings
+    // Key for storing the setting
     public const string CalendarSystemKey = "CalendarSystemPreference";
-    public const string DarkModeBackgroundKey = "DarkModeBackgroundPreference"; // New Key
+    // REMOVED: SortOrderKey
+    // public const string SortOrderKey = "SortOrderPreference";
 
-    // Backing fields - Now initialized by static constructor
+    // Backing field - Now initialized by static constructor
     private static CalendarSystemType _selectedCalendarSystem;
-    private static DarkModeBackgroundType _selectedDarkModeBackground; // New Field
+    // REMOVED: _selectedSortOrder
+    // private static SortOrderType _selectedSortOrder;
 
     // --- Static Constructor ---
     static AppSettings()
@@ -23,11 +23,10 @@ public static class AppSettings
         _selectedCalendarSystem = (CalendarSystemType)storedCalendarValue;
         Debug.WriteLine($"AppSettings (Static Constructor): Initialized CalendarSystem to {_selectedCalendarSystem} from Preferences.");
 
-        // Load Dark Mode Background from Preferences, default to OffBlack (0) if not found
-        int storedDarkModeBgValue = Preferences.Get(DarkModeBackgroundKey, (int)DarkModeBackgroundType.OffBlack);
-        _selectedDarkModeBackground = (DarkModeBackgroundType)storedDarkModeBgValue;
-        Debug.WriteLine($"AppSettings (Static Constructor): Initialized DarkModeBackground to {_selectedDarkModeBackground} from Preferences.");
-
+        // REMOVED: Sort Order loading
+        // int storedSortValue = Preferences.Get(SortOrderKey, (int)SortOrderType.PriorityHighFirst);
+        // _selectedSortOrder = (SortOrderType)storedSortValue;
+        // Debug.WriteLine($"AppSettings (Static Constructor): Initialized SortOrder to {_selectedSortOrder} from Preferences.");
     }
     // --- End Static Constructor ---
 
@@ -40,24 +39,12 @@ public static class AppSettings
             if (_selectedCalendarSystem != value)
             {
                 _selectedCalendarSystem = value;
-                // Saving is handled by ViewModel
                 Debug.WriteLine($"AppSettings: CalendarSystem changed to {value} (will be saved by SettingsViewModel).");
             }
         }
     }
 
-    // Public property to access the Dark Mode Background setting
-    public static DarkModeBackgroundType SelectedDarkModeBackground
-    {
-        get => _selectedDarkModeBackground;
-        set
-        {
-            if (_selectedDarkModeBackground != value)
-            {
-                _selectedDarkModeBackground = value;
-                // Saving is handled by ViewModel
-                Debug.WriteLine($"AppSettings: DarkModeBackground changed to {value} (will be saved by SettingsViewModel).");
-            }
-        }
-    }
+    // REMOVED: SelectedSortOrder property
+    // public static SortOrderType SelectedSortOrder { ... }
+
 }

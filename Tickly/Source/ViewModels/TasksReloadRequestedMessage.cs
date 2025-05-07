@@ -1,8 +1,9 @@
-﻿namespace Tickly.Messages;
-
-public class TasksReloadRequestedMessage
+﻿namespace Tickly.Messages
 {
-    public TasksReloadRequestedMessage()
+    internal class TasksReloadRequestedMessage
     {
+        public TasksReloadRequestedMessage()
+        {
+        }
     }
 }
