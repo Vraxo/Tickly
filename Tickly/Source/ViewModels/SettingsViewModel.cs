@@ -12,7 +12,7 @@ using Tickly.Messages;
 using Tickly.Models;
 using Tickly.Services;
 using Tickly.Utils;
-using Tickly.Views; // Needed for GetCurrentPage
+using Tickly.Views;
 
 namespace Tickly.ViewModels;
 
@@ -21,6 +21,8 @@ public sealed partial class SettingsViewModel : ObservableObject
     private readonly TaskPersistenceService _taskPersistenceService;
     private bool _isGregorianSelected;
     private bool _isPersianSelected;
+    private bool _isPitchBlackSelected;
+    private bool _isDarkGraySelected;
     private readonly string _applicationTasksFilePath;
     private const string TaskExportFilePrefix = "Tickly-Tasks-Export-";
 
@@ -44,6 +46,30 @@ public sealed partial class SettingsViewModel : ObservableObject
             if (SetProperty(ref _isPersianSelected, value) && value)
             {
                 OnCalendarSelectionChanged(false);
+            }
+        }
+    }
+
+    public bool IsPitchBlackSelected
+    {
+        get => _isPitchBlackSelected;
+        set
+        {
+            if (SetProperty(ref _isPitchBlackSelected, value) && value)
+            {
+                OnThemeSelectionChanged(true);
+            }
+        }
+    }
+
+    public bool IsDarkGraySelected
+    {
+        get => _isDarkGraySelected;
+        set
+        {
+            if (SetProperty(ref _isDarkGraySelected, value) && value)
+            {
+                OnThemeSelectionChanged(false);
             }
         }
     }
@@ -83,21 +109,56 @@ public sealed partial class SettingsViewModel : ObservableObject
         WeakReferenceMessenger.Default.Send(new CalendarSettingChangedMessage());
     }
 
+    private void OnThemeSelectionChanged(bool isPitchBlackNowSelected)
+    {
+        if (isPitchBlackNowSelected)
+        {
+            SetProperty(ref _isDarkGraySelected, false, nameof(IsDarkGraySelected));
+            UpdateThemeSetting(ThemeType.PitchBlack);
+        }
+        else
+        {
+            SetProperty(ref _isPitchBlackSelected, false, nameof(IsPitchBlackSelected));
+            UpdateThemeSetting(ThemeType.DarkGray);
+        }
+    }
+
+    private void UpdateThemeSetting(ThemeType newTheme)
+    {
+        if (AppSettings.SelectedTheme == newTheme)
+        {
+            return;
+        }
+
+        AppSettings.SelectedTheme = newTheme;
+        Preferences.Set(AppSettings.ThemePreferenceKey, (int)newTheme);
+        WeakReferenceMessenger.Default.Send(new ThemeChangedMessage(newTheme));
+    }
+
     private void LoadSettings()
     {
         CalendarSystemType currentSystem = AppSettings.SelectedCalendarSystem;
-
         bool shouldBeGregorian = currentSystem == CalendarSystemType.Gregorian;
         bool shouldBePersian = currentSystem == CalendarSystemType.Persian;
-
         SetProperty(ref _isGregorianSelected, shouldBeGregorian, nameof(IsGregorianSelected));
         SetProperty(ref _isPersianSelected, shouldBePersian, nameof(IsPersianSelected));
-
         if (!_isGregorianSelected && !_isPersianSelected)
         {
             SetProperty(ref _isGregorianSelected, true, nameof(IsGregorianSelected));
             AppSettings.SelectedCalendarSystem = CalendarSystemType.Gregorian;
             Preferences.Set(AppSettings.CalendarSystemKey, (int)CalendarSystemType.Gregorian);
+        }
+
+        ThemeType currentTheme = AppSettings.SelectedTheme;
+        bool shouldBePitchBlack = currentTheme == ThemeType.PitchBlack;
+        bool shouldBeDarkGray = currentTheme == ThemeType.DarkGray;
+        SetProperty(ref _isPitchBlackSelected, shouldBePitchBlack, nameof(IsPitchBlackSelected));
+        SetProperty(ref _isDarkGraySelected, shouldBeDarkGray, nameof(IsDarkGraySelected));
+        if (!_isPitchBlackSelected && !_isDarkGraySelected)
+        {
+            SetProperty(ref _isPitchBlackSelected, true, nameof(IsPitchBlackSelected));
+            AppSettings.SelectedTheme = ThemeType.PitchBlack;
+            Preferences.Set(AppSettings.ThemePreferenceKey, (int)ThemeType.PitchBlack);
         }
     }
 

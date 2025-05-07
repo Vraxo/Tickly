@@ -1,24 +1,35 @@
 ﻿<?xml version="1.0" encoding="UTF-8" ?>
 <?xaml-comp compile="true" ?>
-<ResourceDictionary 
+<ResourceDictionary
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml">
 
-    <!-- Note: For Android please see also Platforms\Android\Resources\values\colors.xml -->
-
+    <!-- Core Palette -->
     <Color x:Key="Primary">#512BD4</Color>
-    <Color x:Key="PrimaryDark">#ac99ea</Color>
+    <!-- Vibrant Purple -->
     <Color x:Key="PrimaryDarkText">#242424</Color>
+    <!-- Dark text for light primary bg -->
     <Color x:Key="Secondary">#DFD8F7</Color>
-    <Color x:Key="SecondaryDarkText">#9880e5</Color>
+    <!-- Light Purple -->
+    <Color x:Key="SecondaryDarkText">#AC99EA</Color>
+    <!-- Lighter Purple Text for Dark BG -->
     <Color x:Key="Tertiary">#2B0B98</Color>
+    <!-- Deep Purple -->
 
-    <Color x:Key="White">White</Color>
-    <Color x:Key="Black">Black</Color>
-    <Color x:Key="Magenta">#D600AA</Color>
-    <Color x:Key="MidnightBlue">#190649</Color>
-    <Color x:Key="OffBlack">#1f1f1f</Color>
+    <Color x:Key="White">#FFFFFF</Color>
+    <Color x:Key="Black">#000000</Color>
+    <Color x:Key="OffBlack">#121212</Color>
+    <!-- Slightly off-black -->
+    <Color x:Key="DarkGrayBackground">#1E1E1E</Color>
+    <!-- Dark Gray for BG -->
+    <Color x:Key="DarkGraySurface">#2C2C2C</Color>
+    <!-- Slightly lighter Dark Gray for surfaces -->
+    <Color x:Key="WhiteSmoke">#F5F5F5</Color>
+    <!-- Common light text color -->
+    <Color x:Key="LightGrayText">#D3D3D3</Color>
+    <!-- Lighter text for dark themes -->
 
+    <!-- Grays -->
     <Color x:Key="Gray100">#E1E1E1</Color>
     <Color x:Key="Gray200">#C8C8C8</Color>
     <Color x:Key="Gray300">#ACACAC</Color>
@@ -28,6 +39,25 @@
     <Color x:Key="Gray900">#212121</Color>
     <Color x:Key="Gray950">#141414</Color>
 
+    <!-- Specific Theme Colors -->
+    <Color x:Key="PitchBlackBackgroundColor">#000000</Color>
+    <Color x:Key="PitchBlackSurfaceColor">#121212</Color>
+    <Color x:Key="PitchBlackForegroundColor">#F5F5F5</Color>
+
+    <Color x:Key="DarkGrayBackgroundColor">#1E1E1E</Color>
+    <Color x:Key="DarkGraySurfaceColor">#2C2C2C</Color>
+    <Color x:Key="DarkGrayForegroundColor">#E0E0E0</Color>
+    <!-- Slightly adjusted for dark gray -->
+
+    <!-- DYNAMIC THEME RESOURCES (Initialized to PitchBlack) -->
+    <Color x:Key="AppBackgroundColor">#000000</Color>
+    <Color x:Key="AppSurfaceColor">#121212</Color>
+    <Color x:Key="AppForegroundColor">#F5F5F5</Color>
+    <!-- Default/PitchBlack Text -->
+    <Color x:Key="AppSecondaryTextColor">#A0A0A0</Color>
+    <!-- Grayer text -->
+
+    <!-- Brushes (Mostly static, except maybe foreground/background if needed) -->
     <SolidColorBrush x:Key="PrimaryBrush" Color="{StaticResource Primary}"/>
     <SolidColorBrush x:Key="SecondaryBrush" Color="{StaticResource Secondary}"/>
     <SolidColorBrush x:Key="TertiaryBrush" Color="{StaticResource Tertiary}"/>
@@ -42,4 +72,5 @@
     <SolidColorBrush x:Key="Gray600Brush" Color="{StaticResource Gray600}"/>
     <SolidColorBrush x:Key="Gray900Brush" Color="{StaticResource Gray900}"/>
     <SolidColorBrush x:Key="Gray950Brush" Color="{StaticResource Gray950}"/>
+
 </ResourceDictionary>

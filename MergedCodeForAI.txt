@@ -16,33 +16,61 @@
 </file>
 
 <file path="App.xaml.cs">
-// App.xaml.cs
-using Microsoft.Maui.LifecycleEvents; // Might be needed depending on exact MAUI version/setup
+using CommunityToolkit.Mvvm.Messaging;
+using Microsoft.Maui.LifecycleEvents;
 using Tickly.ViewModels;
-using Tickly.Services; // Added for TaskPersistenceService if directly used, or for general service access
+using Tickly.Services;
 using System.Diagnostics;
+using Tickly.Messages;
+using Tickly.Models;
 
-namespace Tickly; // Make sure this namespace matches your project
+namespace Tickly;
 
 public partial class App : Application
 {
-    // Define desired size constants
     const int WindowWidth = 450;
     const int WindowHeight = 800;
 
     public App()
     {
         InitializeComponent();
-
+        ApplyTheme(AppSettings.SelectedTheme); // Apply theme on startup
         MainPage = new AppShell();
+        WeakReferenceMessenger.Default.Register<ThemeChangedMessage>(this, (r, m) => ApplyTheme(m.Value));
+    }
+
+    private void ApplyTheme(ThemeType theme)
+    {
+        if (Application.Current == null) return;
+
+        MainThread.BeginInvokeOnMainThread(() =>
+        {
+            string backgroundKey = theme == ThemeType.DarkGray ? "DarkGrayBackgroundColor" : "PitchBlackBackgroundColor";
+            string surfaceKey = theme == ThemeType.DarkGray ? "DarkGraySurfaceColor" : "PitchBlackSurfaceColor";
+            string foregroundKey = theme == ThemeType.DarkGray ? "DarkGrayForegroundColor" : "PitchBlackForegroundColor";
+            string secondaryTextKey = theme == ThemeType.DarkGray ? "LightGrayText" : "Gray500"; // Adjust secondary text based on theme
+
+            Application.Current.Resources["AppBackgroundColor"] = Application.Current.Resources[backgroundKey];
+            Application.Current.Resources["AppSurfaceColor"] = Application.Current.Resources[surfaceKey];
+            Application.Current.Resources["AppForegroundColor"] = Application.Current.Resources[foregroundKey];
+            Application.Current.Resources["AppSecondaryTextColor"] = Application.Current.Resources[secondaryTextKey]; // Apply secondary text color too
+
+            Debug.WriteLine($"Theme applied: {theme}. Background: {Application.Current.Resources["AppBackgroundColor"]}, Surface: {Application.Current.Resources["AppSurfaceColor"]}, Foreground: {Application.Current.Resources["AppForegroundColor"]}");
+
+            // Force Shell to re-evaluate styles if needed (might not be necessary with DynamicResource)
+            if (MainPage is Shell shell)
+            {
+                // Attempt to force redraw if DynamicResource doesn't update shell immediately
+                var currentBg = shell.BackgroundColor;
+                shell.BackgroundColor = Colors.Transparent; // Temporary change
+                shell.BackgroundColor = currentBg; // Restore (or re-bind if using DynamicResource)
+            }
+        });
     }
 
     protected override async void OnStart()
     {
         base.OnStart();
-        // Optional: Logic to check and save progress for a missed day could go here,
-        // but it's complex as we wouldn't know the percentage.
-        // The current MainViewModel logic aims to keep today's progress up-to-date.
         Debug.WriteLine("App.OnStart: Application started.");
     }
 
@@ -73,78 +101,54 @@ public partial class App : Application
     {
         base.OnResume();
         Debug.WriteLine("App.OnResume: Application is resuming.");
-        // Optional: Could trigger a progress check/update here if the day might have changed
-        // while the app was asleep for an extended period.
-        // However, MainViewModel's continuous updates should handle this if it's running.
     }
 
     protected override Window CreateWindow(IActivationState activationState)
     {
         Window window = base.CreateWindow(activationState);
 
-        // --- WINDOWS SPECIFIC RESIZING ---
 #if WINDOWS
         window.Created += (s, e) =>
         {
-            // Ensure sender is a Window
             var mauiWindow = s as Window;
             if (mauiWindow == null) return;
 
-            // Get the Handler and Platform Window (Microsoft.UI.Xaml.Window)
             var handler = mauiWindow.Handler;
             if (handler?.PlatformView is Microsoft.UI.Xaml.Window nativeWindow)
             {
                 try
                 {
-                    // Get the HWND (Window Handle) for the WinUI window
                     var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(nativeWindow);
                     if (hwnd == IntPtr.Zero) return;
 
-                    // Get the WindowId from the HWND
                     Microsoft.UI.WindowId windowId = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(hwnd);
-                    if (windowId.Value == 0) return; // Invalid WindowId
+                    if (windowId.Value == 0) return;
 
-                    // Get the AppWindow from the WindowId
                     Microsoft.UI.Windowing.AppWindow appWindow = Microsoft.UI.Windowing.AppWindow.GetFromWindowId(windowId);
                     if (appWindow != null)
                     {
-                         // Get the primary display area
                          Microsoft.UI.Windowing.DisplayArea displayArea = Microsoft.UI.Windowing.DisplayArea.GetFromWindowId(windowId, Microsoft.UI.Windowing.DisplayAreaFallback.Nearest);
                         if (displayArea != null)
                         {
-                            // Calculate centered position
                             var mainMonitorWorkArea = displayArea.WorkArea;
                             var centeredX = (mainMonitorWorkArea.Width - WindowWidth) / 2;
                             var centeredY = (mainMonitorWorkArea.Height - WindowHeight) / 2;
 
-                            // Move and resize the window
                             appWindow.MoveAndResize(new Windows.Graphics.RectInt32(centeredX, centeredY, WindowWidth, WindowHeight));
                         }
                         else
                         {
-                            // Fallback if display area info not available - just resize
                             appWindow.ResizeClient(new Windows.Graphics.SizeInt32(WindowWidth, WindowHeight));
                         }
-
-                        // --- Optional: Prevent User Resizing ---
-                        // If you want to lock the window size:
-                        // if (appWindow.Presenter is Microsoft.UI.Windowing.OverlappedPresenter p)
-                        // {
-                        //     p.IsResizable = false;
-                        //     p.IsMaximizable = false;
-                        // }
-                        // --- End Optional ---
                     }
                 }
                 catch (Exception ex)
                 {
-                    // Log or handle potential exceptions during window manipulation
                     System.Diagnostics.Debug.WriteLine($"Error resizing window: {ex.Message}");
                 }
             }
         };
 #endif
-        // --- END WINDOWS SPECIFIC ---
 
         return window;
     }
@@ -160,11 +164,11 @@ public partial class App : Application
     xmlns:local="clr-namespace:Tickly"
     xmlns:views="clr-namespace:Tickly.Views"
     Shell.FlyoutBehavior="Flyout"
-    Shell.BackgroundColor="Black"
-    Shell.TitleColor="{AppThemeBinding Light=Black, Dark=White}"
-    Shell.DisabledColor="#B4FFFFFF"
-    Shell.UnselectedColor="#95FFFFFF"
-    Shell.FlyoutBackgroundColor="Black">
+    Shell.BackgroundColor="{DynamicResource AppBackgroundColor}"
+    Shell.TitleColor="{DynamicResource AppForegroundColor}"
+    Shell.DisabledColor="{DynamicResource AppSecondaryTextColor}"
+    Shell.UnselectedColor="{DynamicResource AppSecondaryTextColor}"
+    Shell.FlyoutBackgroundColor="{DynamicResource AppSurfaceColor}">
 
     <Shell.FlyoutHeader>
         <ContentView>
@@ -187,7 +191,6 @@ public partial class App : Application
     </FlyoutItem>
 
     <FlyoutItem Title="Stats" Icon="icon_stats.png">
-        <!-- Added Stats Page -->
         <ShellContent
             Title="Stats"
             ContentTemplate="{DataTemplate views:StatsPage}"
@@ -205,8 +208,7 @@ public partial class App : Application
 </file>
 
 <file path="AppShell.xaml.cs">
-// AppShell.xaml.cs
-using Tickly.Views; // Add this using
+using Tickly.Views;
 
 namespace Tickly;
 
@@ -216,7 +218,6 @@ public partial class AppShell : Shell
     {
         InitializeComponent();
 
-        // Register the route for the modal popup page
         Routing.RegisterRoute(nameof(AddTaskPopupPage), typeof(AddTaskPopupPage));
     }
 }
@@ -242,7 +243,7 @@ public static class MauiProgram
             {
                 fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
                 fonts.AddFont("OpenSans-Semibold.ttf", "OpenSansSemibold");
-                fonts.AddFont("FluentSystemIcons-Regular.ttf", "FluentUI"); // Ensure FluentUI is added
+                fonts.AddFont("FluentSystemIcons-Regular.ttf", "FluentUI");
             });
 
 #if DEBUG
@@ -255,12 +256,12 @@ public static class MauiProgram
 
         builder.Services.AddSingleton<MainViewModel>();
         builder.Services.AddSingleton<SettingsViewModel>();
-        builder.Services.AddSingleton<StatsViewModel>(); // Register StatsViewModel
+        builder.Services.AddSingleton<StatsViewModel>(); // Corrected registration
 
         builder.Services.AddSingleton<MainPage>();
         builder.Services.AddTransient<AddTaskPopupPage>();
         builder.Services.AddSingleton<SettingsPage>();
-        builder.Services.AddSingleton<StatsPage>(); // Register StatsPage
+        builder.Services.AddSingleton<StatsPage>();
 
         return builder.Build();
     }
@@ -277,19 +278,14 @@ public static class MauiProgram
          xmlns:fonts="clr-namespace:Fonts"
          x:Class="Tickly.MainPage"
          x:Name="MainTasksPage"
-         BackgroundColor="Black"
+         BackgroundColor="{DynamicResource AppBackgroundColor}"
          Title="Tickly Tasks">
-
-    <!-- REMOVED: Direct ViewModel instantiation -->
-    <!-- <ContentPage.BindingContext> -->
-    <!--     <vm:MainViewModel /> -->
-    <!-- </ContentPage.BindingContext> -->
 
     <Shell.TitleView>
         <Grid ColumnDefinitions="*" VerticalOptions="FillAndExpand" Margin="0,0,10,0">
             <Label Grid.Column="0"
                Text="Tickly Tasks"
-               TextColor="{AppThemeBinding Light=Black, Dark=White}"
+               TextColor="{DynamicResource AppForegroundColor}"
                FontSize="18"
                FontAttributes="Bold"
                VerticalOptions="Center"
@@ -297,7 +293,6 @@ public static class MauiProgram
                Margin="10,0,0,0"/>
         </Grid>
     </Shell.TitleView>
-
 
     <ContentPage.Resources>
         <ResourceDictionary>
@@ -318,13 +313,13 @@ public static class MauiProgram
             </Style>
 
             <Style TargetType="Label" x:Key="TaskTitleLabelStyle">
-                <Setter Property="TextColor" Value="{AppThemeBinding Light=Black, Dark=White}"/>
+                <Setter Property="TextColor" Value="{DynamicResource AppForegroundColor}"/>
                 <Setter Property="FontSize" Value="16"/>
                 <Setter Property="FontAttributes" Value="Bold"/>
                 <Setter Property="VerticalOptions" Value="Center"/>
             </Style>
             <Style TargetType="Label" x:Key="TaskTimeLabelStyle">
-                <Setter Property="TextColor" Value="Gray"/>
+                <Setter Property="TextColor" Value="{DynamicResource AppSecondaryTextColor}"/>
                 <Setter Property="FontSize" Value="12"/>
                 <Setter Property="VerticalOptions" Value="Center"/>
             </Style>
@@ -335,14 +330,14 @@ public static class MauiProgram
                 <Setter Property="Spacing" Value="5"/>
             </Style>
             <Style TargetType="Label" x:Key="EmptyViewLabelStyle">
-                <Setter Property="TextColor" Value="Gray"/>
+                <Setter Property="TextColor" Value="{DynamicResource AppSecondaryTextColor}"/>
                 <Setter Property="HorizontalTextAlignment" Value="Center"/>
             </Style>
             <Style TargetType="Button" x:Key="AddButtonStyle">
                 <Setter Property="Text" Value="+"/>
                 <Setter Property="FontSize" Value="24"/>
                 <Setter Property="FontAttributes" Value="Bold"/>
-                <Setter Property="TextColor" Value="{AppThemeBinding Light=White, Dark=Black}"/>
+                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}"/>
                 <Setter Property="BackgroundColor" Value="{StaticResource Primary}"/>
                 <Setter Property="CornerRadius" Value="28"/>
                 <Setter Property="HeightRequest" Value="56"/>
@@ -357,7 +352,7 @@ public static class MauiProgram
                 <Setter Property="FontFamily" Value="FluentUI"/>
                 <Setter Property="Text" Value="{x:Static fonts:FluentUI.arrow_counterclockwise_20_regular}"/>
                 <Setter Property="FontSize" Value="16"/>
-                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"/>
+                <Setter Property="TextColor" Value="{DynamicResource AppSecondaryTextColor}"/>
                 <Setter Property="BackgroundColor" Value="Transparent"/>
                 <Setter Property="Padding" Value="0"/>
                 <Setter Property="WidthRequest" Value="24"/>
@@ -371,7 +366,7 @@ public static class MauiProgram
                             <VisualState Name="Normal" />
                             <VisualState Name="Disabled">
                                 <VisualState.Setters>
-                                    <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}"/>
+                                    <Setter Property="TextColor" Value="{DynamicResource Gray600}"/>
                                     <Setter Property="Opacity" Value="0.5"/>
                                 </VisualState.Setters>
                             </VisualState>
@@ -393,7 +388,7 @@ public static class MauiProgram
         <ProgressBar Grid.Row="0" Grid.Column="0"
                      Progress="{Binding TaskProgress}"
                      ProgressColor="{Binding TaskProgressColor}"
-                     BackgroundColor="#404040"
+                     BackgroundColor="{DynamicResource AppSurfaceColor}"
                      HeightRequest="5"
                      Margin="0,0,0,5"/>
 
@@ -430,21 +425,15 @@ public static class MauiProgram
                         <Grid ColumnSpacing="10">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
-                                <!-- Position Indicator -->
                                 <ColumnDefinition Width="*" />
-                                <!-- Task Title/Time -->
                                 <ColumnDefinition Width="Auto" />
-                                <!-- Checkmark Area -->
                                 <ColumnDefinition Width="Auto" />
-                                <!-- Reset Button Area -->
                             </Grid.ColumnDefinitions>
 
-                            <!-- Position Indicator -->
                             <Frame Grid.Column="0"
                                    Style="{StaticResource PositionIndicatorFrameStyle}"
                                    BackgroundColor="{Binding PositionColor}" />
 
-                            <!-- Task Title and Time -->
                             <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
                                 <VerticalStackLayout.GestureRecognizers>
                                     <TapGestureRecognizer
@@ -455,7 +444,6 @@ public static class MauiProgram
                                 <Label Text="{Binding ., Converter={StaticResource TaskTimeConverter}}" Style="{StaticResource TaskTimeLabelStyle}" />
                             </VerticalStackLayout>
 
-                            <!-- Checkmark Area -->
                             <Grid Grid.Column="2"
                                   VerticalOptions="Center"
                                   HorizontalOptions="Center"
@@ -475,7 +463,7 @@ public static class MauiProgram
                                         Command="{Binding Source={RelativeSource AncestorType={x:Type vm:MainViewModel}}, Path=MarkTaskDoneCommand}"
                                         CommandParameter="{Binding .}"/>
                                 </Grid.GestureRecognizers>
-                                <Border Stroke="{AppThemeBinding Light=Gray, Dark=LightGray}"
+                                <Border Stroke="{DynamicResource AppForegroundColor}"
                                         StrokeThickness="2"
                                         HeightRequest="24"
                                         WidthRequest="24"
@@ -488,7 +476,6 @@ public static class MauiProgram
                                 </Border>
                             </Grid>
 
-                            <!-- Reset Daily Task Button -->
                             <Button Grid.Column="3"
                                     Style="{StaticResource ResetDailyButtonStyle}"
                                     Command="{Binding Source={RelativeSource AncestorType={x:Type vm:MainViewModel}}, Path=ResetDailyTaskCommand}"
@@ -532,16 +519,16 @@ public static class MauiProgram
 </file>
 
 <file path="Source\MainPage.xaml.cs">
-using Tickly.ViewModels; // Add this using statement
+using Tickly.ViewModels;
 
 namespace Tickly;
 
 public partial class MainPage : ContentPage
 {
-    public MainPage(MainViewModel viewModel) // Inject the ViewModel
+    public MainPage(MainViewModel viewModel)
     {
         InitializeComponent();
-        BindingContext = viewModel; // Set the BindingContext
+        BindingContext = viewModel;
     }
 }
 </file>
@@ -8629,25 +8616,36 @@ namespace Fonts
 <file path="Resources\Styles\Colors.xaml">
 <?xml version="1.0" encoding="UTF-8" ?>
 <?xaml-comp compile="true" ?>
-<ResourceDictionary 
+<ResourceDictionary
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml">
 
-    <!-- Note: For Android please see also Platforms\Android\Resources\values\colors.xml -->
-
+    <!-- Core Palette -->
     <Color x:Key="Primary">#512BD4</Color>
-    <Color x:Key="PrimaryDark">#ac99ea</Color>
+    <!-- Vibrant Purple -->
     <Color x:Key="PrimaryDarkText">#242424</Color>
+    <!-- Dark text for light primary bg -->
     <Color x:Key="Secondary">#DFD8F7</Color>
-    <Color x:Key="SecondaryDarkText">#9880e5</Color>
+    <!-- Light Purple -->
+    <Color x:Key="SecondaryDarkText">#AC99EA</Color>
+    <!-- Lighter Purple Text for Dark BG -->
     <Color x:Key="Tertiary">#2B0B98</Color>
+    <!-- Deep Purple -->
 
-    <Color x:Key="White">White</Color>
-    <Color x:Key="Black">Black</Color>
-    <Color x:Key="Magenta">#D600AA</Color>
-    <Color x:Key="MidnightBlue">#190649</Color>
-    <Color x:Key="OffBlack">#1f1f1f</Color>
+    <Color x:Key="White">#FFFFFF</Color>
+    <Color x:Key="Black">#000000</Color>
+    <Color x:Key="OffBlack">#121212</Color>
+    <!-- Slightly off-black -->
+    <Color x:Key="DarkGrayBackground">#1E1E1E</Color>
+    <!-- Dark Gray for BG -->
+    <Color x:Key="DarkGraySurface">#2C2C2C</Color>
+    <!-- Slightly lighter Dark Gray for surfaces -->
+    <Color x:Key="WhiteSmoke">#F5F5F5</Color>
+    <!-- Common light text color -->
+    <Color x:Key="LightGrayText">#D3D3D3</Color>
+    <!-- Lighter text for dark themes -->
 
+    <!-- Grays -->
     <Color x:Key="Gray100">#E1E1E1</Color>
     <Color x:Key="Gray200">#C8C8C8</Color>
     <Color x:Key="Gray300">#ACACAC</Color>
@@ -8657,6 +8655,25 @@ namespace Fonts
     <Color x:Key="Gray900">#212121</Color>
     <Color x:Key="Gray950">#141414</Color>
 
+    <!-- Specific Theme Colors -->
+    <Color x:Key="PitchBlackBackgroundColor">#000000</Color>
+    <Color x:Key="PitchBlackSurfaceColor">#121212</Color>
+    <Color x:Key="PitchBlackForegroundColor">#F5F5F5</Color>
+
+    <Color x:Key="DarkGrayBackgroundColor">#1E1E1E</Color>
+    <Color x:Key="DarkGraySurfaceColor">#2C2C2C</Color>
+    <Color x:Key="DarkGrayForegroundColor">#E0E0E0</Color>
+    <!-- Slightly adjusted for dark gray -->
+
+    <!-- DYNAMIC THEME RESOURCES (Initialized to PitchBlack) -->
+    <Color x:Key="AppBackgroundColor">#000000</Color>
+    <Color x:Key="AppSurfaceColor">#121212</Color>
+    <Color x:Key="AppForegroundColor">#F5F5F5</Color>
+    <!-- Default/PitchBlack Text -->
+    <Color x:Key="AppSecondaryTextColor">#A0A0A0</Color>
+    <!-- Grayer text -->
+
+    <!-- Brushes (Mostly static, except maybe foreground/background if needed) -->
     <SolidColorBrush x:Key="PrimaryBrush" Color="{StaticResource Primary}"/>
     <SolidColorBrush x:Key="SecondaryBrush" Color="{StaticResource Secondary}"/>
     <SolidColorBrush x:Key="TertiaryBrush" Color="{StaticResource Tertiary}"/>
@@ -8671,37 +8688,44 @@ namespace Fonts
     <SolidColorBrush x:Key="Gray600Brush" Color="{StaticResource Gray600}"/>
     <SolidColorBrush x:Key="Gray900Brush" Color="{StaticResource Gray900}"/>
     <SolidColorBrush x:Key="Gray950Brush" Color="{StaticResource Gray950}"/>
+
 </ResourceDictionary>
 </file>
 
 <file path="Resources\Styles\Styles.xaml">
 <?xml version="1.0" encoding="UTF-8" ?>
 <?xaml-comp compile="true" ?>
-<ResourceDictionary 
+<ResourceDictionary
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml">
 
+    <!-- ActivityIndicator now uses AppForegroundColor for better theme adaptation -->
     <Style TargetType="ActivityIndicator">
-        <Setter Property="Color" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource White}}" />
+        <Setter Property="Color" Value="{DynamicResource AppForegroundColor}" />
     </Style>
 
     <Style TargetType="IndicatorView">
-        <Setter Property="IndicatorColor" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray500}}"/>
-        <Setter Property="SelectedIndicatorColor" Value="{AppThemeBinding Light={StaticResource Gray950}, Dark={StaticResource Gray100}}"/>
+        <Setter Property="IndicatorColor" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray600}}"/>
+        <Setter Property="SelectedIndicatorColor" Value="{DynamicResource AppForegroundColor}"/>
     </Style>
 
     <Style TargetType="Border">
-        <Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray500}}" />
+        <!-- Border color might depend on the surface it's on -->
+        <Setter Property="Stroke" Value="{DynamicResource AppSecondaryTextColor}" />
         <Setter Property="StrokeShape" Value="Rectangle"/>
         <Setter Property="StrokeThickness" Value="1"/>
+        <Setter Property="BackgroundColor" Value="Transparent"/>
+        <!-- Ensure border BG is transparent -->
     </Style>
 
     <Style TargetType="BoxView">
-        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource Gray950}, Dark={StaticResource Gray200}}" />
+        <!-- BoxView color might need context, default to secondary text color -->
+        <Setter Property="BackgroundColor" Value="{DynamicResource AppSecondaryTextColor}" />
     </Style>
 
     <Style TargetType="CheckBox">
-        <Setter Property="Color" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource White}}" />
+        <!-- Use Primary color for the check itself, text color follows Label style -->
+        <Setter Property="Color" Value="{StaticResource Primary}" />
         <Setter Property="MinimumHeightRequest" Value="44"/>
         <Setter Property="MinimumWidthRequest" Value="44"/>
         <Setter Property="VisualStateManager.VisualStateGroups">
@@ -8710,7 +8734,7 @@ namespace Fonts
                     <VisualState x:Name="Normal" />
                     <VisualState x:Name="Disabled">
                         <VisualState.Setters>
-                            <Setter Property="Color" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}" />
+                            <Setter Property="Color" Value="{DynamicResource AppSecondaryTextColor}" />
                         </VisualState.Setters>
                     </VisualState>
                 </VisualStateGroup>
@@ -8719,8 +8743,9 @@ namespace Fonts
     </Style>
 
     <Style TargetType="DatePicker">
-        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource White}}" />
-        <Setter Property="BackgroundColor" Value="Transparent" />
+        <Setter Property="TextColor" Value="{DynamicResource AppForegroundColor}" />
+        <Setter Property="BackgroundColor" Value="{DynamicResource AppSurfaceColor}" />
+        <!-- Give it a surface color -->
         <Setter Property="FontFamily" Value="OpenSansRegular"/>
         <Setter Property="FontSize" Value="14"/>
         <Setter Property="MinimumHeightRequest" Value="44"/>
@@ -8731,7 +8756,9 @@ namespace Fonts
                     <VisualState x:Name="Normal" />
                     <VisualState x:Name="Disabled">
                         <VisualState.Setters>
-                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray500}}" />
+                            <Setter Property="TextColor" Value="{DynamicResource AppSecondaryTextColor}" />
+                            <Setter Property="BackgroundColor" Value="{StaticResource Gray600}"/>
+                            <!-- Use a fixed disabled color -->
                         </VisualState.Setters>
                     </VisualState>
                 </VisualStateGroup>
@@ -8740,11 +8767,12 @@ namespace Fonts
     </Style>
 
     <Style TargetType="Editor">
-        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource White}}" />
-        <Setter Property="BackgroundColor" Value="Transparent" />
+        <Setter Property="TextColor" Value="{DynamicResource AppForegroundColor}" />
+        <Setter Property="BackgroundColor" Value="{DynamicResource AppSurfaceColor}" />
+        <!-- Give it a surface color -->
         <Setter Property="FontFamily" Value="OpenSansRegular"/>
         <Setter Property="FontSize" Value="14" />
-        <Setter Property="PlaceholderColor" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray500}}" />
+        <Setter Property="PlaceholderColor" Value="{DynamicResource AppSecondaryTextColor}" />
         <Setter Property="MinimumHeightRequest" Value="44"/>
         <Setter Property="MinimumWidthRequest" Value="44"/>
         <Setter Property="VisualStateManager.VisualStateGroups">
@@ -8753,7 +8781,9 @@ namespace Fonts
                     <VisualState x:Name="Normal" />
                     <VisualState x:Name="Disabled">
                         <VisualState.Setters>
-                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}" />
+                            <Setter Property="TextColor" Value="{DynamicResource AppSecondaryTextColor}" />
+                            <Setter Property="BackgroundColor" Value="{StaticResource Gray600}"/>
+                            <!-- Use a fixed disabled color -->
                         </VisualState.Setters>
                     </VisualState>
                 </VisualStateGroup>
@@ -8762,11 +8792,12 @@ namespace Fonts
     </Style>
 
     <Style TargetType="Entry">
-        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource White}}" />
-        <Setter Property="BackgroundColor" Value="Transparent" />
+        <Setter Property="TextColor" Value="{DynamicResource AppForegroundColor}" />
+        <Setter Property="BackgroundColor" Value="{DynamicResource AppSurfaceColor}" />
+        <!-- Give it a surface color -->
         <Setter Property="FontFamily" Value="OpenSansRegular"/>
         <Setter Property="FontSize" Value="14" />
-        <Setter Property="PlaceholderColor" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray500}}" />
+        <Setter Property="PlaceholderColor" Value="{DynamicResource AppSecondaryTextColor}" />
         <Setter Property="MinimumHeightRequest" Value="44"/>
         <Setter Property="MinimumWidthRequest" Value="44"/>
         <Setter Property="VisualStateManager.VisualStateGroups">
@@ -8775,7 +8806,9 @@ namespace Fonts
                     <VisualState x:Name="Normal" />
                     <VisualState x:Name="Disabled">
                         <VisualState.Setters>
-                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}" />
+                            <Setter Property="TextColor" Value="{DynamicResource AppSecondaryTextColor}" />
+                            <Setter Property="BackgroundColor" Value="{StaticResource Gray600}"/>
+                            <!-- Use a fixed disabled color -->
                         </VisualState.Setters>
                     </VisualState>
                 </VisualStateGroup>
@@ -8785,9 +8818,10 @@ namespace Fonts
 
     <Style TargetType="Frame">
         <Setter Property="HasShadow" Value="False" />
-        <Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray950}}" />
+        <!-- Border slightly lighter than surface -->
+        <Setter Property="BorderColor" Value="{DynamicResource AppSecondaryTextColor}" />
         <Setter Property="CornerRadius" Value="8" />
-        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}" />
+        <Setter Property="BackgroundColor" Value="{DynamicResource AppSurfaceColor}" />
     </Style>
 
     <Style TargetType="ImageButton">
@@ -8812,8 +8846,9 @@ namespace Fonts
         </Setter>
     </Style>
 
-    <Style TargetType="Label">
-        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource White}}" />
+    <!-- Base Style for Label with Explicit Key -->
+    <Style TargetType="Label" x:Key="BaseLabelStyle">
+        <Setter Property="TextColor" Value="{DynamicResource AppForegroundColor}" />
         <Setter Property="BackgroundColor" Value="Transparent" />
         <Setter Property="FontFamily" Value="OpenSansRegular" />
         <Setter Property="FontSize" Value="14" />
@@ -8823,7 +8858,7 @@ namespace Fonts
                     <VisualState x:Name="Normal" />
                     <VisualState x:Name="Disabled">
                         <VisualState.Setters>
-                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}" />
+                            <Setter Property="TextColor" Value="{DynamicResource AppSecondaryTextColor}" />
                         </VisualState.Setters>
                     </VisualState>
                 </VisualStateGroup>
@@ -8831,33 +8866,48 @@ namespace Fonts
         </Setter>
     </Style>
 
-    <Style TargetType="Span">
-        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource White}}" />
-    </Style>
+    <!-- Implicit Style for Label (inherits from BaseLabelStyle) -->
+    <Style TargetType="Label" BasedOn="{StaticResource BaseLabelStyle}" />
 
-    <Style TargetType="Label" x:Key="Headline">
-        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource MidnightBlue}, Dark={StaticResource White}}" />
+    <!-- Specific Label Styles using DynamicResource and Explicit Base -->
+    <Style TargetType="Label" x:Key="Headline" BasedOn="{StaticResource BaseLabelStyle}">
+        <Setter Property="TextColor" Value="{DynamicResource AppForegroundColor}" />
+        <!-- Redundant if BaseLabelStyle has it, but safe -->
         <Setter Property="FontSize" Value="32" />
         <Setter Property="HorizontalOptions" Value="Center" />
         <Setter Property="HorizontalTextAlignment" Value="Center" />
     </Style>
 
-    <Style TargetType="Label" x:Key="SubHeadline">
-        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource MidnightBlue}, Dark={StaticResource White}}" />
+    <Style TargetType="Label" x:Key="SubHeadline" BasedOn="{StaticResource BaseLabelStyle}">
+        <Setter Property="TextColor" Value="{DynamicResource AppForegroundColor}" />
+        <!-- Redundant if BaseLabelStyle has it, but safe -->
         <Setter Property="FontSize" Value="24" />
         <Setter Property="HorizontalOptions" Value="Center" />
         <Setter Property="HorizontalTextAlignment" Value="Center" />
     </Style>
 
+    <Style TargetType="Label" x:Key="LightGrayLabel" BasedOn="{StaticResource BaseLabelStyle}">
+        <Setter Property="TextColor" Value="{DynamicResource AppSecondaryTextColor}" />
+    </Style>
+
+    <Style TargetType="Label" x:Key="WhiteSmokeLabel" BasedOn="{StaticResource BaseLabelStyle}">
+        <Setter Property="TextColor" Value="{DynamicResource AppForegroundColor}" />
+    </Style>
+
+    <Style TargetType="Span">
+        <Setter Property="TextColor" Value="{DynamicResource AppForegroundColor}" />
+    </Style>
+
     <Style TargetType="ListView">
-        <Setter Property="SeparatorColor" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray500}}" />
-        <Setter Property="RefreshControlColor" Value="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray200}}" />
+        <Setter Property="SeparatorColor" Value="{DynamicResource AppSecondaryTextColor}" />
+        <Setter Property="RefreshControlColor" Value="{DynamicResource AppForegroundColor}" />
     </Style>
 
     <Style TargetType="Picker">
-        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource White}}" />
-        <Setter Property="TitleColor" Value="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray200}}" />
-        <Setter Property="BackgroundColor" Value="Transparent" />
+        <Setter Property="TextColor" Value="{DynamicResource AppForegroundColor}" />
+        <Setter Property="TitleColor" Value="{DynamicResource AppSecondaryTextColor}" />
+        <Setter Property="BackgroundColor" Value="{DynamicResource AppSurfaceColor}" />
+        <!-- Surface color -->
         <Setter Property="FontFamily" Value="OpenSansRegular"/>
         <Setter Property="FontSize" Value="14" />
         <Setter Property="MinimumHeightRequest" Value="44"/>
@@ -8868,8 +8918,10 @@ namespace Fonts
                     <VisualState x:Name="Normal" />
                     <VisualState x:Name="Disabled">
                         <VisualState.Setters>
-                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}" />
-                            <Setter Property="TitleColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}" />
+                            <Setter Property="TextColor" Value="{DynamicResource AppSecondaryTextColor}" />
+                            <Setter Property="TitleColor" Value="{DynamicResource AppSecondaryTextColor}" />
+                            <Setter Property="BackgroundColor" Value="{StaticResource Gray600}"/>
+                            <!-- Fixed disabled color -->
                         </VisualState.Setters>
                     </VisualState>
                 </VisualStateGroup>
@@ -8878,14 +8930,17 @@ namespace Fonts
     </Style>
 
     <Style TargetType="ProgressBar">
-        <Setter Property="ProgressColor" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource White}}" />
+        <Setter Property="ProgressColor" Value="{StaticResource Primary}" />
+        <!-- Keep primary for accent -->
+        <Setter Property="BackgroundColor" Value="{DynamicResource AppSurfaceColor}"/>
+        <!-- Background matches surface -->
         <Setter Property="VisualStateManager.VisualStateGroups">
             <VisualStateGroupList>
                 <VisualStateGroup x:Name="CommonStates">
                     <VisualState x:Name="Normal" />
                     <VisualState x:Name="Disabled">
                         <VisualState.Setters>
-                            <Setter Property="ProgressColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}" />
+                            <Setter Property="ProgressColor" Value="{DynamicResource AppSecondaryTextColor}" />
                         </VisualState.Setters>
                     </VisualState>
                 </VisualStateGroup>
@@ -8895,7 +8950,8 @@ namespace Fonts
 
     <Style TargetType="RadioButton">
         <Setter Property="BackgroundColor" Value="Transparent"/>
-        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource White}}" />
+        <Setter Property="TextColor" Value="{DynamicResource AppForegroundColor}" />
+        <!-- Text color from theme -->
         <Setter Property="FontFamily" Value="OpenSansRegular"/>
         <Setter Property="FontSize" Value="14"/>
         <Setter Property="MinimumHeightRequest" Value="44"/>
@@ -8906,7 +8962,7 @@ namespace Fonts
                     <VisualState x:Name="Normal" />
                     <VisualState x:Name="Disabled">
                         <VisualState.Setters>
-                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}" />
+                            <Setter Property="TextColor" Value="{DynamicResource AppSecondaryTextColor}" />
                         </VisualState.Setters>
                     </VisualState>
                 </VisualStateGroup>
@@ -8915,14 +8971,15 @@ namespace Fonts
     </Style>
 
     <Style TargetType="RefreshView">
-        <Setter Property="RefreshColor" Value="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray200}}" />
+        <Setter Property="RefreshColor" Value="{DynamicResource AppForegroundColor}" />
     </Style>
 
     <Style TargetType="SearchBar">
-        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource White}}" />
-        <Setter Property="PlaceholderColor" Value="{StaticResource Gray500}" />
-        <Setter Property="CancelButtonColor" Value="{StaticResource Gray500}" />
-        <Setter Property="BackgroundColor" Value="Transparent" />
+        <Setter Property="TextColor" Value="{DynamicResource AppForegroundColor}" />
+        <Setter Property="PlaceholderColor" Value="{DynamicResource AppSecondaryTextColor}" />
+        <Setter Property="CancelButtonColor" Value="{DynamicResource AppSecondaryTextColor}" />
+        <Setter Property="BackgroundColor" Value="{DynamicResource AppSurfaceColor}" />
+        <!-- Surface color -->
         <Setter Property="FontFamily" Value="OpenSansRegular" />
         <Setter Property="FontSize" Value="14" />
         <Setter Property="MinimumHeightRequest" Value="44"/>
@@ -8933,8 +8990,8 @@ namespace Fonts
                     <VisualState x:Name="Normal" />
                     <VisualState x:Name="Disabled">
                         <VisualState.Setters>
-                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}" />
-                            <Setter Property="PlaceholderColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}" />
+                            <Setter Property="TextColor" Value="{DynamicResource AppSecondaryTextColor}" />
+                            <Setter Property="PlaceholderColor" Value="{DynamicResource AppSecondaryTextColor}" />
                         </VisualState.Setters>
                     </VisualState>
                 </VisualStateGroup>
@@ -8943,9 +9000,9 @@ namespace Fonts
     </Style>
 
     <Style TargetType="SearchHandler">
-        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource White}}" />
-        <Setter Property="PlaceholderColor" Value="{StaticResource Gray500}" />
-        <Setter Property="BackgroundColor" Value="Transparent" />
+        <Setter Property="TextColor" Value="{DynamicResource AppForegroundColor}" />
+        <Setter Property="PlaceholderColor" Value="{DynamicResource AppSecondaryTextColor}" />
+        <Setter Property="BackgroundColor" Value="{DynamicResource AppSurfaceColor}" />
         <Setter Property="FontFamily" Value="OpenSansRegular" />
         <Setter Property="FontSize" Value="14" />
         <Setter Property="VisualStateManager.VisualStateGroups">
@@ -8954,8 +9011,8 @@ namespace Fonts
                     <VisualState x:Name="Normal" />
                     <VisualState x:Name="Disabled">
                         <VisualState.Setters>
-                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}" />
-                            <Setter Property="PlaceholderColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}" />
+                            <Setter Property="TextColor" Value="{DynamicResource AppSecondaryTextColor}" />
+                            <Setter Property="PlaceholderColor" Value="{DynamicResource AppSecondaryTextColor}" />
                         </VisualState.Setters>
                     </VisualState>
                 </VisualStateGroup>
@@ -8966,23 +9023,26 @@ namespace Fonts
     <Style TargetType="Shadow">
         <Setter Property="Radius" Value="15" />
         <Setter Property="Opacity" Value="0.5" />
-        <Setter Property="Brush" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource White}}" />
+        <!-- Shadow color might need adjustment based on theme -->
+        <Setter Property="Brush" Value="{DynamicResource AppForegroundColor}" />
         <Setter Property="Offset" Value="10,10" />
     </Style>
 
     <Style TargetType="Slider">
-        <Setter Property="MinimumTrackColor" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource White}}" />
-        <Setter Property="MaximumTrackColor" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray600}}" />
-        <Setter Property="ThumbColor" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource White}}" />
+        <Setter Property="MinimumTrackColor" Value="{StaticResource Primary}" />
+        <!-- Accent -->
+        <Setter Property="MaximumTrackColor" Value="{DynamicResource AppSecondaryTextColor}" />
+        <Setter Property="ThumbColor" Value="{StaticResource Primary}" />
+        <!-- Accent -->
         <Setter Property="VisualStateManager.VisualStateGroups">
             <VisualStateGroupList>
                 <VisualStateGroup x:Name="CommonStates">
                     <VisualState x:Name="Normal" />
                     <VisualState x:Name="Disabled">
                         <VisualState.Setters>
-                            <Setter Property="MinimumTrackColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}"/>
-                            <Setter Property="MaximumTrackColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}"/>
-                            <Setter Property="ThumbColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}"/>
+                            <Setter Property="MinimumTrackColor" Value="{DynamicResource AppSecondaryTextColor}"/>
+                            <Setter Property="MaximumTrackColor" Value="{DynamicResource AppSecondaryTextColor}"/>
+                            <Setter Property="ThumbColor" Value="{DynamicResource AppSecondaryTextColor}"/>
                         </VisualState.Setters>
                     </VisualState>
                 </VisualStateGroup>
@@ -8991,31 +9051,35 @@ namespace Fonts
     </Style>
 
     <Style TargetType="SwipeItem">
-        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}" />
+        <!-- Use surface color for SwipeItem background -->
+        <Setter Property="BackgroundColor" Value="{DynamicResource AppSurfaceColor}" />
     </Style>
 
     <Style TargetType="Switch">
-        <Setter Property="OnColor" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource White}}" />
-        <Setter Property="ThumbColor" Value="{StaticResource White}" />
+        <Setter Property="OnColor" Value="{StaticResource Primary}" />
+        <!-- Accent -->
+        <Setter Property="ThumbColor" Value="{DynamicResource AppForegroundColor}" />
+        <!-- Thumb matches text -->
         <Setter Property="VisualStateManager.VisualStateGroups">
             <VisualStateGroupList>
                 <VisualStateGroup x:Name="CommonStates">
                     <VisualState x:Name="Normal" />
                     <VisualState x:Name="Disabled">
                         <VisualState.Setters>
-                            <Setter Property="OnColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}" />
-                            <Setter Property="ThumbColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}" />
+                            <Setter Property="OnColor" Value="{DynamicResource AppSecondaryTextColor}" />
+                            <Setter Property="ThumbColor" Value="{DynamicResource AppSecondaryTextColor}" />
                         </VisualState.Setters>
                     </VisualState>
                     <VisualState x:Name="On">
                         <VisualState.Setters>
-                            <Setter Property="OnColor" Value="{AppThemeBinding Light={StaticResource Secondary}, Dark={StaticResource Gray200}}" />
-                            <Setter Property="ThumbColor" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource White}}" />
+                            <Setter Property="OnColor" Value="{StaticResource Primary}" />
+                            <Setter Property="ThumbColor" Value="{DynamicResource AppForegroundColor}" />
                         </VisualState.Setters>
                     </VisualState>
                     <VisualState x:Name="Off">
                         <VisualState.Setters>
-                            <Setter Property="ThumbColor" Value="{AppThemeBinding Light={StaticResource Gray400}, Dark={StaticResource Gray500}}" />
+                            <!-- Use a grayed-out version of the foreground color -->
+                            <Setter Property="ThumbColor" Value="{DynamicResource AppSecondaryTextColor}" />
                         </VisualState.Setters>
                     </VisualState>
                 </VisualStateGroup>
@@ -9024,8 +9088,9 @@ namespace Fonts
     </Style>
 
     <Style TargetType="TimePicker">
-        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource White}}" />
-        <Setter Property="BackgroundColor" Value="Transparent"/>
+        <Setter Property="TextColor" Value="{DynamicResource AppForegroundColor}" />
+        <Setter Property="BackgroundColor" Value="{DynamicResource AppSurfaceColor}"/>
+        <!-- Surface color -->
         <Setter Property="FontFamily" Value="OpenSansRegular"/>
         <Setter Property="FontSize" Value="14"/>
         <Setter Property="MinimumHeightRequest" Value="44"/>
@@ -9036,101 +9101,84 @@ namespace Fonts
                     <VisualState x:Name="Normal" />
                     <VisualState x:Name="Disabled">
                         <VisualState.Setters>
-                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}" />
+                            <Setter Property="TextColor" Value="{DynamicResource AppSecondaryTextColor}" />
+                            <Setter Property="BackgroundColor" Value="{StaticResource Gray600}"/>
+                            <!-- Fixed disabled color -->
                         </VisualState.Setters>
                     </VisualState>
                 </VisualStateGroup>
             </VisualStateGroupList>
         </Setter>
     </Style>
-  
-    <!--
-    <Style TargetType="TitleBar">
-        <Setter Property="MinimumHeightRequest" Value="32"/>
-        <Setter Property="VisualStateManager.VisualStateGroups">
-            <VisualStateGroupList>
-                <VisualStateGroup x:Name="TitleActiveStates">
-                    <VisualState x:Name="TitleBarTitleActive">
-                        <VisualState.Setters>
-                            <Setter Property="BackgroundColor" Value="Transparent" />
-                            <Setter Property="ForegroundColor" Value="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource White}}" />
-                        </VisualState.Setters>
-                    </VisualState>
-                    <VisualState x:Name="TitleBarTitleInactive">
-                        <VisualState.Setters>
-                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}" />
-                            <Setter Property="ForegroundColor" Value="{AppThemeBinding Light={StaticResource Gray400}, Dark={StaticResource Gray500}}" />
-                        </VisualState.Setters>
-                    </VisualState>
-                </VisualStateGroup>
-            </VisualStateGroupList>
-        </Setter>
-    </Style>
-    -->
 
     <Style TargetType="Page" ApplyToDerivedTypes="True">
         <Setter Property="Padding" Value="0"/>
-        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource OffBlack}}" />
+        <Setter Property="BackgroundColor" Value="{DynamicResource AppBackgroundColor}" />
     </Style>
 
     <Style TargetType="Shell" ApplyToDerivedTypes="True">
-        <Setter Property="Shell.BackgroundColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource OffBlack}}" />
-        <Setter Property="Shell.ForegroundColor" Value="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource SecondaryDarkText}}" />
-        <Setter Property="Shell.TitleColor" Value="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource SecondaryDarkText}}" />
-        <Setter Property="Shell.DisabledColor" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray950}}" />
-        <Setter Property="Shell.UnselectedColor" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray200}}" />
+        <Setter Property="Shell.BackgroundColor" Value="{DynamicResource AppBackgroundColor}" />
+        <Setter Property="Shell.ForegroundColor" Value="{DynamicResource AppForegroundColor}" />
+        <!-- Main text/icon color -->
+        <Setter Property="Shell.TitleColor" Value="{DynamicResource AppForegroundColor}" />
+        <Setter Property="Shell.DisabledColor" Value="{DynamicResource AppSecondaryTextColor}" />
+        <Setter Property="Shell.UnselectedColor" Value="{DynamicResource AppSecondaryTextColor}" />
         <Setter Property="Shell.NavBarHasShadow" Value="False" />
-        <Setter Property="Shell.TabBarBackgroundColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}" />
-        <Setter Property="Shell.TabBarForegroundColor" Value="{AppThemeBinding Light={StaticResource Magenta}, Dark={StaticResource White}}" />
-        <Setter Property="Shell.TabBarTitleColor" Value="{AppThemeBinding Light={StaticResource Magenta}, Dark={StaticResource White}}" />
-        <Setter Property="Shell.TabBarUnselectedColor" Value="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray200}}" />
+        <Setter Property="Shell.TabBarBackgroundColor" Value="{DynamicResource AppSurfaceColor}" />
+        <!-- Surface for tab bar -->
+        <Setter Property="Shell.TabBarForegroundColor" Value="{StaticResource Primary}" />
+        <!-- Accent for selected tab -->
+        <Setter Property="Shell.TabBarTitleColor" Value="{StaticResource Primary}" />
+        <!-- Accent for selected tab title -->
+        <Setter Property="Shell.TabBarUnselectedColor" Value="{DynamicResource AppSecondaryTextColor}" />
+        <Setter Property="Shell.FlyoutBackgroundColor" Value="{DynamicResource AppSurfaceColor}"/>
+        <!-- Flyout uses surface color -->
     </Style>
 
     <Style TargetType="NavigationPage">
-        <Setter Property="BarBackgroundColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource OffBlack}}" />
-        <Setter Property="BarTextColor" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource White}}" />
-        <Setter Property="IconColor" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource White}}" />
+        <Setter Property="BarBackgroundColor" Value="{DynamicResource AppSurfaceColor}" />
+        <Setter Property="BarTextColor" Value="{DynamicResource AppForegroundColor}" />
+        <Setter Property="IconColor" Value="{DynamicResource AppForegroundColor}" />
     </Style>
 
     <Style TargetType="TabbedPage">
-        <Setter Property="BarBackgroundColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Gray950}}" />
-        <Setter Property="BarTextColor" Value="{AppThemeBinding Light={StaticResource Magenta}, Dark={StaticResource White}}" />
-        <Setter Property="UnselectedTabColor" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray950}}" />
-        <Setter Property="SelectedTabColor" Value="{AppThemeBinding Light={StaticResource Gray950}, Dark={StaticResource Gray200}}" />
+        <Setter Property="BarBackgroundColor" Value="{DynamicResource AppSurfaceColor}" />
+        <Setter Property="BarTextColor" Value="{StaticResource Primary}" />
+        <!-- Accent for selected -->
+        <Setter Property="UnselectedTabColor" Value="{DynamicResource AppSecondaryTextColor}" />
+        <Setter Property="SelectedTabColor" Value="{StaticResource Primary}" />
+        <!-- Accent for selected -->
     </Style>
 
     <Style TargetType="Button">
-        <!-- Existing setters might be here -->
         <Setter Property="FontSize" Value="14" />
-        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Primary}}" />
-        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource White}}" />
-        <!-- ... etc ... -->
-
+        <Setter Property="TextColor" Value="{DynamicResource AppForegroundColor}" />
+        <!-- Theme text color -->
+        <Setter Property="BackgroundColor" Value="{StaticResource Primary}" />
+        <!-- Accent background -->
+        <Setter Property="Padding" Value="14,10"/>
+        <Setter Property="MinimumHeightRequest" Value="44"/>
+        <Setter Property="MinimumWidthRequest" Value="44"/>
         <Setter Property="VisualStateManager.VisualStateGroups">
             <VisualStateGroupList>
                 <VisualStateGroup x:Name="CommonStates">
                     <VisualState x:Name="Normal">
                         <VisualState.Setters>
                             <Setter Property="Scale" Value="1.0" />
-                            <!-- Optional: Reset background if needed, often handled by base setter -->
-                            <!-- <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource White}}" /> -->
+                            <Setter Property="BackgroundColor" Value="{StaticResource Primary}" />
                         </VisualState.Setters>
                     </VisualState>
-
-                    <!-- ADD OR MODIFY THIS -->
                     <VisualState x:Name="Pressed">
                         <VisualState.Setters>
                             <Setter Property="Scale" Value="0.95" />
-                            <!-- Optional: Define a pressed background color -->
-                            <!-- Note: Might need separate Light/Dark values -->
-                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light='#3E1F9F', Dark='#DDDDDD'}" />
+                            <!-- Slightly darker primary color on press -->
+                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light='#3E1F9F', Dark='#4A25BC'}" />
                         </VisualState.Setters>
                     </VisualState>
-
                     <VisualState x:Name="Disabled">
                         <VisualState.Setters>
-                            <Setter Property="TextColor" Value="#A0A0A0" />
-                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light='#C0C0C0', Dark='#444444'}" />
+                            <Setter Property="TextColor" Value="{DynamicResource AppSecondaryTextColor}" />
+                            <Setter Property="BackgroundColor" Value="{StaticResource Gray600}" />
                         </VisualState.Setters>
                     </VisualState>
                 </VisualStateGroup>
@@ -9564,6 +9612,18 @@ public class TasksReloadRequestedMessage : Commu
 }
 </file>
 
+<file path="Source\Messages\ThemeChangedMessage.cs">
+using CommunityToolkit.Mvvm.Messaging.Messages;
+using Tickly.Models;
+
+namespace Tickly.Messages;
+
+public class ThemeChangedMessage : ValueChangedMessage<ThemeType>
+{
+    public ThemeChangedMessage(ThemeType value) : base(value) { }
+}
+</file>
+
 <file path="Source\Messages\UpdateTaskMessage.cs">
 using CommunityToolkit.Mvvm.Messaging.Messages;
 using Tickly.Models;
@@ -9691,6 +9751,16 @@ public enum TaskTimeType
 }
 </file>
 
+<file path="Source\Models\ThemeType.cs">
+namespace Tickly.Models;
+
+public enum ThemeType
+{
+    PitchBlack,
+    DarkGray
+}
+</file>
+
 <file path="Source\Services\AppSettings.cs">
 using System.Diagnostics;
 using Tickly.Models;
@@ -9699,32 +9769,23 @@ namespace Tickly.Services;
 
 public static class AppSettings
 {
-    // Key for storing the setting
     public const string CalendarSystemKey = "CalendarSystemPreference";
-    // REMOVED: SortOrderKey
-    // public const string SortOrderKey = "SortOrderPreference";
+    public const string ThemePreferenceKey = "ThemePreference";
 
-    // Backing field - Now initialized by static constructor
     private static CalendarSystemType _selectedCalendarSystem;
-    // REMOVED: _selectedSortOrder
-    // private static SortOrderType _selectedSortOrder;
+    private static ThemeType _selectedTheme;
 
-    // --- Static Constructor ---
     static AppSettings()
     {
-        // Load Calendar from Preferences, default to Gregorian (0) if not found
         int storedCalendarValue = Preferences.Get(CalendarSystemKey, (int)CalendarSystemType.Gregorian);
         _selectedCalendarSystem = (CalendarSystemType)storedCalendarValue;
         Debug.WriteLine($"AppSettings (Static Constructor): Initialized CalendarSystem to {_selectedCalendarSystem} from Preferences.");
 
-        // REMOVED: Sort Order loading
-        // int storedSortValue = Preferences.Get(SortOrderKey, (int)SortOrderType.PriorityHighFirst);
-        // _selectedSortOrder = (SortOrderType)storedSortValue;
-        // Debug.WriteLine($"AppSettings (Static Constructor): Initialized SortOrder to {_selectedSortOrder} from Preferences.");
+        int storedThemeValue = Preferences.Get(ThemePreferenceKey, (int)ThemeType.PitchBlack);
+        _selectedTheme = (ThemeType)storedThemeValue;
+        Debug.WriteLine($"AppSettings (Static Constructor): Initialized Theme to {_selectedTheme} from Preferences.");
     }
-    // --- End Static Constructor ---
 
-    // Public property to access the Calendar setting
     public static CalendarSystemType SelectedCalendarSystem
     {
         get => _selectedCalendarSystem;
@@ -9738,9 +9799,18 @@ public static class AppSettings
         }
     }
 
-    // REMOVED: SelectedSortOrder property
-    // public static SortOrderType SelectedSortOrder { ... }
-
+    public static ThemeType SelectedTheme
+    {
+        get => _selectedTheme;
+        set
+        {
+            if (_selectedTheme != value)
+            {
+                _selectedTheme = value;
+                Debug.WriteLine($"AppSettings: Theme changed to {value} (will be saved by SettingsViewModel).");
+            }
+        }
+    }
 }
 </file>
 
@@ -10656,7 +10726,7 @@ using Tickly.Messages;
 using Tickly.Models;
 using Tickly.Services;
 using Tickly.Utils;
-using Tickly.Views; // Needed for GetCurrentPage
+using Tickly.Views;
 
 namespace Tickly.ViewModels;
 
@@ -10665,6 +10735,8 @@ public sealed partial class SettingsViewModel : ObservableObject
     private readonly TaskPersistenceService _taskPersistenceService;
     private bool _isGregorianSelected;
     private bool _isPersianSelected;
+    private bool _isPitchBlackSelected;
+    private bool _isDarkGraySelected;
     private readonly string _applicationTasksFilePath;
     private const string TaskExportFilePrefix = "Tickly-Tasks-Export-";
 
@@ -10688,6 +10760,30 @@ public sealed partial class SettingsViewModel : ObservableObject
             if (SetProperty(ref _isPersianSelected, value) && value)
             {
                 OnCalendarSelectionChanged(false);
+            }
+        }
+    }
+
+    public bool IsPitchBlackSelected
+    {
+        get => _isPitchBlackSelected;
+        set
+        {
+            if (SetProperty(ref _isPitchBlackSelected, value) && value)
+            {
+                OnThemeSelectionChanged(true);
+            }
+        }
+    }
+
+    public bool IsDarkGraySelected
+    {
+        get => _isDarkGraySelected;
+        set
+        {
+            if (SetProperty(ref _isDarkGraySelected, value) && value)
+            {
+                OnThemeSelectionChanged(false);
             }
         }
     }
@@ -10727,21 +10823,56 @@ public sealed partial class SettingsViewModel : ObservableObject
         WeakReferenceMessenger.Default.Send(new CalendarSettingChangedMessage());
     }
 
+    private void OnThemeSelectionChanged(bool isPitchBlackNowSelected)
+    {
+        if (isPitchBlackNowSelected)
+        {
+            SetProperty(ref _isDarkGraySelected, false, nameof(IsDarkGraySelected));
+            UpdateThemeSetting(ThemeType.PitchBlack);
+        }
+        else
+        {
+            SetProperty(ref _isPitchBlackSelected, false, nameof(IsPitchBlackSelected));
+            UpdateThemeSetting(ThemeType.DarkGray);
+        }
+    }
+
+    private void UpdateThemeSetting(ThemeType newTheme)
+    {
+        if (AppSettings.SelectedTheme == newTheme)
+        {
+            return;
+        }
+
+        AppSettings.SelectedTheme = newTheme;
+        Preferences.Set(AppSettings.ThemePreferenceKey, (int)newTheme);
+        WeakReferenceMessenger.Default.Send(new ThemeChangedMessage(newTheme));
+    }
+
     private void LoadSettings()
     {
         CalendarSystemType currentSystem = AppSettings.SelectedCalendarSystem;
-
         bool shouldBeGregorian = currentSystem == CalendarSystemType.Gregorian;
         bool shouldBePersian = currentSystem == CalendarSystemType.Persian;
-
         SetProperty(ref _isGregorianSelected, shouldBeGregorian, nameof(IsGregorianSelected));
         SetProperty(ref _isPersianSelected, shouldBePersian, nameof(IsPersianSelected));
-
         if (!_isGregorianSelected && !_isPersianSelected)
         {
             SetProperty(ref _isGregorianSelected, true, nameof(IsGregorianSelected));
             AppSettings.SelectedCalendarSystem = CalendarSystemType.Gregorian;
             Preferences.Set(AppSettings.CalendarSystemKey, (int)CalendarSystemType.Gregorian);
+        }
+
+        ThemeType currentTheme = AppSettings.SelectedTheme;
+        bool shouldBePitchBlack = currentTheme == ThemeType.PitchBlack;
+        bool shouldBeDarkGray = currentTheme == ThemeType.DarkGray;
+        SetProperty(ref _isPitchBlackSelected, shouldBePitchBlack, nameof(IsPitchBlackSelected));
+        SetProperty(ref _isDarkGraySelected, shouldBeDarkGray, nameof(IsDarkGraySelected));
+        if (!_isPitchBlackSelected && !_isDarkGraySelected)
+        {
+            SetProperty(ref _isPitchBlackSelected, true, nameof(IsPitchBlackSelected));
+            AppSettings.SelectedTheme = ThemeType.PitchBlack;
+            Preferences.Set(AppSettings.ThemePreferenceKey, (int)ThemeType.PitchBlack);
         }
     }
 
@@ -11044,7 +11175,7 @@ public sealed partial class SettingsViewModel : ObservableObject
 }
 </file>
 
-<file path="Source\ViewModels\StatsVideoModel.cs">
+<file path="Source\ViewModels\StatsViewModel.cs">
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Globalization;
@@ -11056,7 +11187,7 @@ using Microsoft.Maui.Controls;
 using Tickly.Models;
 using Tickly.Services;
 using Tickly.Utils;
-using Tickly.Views; // Needed for GetCurrentPage
+using Tickly.Views.Plotting;
 
 namespace Tickly.ViewModels;
 
@@ -11064,6 +11195,18 @@ public sealed partial class StatsViewModel : ObservableObject
 {
     private readonly TaskPersistenceService _taskPersistenceService;
     private const string ProgressExportFilePrefix = "Tickly-Progress-Export-";
+
+    [ObservableProperty]
+    private ObservableCollection<DailyProgress> _allProgressData;
+
+    [ObservableProperty]
+    private List<PlotDataPoint> _plotData;
+
+    [ObservableProperty]
+    private ObservableCollection<string> _plotTimeRanges;
+
+    [ObservableProperty]
+    private string _selectedPlotTimeRange;
 
     public ObservableCollection<string> ExportSortOrders { get; }
 
@@ -11075,78 +11218,201 @@ public sealed partial class StatsViewModel : ObservableObject
     [ObservableProperty]
     private string _selectedExportCalendarType;
 
+    [ObservableProperty]
+    private BarChartDrawable _chartDrawable;
+
     public StatsViewModel(TaskPersistenceService taskPersistenceService)
     {
         _taskPersistenceService = taskPersistenceService;
+        _allProgressData = [];
+        _plotData = [];
 
-        ExportSortOrders = new ObservableCollection<string>
-        {
+        Color initialTextColor = GetCurrentThemeTextColor();
+        _chartDrawable = new BarChartDrawable { DataPoints = [], TextColor = initialTextColor };
+
+        PlotTimeRanges =
+        [
+            "Last 7 Days",
+            "Last 30 Days",
+            "Last 3 Months",
+            "Last 6 Months",
+            "Last Year",
+            "All Time"
+        ];
+        SelectedPlotTimeRange = PlotTimeRanges.FirstOrDefault() ?? "Last 7 Days";
+
+        ExportSortOrders =
+        [
             "Ascending by Date",
             "Descending by Date"
-        };
-        _selectedExportSortOrder = ExportSortOrders.FirstOrDefault() ?? "Ascending by Date";
+        ];
+        SelectedExportSortOrder = ExportSortOrders.FirstOrDefault() ?? "Ascending by Date";
 
-        ExportCalendarTypes = new ObservableCollection<string>
-        {
+        ExportCalendarTypes =
+        [
             "Gregorian",
             "Persian"
-        };
-        _selectedExportCalendarType = ExportCalendarTypes.FirstOrDefault() ?? "Gregorian";
+        ];
+        SelectedExportCalendarType = ExportCalendarTypes.FirstOrDefault() ?? "Gregorian";
 
+        _ = LoadProgressAsync();
+    }
+
+    partial void OnSelectedPlotTimeRangeChanged(string value)
+    {
+        Debug.WriteLine($"StatsViewModel: Time range changed to '{value}'. Updating plot data.");
+        UpdatePlotData();
+    }
+
+    [RelayCommand]
+    private async Task LoadProgressAsync()
+    {
+        Debug.WriteLine("StatsViewModel: LoadProgressAsync started.");
+        var progress = await _taskPersistenceService.LoadDailyProgressAsync();
+        Debug.WriteLine($"StatsViewModel: Loaded {progress.Count} progress entries.");
+        AllProgressData = new ObservableCollection<DailyProgress>(progress.OrderBy(p => p.Date));
+        Debug.WriteLine("StatsViewModel: AllProgressData populated and sorted.");
+        UpdatePlotData();
+    }
+
+    private void UpdatePlotData()
+    {
+        Debug.WriteLine($"StatsViewModel: UpdatePlotData started for range '{SelectedPlotTimeRange}'.");
+        Color currentTextColor = GetCurrentThemeTextColor();
+
+        if (AllProgressData == null || !AllProgressData.Any())
+        {
+            Debug.WriteLine("StatsViewModel: No progress data available. Clearing plot.");
+            PlotData = [];
+            ChartDrawable = new BarChartDrawable { DataPoints = PlotData, TextColor = currentTextColor };
+            return;
+        }
+
+        DateTime startDate = DateTime.MinValue;
+        DateTime today = DateTime.Today;
+
+        switch (SelectedPlotTimeRange)
+        {
+            case "Last 7 Days":
+                startDate = today.AddDays(-6);
+                break;
+            case "Last 30 Days":
+                startDate = today.AddDays(-29);
+                break;
+            case "Last 3 Months":
+                startDate = today.AddMonths(-3).AddDays(1);
+                break;
+            case "Last 6 Months":
+                startDate = today.AddMonths(-6).AddDays(1);
+                break;
+            case "Last Year":
+                startDate = today.AddYears(-1).AddDays(1);
+                break;
+            case "All Time":
+            default:
+                startDate = AllProgressData.Min(p => p.Date);
+                break;
+        }
+        Debug.WriteLine($"StatsViewModel: Date range calculated: {startDate:yyyy-MM-dd} to {today:yyyy-MM-dd}");
+
+        var filteredProgress = AllProgressData
+            .Where(p => p.Date.Date >= startDate.Date && p.Date.Date <= today.Date)
+            .OrderBy(p => p.Date)
+            .ToList();
+
+        Debug.WriteLine($"StatsViewModel: Filtered data count: {filteredProgress.Count}");
+
+        if (SelectedPlotTimeRange == "All Time" && filteredProgress.Count > 90)
+        {
+            Debug.WriteLine($"StatsViewModel: Plot has {filteredProgress.Count} points for All Time. Consider aggregation for performance/readability.");
+        }
+
+        CalendarSystemType calendarSystem = AppSettings.SelectedCalendarSystem;
+        CultureInfo formatCulture = calendarSystem == CalendarSystemType.Persian ? new("fa-IR") : CultureInfo.InvariantCulture;
+        string dateFormat = "dd MMM";
+        if (SelectedPlotTimeRange == "Last Year" || (SelectedPlotTimeRange == "All Time" && (today - startDate).TotalDays > 365))
+        {
+            dateFormat = "MMM yy";
+        }
+
+
+        List<PlotDataPoint> newPlotData = [];
+        foreach (var progress in filteredProgress)
+        {
+            string label;
+            if (calendarSystem == CalendarSystemType.Persian)
+            {
+                PersianCalendar pc = new();
+                label = $"{pc.GetDayOfMonth(progress.Date):00} {GetPersianAbbreviatedMonthName(pc.GetMonth(progress.Date))}";
+                if (dateFormat == "MMM yy")
+                {
+                    label = $"{GetPersianAbbreviatedMonthName(pc.GetMonth(progress.Date))} {pc.GetYear(progress.Date) % 100:00}";
+                }
+            }
+            else
+            {
+                label = progress.Date.ToString(dateFormat, formatCulture);
+            }
+            newPlotData.Add(new PlotDataPoint(label, progress.PercentageCompleted, DetermineBarColor(progress.PercentageCompleted)));
+        }
+        PlotData = newPlotData;
+        Debug.WriteLine($"StatsViewModel: Created new PlotData list with {PlotData.Count} points.");
+
+        var newDrawable = new BarChartDrawable
+        {
+            DataPoints = PlotData,
+            TextColor = currentTextColor // Use the determined theme text color
+        };
+        ChartDrawable = newDrawable;
+        Debug.WriteLine("StatsViewModel: Assigned new BarChartDrawable instance to ChartDrawable property. UI should update.");
+    }
+
+    private string GetPersianAbbreviatedMonthName(int month)
+    {
+        string[] names = ["", "فر", "ار", "خر", "تی", "مر", "شه", "مه", "آب", "آذ", "دی", "به", "اس"];
+        return (month >= 1 && month <= 12) ? names[month] : "?";
+    }
+
+
+    private Color DetermineBarColor(double percentage)
+    {
+        if (percentage >= 0.75) return Colors.LimeGreen;
+        if (percentage >= 0.40) return Colors.Yellow;
+        return Colors.Red;
     }
 
     [RelayCommand]
     private async Task ExportProgressAsync()
     {
-        Debug.WriteLine("ExportProgressAsync: Starting progress export process.");
         string temporaryExportPath = string.Empty;
-
         try
         {
             List<DailyProgress> dailyProgressList = await _taskPersistenceService.LoadDailyProgressAsync();
 
             if (dailyProgressList == null || !dailyProgressList.Any())
             {
-                Debug.WriteLine("ExportProgressAsync: No progress data to export.");
-                await StatsViewModel.ShowAlertAsync("Export Progress", "No daily progress data found to export.", "OK");
+                await ShowAlertAsync("Export Progress", "No daily progress data found to export.", "OK");
                 return;
             }
-            Debug.WriteLine($"ExportProgressAsync: Loaded {dailyProgressList.Count} progress entries.");
 
-            IEnumerable<DailyProgress> sortedProgress;
-            if (SelectedExportSortOrder == "Ascending by Date")
-            {
-                sortedProgress = dailyProgressList.OrderBy(p => p.Date);
-                Debug.WriteLine("ExportProgressAsync: Sorting progress by date ascending.");
-            }
-            else
-            {
-                sortedProgress = dailyProgressList.OrderByDescending(p => p.Date);
-                Debug.WriteLine("ExportProgressAsync: Sorting progress by date descending.");
-            }
+            IEnumerable<DailyProgress> sortedProgress = SelectedExportSortOrder == "Ascending by Date"
+                ? dailyProgressList.OrderBy(p => p.Date)
+                : dailyProgressList.OrderByDescending(p => p.Date);
 
             StringBuilder sb = new();
-            Debug.WriteLine($"ExportProgressAsync: Formatting progress using {SelectedExportCalendarType} calendar.");
             foreach (var progress in sortedProgress)
             {
-                string dateString;
-                if (SelectedExportCalendarType == "Persian")
-                {
-                    dateString = DateUtils.ToPersianDateString(progress.Date);
-                }
-                else
-                {
-                    dateString = DateUtils.ToGregorianDateString(progress.Date);
-                }
+                string dateString = SelectedExportCalendarType == "Persian"
+                    ? DateUtils.ToPersianDateString(progress.Date)
+                    : DateUtils.ToGregorianDateString(progress.Date);
                 string percentageString = progress.PercentageCompleted.ToString("P0", CultureInfo.InvariantCulture);
-                sb.AppendLine($"{dateString}-{percentageString}");
+                sb.AppendLine($"{dateString} - {percentageString}");
             }
 
             string fileContent = sb.ToString();
             if (string.IsNullOrWhiteSpace(fileContent))
             {
-                Debug.WriteLine("ExportProgressAsync: Formatted content is empty.");
-                await StatsViewModel.ShowAlertAsync("Export Progress", "Failed to generate export content.", "OK");
+                await ShowAlertAsync("Export Progress", "Failed to generate export content.", "OK");
                 return;
             }
 
@@ -11154,20 +11420,11 @@ public sealed partial class StatsViewModel : ObservableObject
 
             string exportFilename = $"{ProgressExportFilePrefix}{DateTime.Now:yyyy-MM-dd_HH-mm-ss}.txt";
             temporaryExportPath = Path.Combine(FileSystem.CacheDirectory, exportFilename);
-            Debug.WriteLine($"ExportProgressAsync: Temporary progress export path set to: {temporaryExportPath}");
 
             EnsureDirectoryExists(temporaryExportPath);
 
-            Debug.WriteLine($"ExportProgressAsync: Writing progress content ({fileContent.Length} chars) to '{temporaryExportPath}'");
             await File.WriteAllTextAsync(temporaryExportPath, fileContent);
-            Debug.WriteLine("ExportProgressAsync: Progress file write successful.");
 
-            if (!File.Exists(temporaryExportPath))
-            {
-                Debug.WriteLine($"ExportProgressAsync: ERROR - Temporary progress file does not exist after write attempt: {temporaryExportPath}");
-                await StatsViewModel.ShowAlertAsync("Export Error", "Failed to create temporary export file.", "OK");
-                return;
-            }
             LogFileInfo(temporaryExportPath, "Temporary Progress");
 
             ShareFileRequest request = new()
@@ -11175,16 +11432,12 @@ public sealed partial class StatsViewModel : ObservableObject
                 Title = "Export Tickly Progress",
                 File = new ShareFile(temporaryExportPath, "text/plain")
             };
-            Debug.WriteLine("ExportProgressAsync: ShareFileRequest created for progress. Title: " + request.Title + ", File Path: " + request.File.FullPath);
-
-            Debug.WriteLine("ExportProgressAsync: Calling Share.RequestAsync for progress...");
             await Share.RequestAsync(request);
-            Debug.WriteLine("ExportProgressAsync: Share.RequestAsync for progress completed.");
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"ExportProgressAsync: Exception caught: {ex.GetType().Name} - {ex.Message}\nStackTrace: {ex.StackTrace}");
-            await StatsViewModel.ShowAlertAsync("Export Error", $"An unexpected error occurred during progress export: {ex.Message}", "OK");
+            Debug.WriteLine($"ExportProgressAsync: Exception: {ex.Message}");
+            await ShowAlertAsync("Export Error", $"An unexpected error occurred: {ex.Message}", "OK");
         }
     }
 
@@ -11309,17 +11562,28 @@ public sealed partial class StatsViewModel : ObservableObject
         Debug.WriteLine("GetCurrentPage: Could not determine the current page reliably.");
         return null;
     }
+
+    private static Color GetCurrentThemeTextColor()
+    {
+        if (Application.Current != null && Application.Current.Resources.TryGetValue("AppForegroundColor", out var foregroundColor) && foregroundColor is Color color)
+        {
+            return color;
+        }
+        // Fallback based on system theme if dynamic resource isn't available yet
+        return Application.Current?.RequestedTheme == AppTheme.Dark ? Colors.WhiteSmoke : Colors.Black;
+    }
 }
 </file>
 
 <file path="Source\ViewModels\TasksReloadRequestedMessage.cs">
-namespace Tickly.Messages
+using CommunityToolkit.Mvvm.Messaging.Messages;
+
+namespace Tickly.Messages;
+
+public class TasksReloadRequestedMessage : ValueChangedMessage<bool>
 {
-    internal class TasksReloadRequestedMessage
+    public TasksReloadRequestedMessage() : base(true)
     {
-        public TasksReloadRequestedMessage()
-        {
-        }
     }
 }
 </file>
@@ -11800,7 +12064,6 @@ public sealed class SettingsPage : ContentPage
         BindingContext = viewModel;
 
         Title = "Settings";
-        BackgroundColor = Colors.Black;
 
         Content = new ScrollView
         {
@@ -11812,33 +12075,62 @@ public sealed class SettingsPage : ContentPage
                 {
                     new Label
                     {
+                        Text = "Theme Settings",
+                        TextColor = Colors.WhiteSmoke,
+                        FontSize = LargeFontSize,
+                        FontAttributes = FontAttributes.Bold,
+                        Margin = new(0, 0, 0, 10)
+                    },
+                    new Label
+                    {
+                        Text = "Choose the application theme:",
+                        Style = GetStyle("LightGrayLabel")
+                    },
+                     new RadioButton
+                    {
+                        GroupName = "ThemeGroup",
+                        Content = "Pitch Black"
+                    }
+                    .Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsPitchBlackSelected)),
+
+                    new RadioButton
+                    {
+                        GroupName = "ThemeGroup",
+                        Content = "Dark Gray"
+                    }
+                    .Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsDarkGraySelected)),
+
+                    new BoxView
+                    {
+                        HeightRequest = 1,
+                        BackgroundColor = Color.FromArgb("#333333"),
+                        Margin = new(0, 15, 0, 15)
+                    },
+
+                    new Label
+                    {
                         Text = "Calendar Settings",
                         TextColor = Colors.WhiteSmoke,
                         FontSize = LargeFontSize,
                         FontAttributes = FontAttributes.Bold,
                         Margin = new(0, 0, 0, 10)
                     },
-
                     new Label
                     {
                         Text = "Choose the calendar system for displaying dates:",
-                        TextColor = Colors.LightGray,
-                        FontSize = SmallFontSize
+                        Style = GetStyle("LightGrayLabel")
                     },
-
                     new RadioButton
                     {
                         GroupName = "CalendarGroup",
-                        Content = "Gregorian Calendar",
-                        TextColor = Colors.WhiteSmoke
+                        Content = "Gregorian Calendar"
                     }
                     .Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsGregorianSelected)),
 
                     new RadioButton
                     {
                         GroupName = "CalendarGroup",
-                        Content = "Persian (Shamsi) Calendar",
-                        TextColor = Colors.WhiteSmoke
+                        Content = "Persian (Shamsi) Calendar"
                     }
                     .Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsPersianSelected)),
 
@@ -11857,15 +12149,12 @@ public sealed class SettingsPage : ContentPage
                         FontAttributes = FontAttributes.Bold,
                         Margin = new(0, 0, 0, 10)
                     },
-
                     new Label
                     {
                         Text = "Export your current tasks to a JSON file or import tasks from a previously exported file (this will replace current tasks).",
-                        TextColor = Colors.LightGray,
-                        FontSize = SmallFontSize,
+                        Style = GetStyle("LightGrayLabel"),
                         LineBreakMode = LineBreakMode.WordWrap
                     },
-
                     new HorizontalStackLayout
                     {
                         Spacing = 10,
@@ -11875,7 +12164,7 @@ public sealed class SettingsPage : ContentPage
                             new Button
                             {
                                 Text = "Export Tasks",
-                                BackgroundColor = Color.FromArgb("#005A9C"),
+                                BackgroundColor = Color.FromArgb("#4A6FA5"),
                                 TextColor = Colors.WhiteSmoke
                             }
                             .BindCommand(nameof(SettingsViewModel.ExportTasksCommand)),
@@ -11883,7 +12172,7 @@ public sealed class SettingsPage : ContentPage
                             new Button
                             {
                                 Text = "Import Tasks",
-                                BackgroundColor = Color.FromArgb("#008000"),
+                                BackgroundColor = Color.FromArgb("#5A9A78"),
                                 TextColor = Colors.WhiteSmoke
                             }
                             .BindCommand(nameof(SettingsViewModel.ImportTasksCommand))
@@ -11893,6 +12182,16 @@ public sealed class SettingsPage : ContentPage
             }
         };
     }
+
+    private static Style GetStyle(string key)
+    {
+        if (Application.Current != null && Application.Current.Resources.TryGetValue(key, out var resource) && resource is Style style)
+        {
+            return style;
+        }
+
+        return new Style(typeof(Label));
+    }
 }
 </file>
 
@@ -11901,6 +12200,7 @@ using CommunityToolkit.Maui.Markup;
 using Microsoft.Maui.Controls;
 using Microsoft.Maui.Graphics;
 using Tickly.ViewModels;
+using Tickly.Views.Plotting;
 
 namespace Tickly.Views;
 
@@ -11908,12 +12208,28 @@ public sealed class StatsPage : ContentPage
 {
     private const double LargeFontSize = 20;
     private const double SmallFontSize = 12;
+    private GraphicsView? _barChartView;
 
     public StatsPage(StatsViewModel viewModel)
     {
         BindingContext = viewModel;
         Title = "Stats";
-        BackgroundColor = Colors.Black;
+        // BackgroundColor set by Page style using DynamicResource
+
+        // Determine initial text color for the chart based on the current theme
+        Color initialChartTextColor = Application.Current?.RequestedTheme == AppTheme.Dark
+                                      ? Colors.WhiteSmoke // Example: Use WhiteSmoke for dark theme
+                                      : Colors.Black;    // Example: Use Black for light theme
+
+        viewModel.ChartDrawable.TextColor = initialChartTextColor; // Set initial color
+
+        _barChartView = new GraphicsView
+        {
+            HeightRequest = 200,
+            Margin = new Thickness(0, 10, 0, 10)
+            // Drawable is bound below
+        }
+        .Bind(GraphicsView.DrawableProperty, nameof(StatsViewModel.ChartDrawable));
 
         Content = new ScrollView
         {
@@ -11925,8 +12241,41 @@ public sealed class StatsPage : ContentPage
                 {
                     new Label
                     {
+                        Text = "Daily Progress Activity",
+                        // Style = GetStyle("Headline"), // Use implicit or base label style
+                        FontSize = LargeFontSize,
+                        FontAttributes = FontAttributes.Bold,
+                        Margin = new(0, 0, 0, 5)
+                    },
+                    new Label
+                    {
+                        Text = "Time Range:",
+                        Style = GetStyle("BaseLabelStyle"), // Use base label style
+                        FontSize = SmallFontSize,
+                        Margin = new(0,0,0,0)
+                    },
+                    new Picker
+                    {
+                        Title = "Select Time Range",
+                        // TextColor, BackgroundColor set by implicit Picker style
+                        TitleColor = (Color)(Application.Current?.Resources["AppSecondaryTextColor"] ?? Colors.Gray) // Explicitly set TitleColor
+                    }
+                    .Bind(Picker.ItemsSourceProperty, nameof(StatsViewModel.PlotTimeRanges))
+                    .Bind(Picker.SelectedItemProperty, nameof(StatsViewModel.SelectedPlotTimeRange)),
+
+                    _barChartView,
+
+                    new BoxView
+                    {
+                        HeightRequest = 1,
+                        BackgroundColor = Color.FromArgb("#333333"), // Use a subtle separator color
+                        Margin = new(0, 15, 0, 15)
+                    },
+
+                    new Label
+                    {
                         Text = "Export Daily Progress",
-                        TextColor = Colors.WhiteSmoke,
+                        // Style = GetStyle("Headline"), // Use implicit or base label style
                         FontSize = LargeFontSize,
                         FontAttributes = FontAttributes.Bold,
                         Margin = new(0, 0, 0, 10)
@@ -11934,7 +12283,7 @@ public sealed class StatsPage : ContentPage
                     new Label
                     {
                         Text = "Export your daily task completion percentages to a .txt file.",
-                        TextColor = Colors.LightGray,
+                        Style = GetStyle("LightGrayLabel"), // Use specific keyed style
                         FontSize = SmallFontSize,
                         LineBreakMode = LineBreakMode.WordWrap,
                         Margin = new(0,0,0,10)
@@ -11942,39 +12291,37 @@ public sealed class StatsPage : ContentPage
                     new Label
                     {
                         Text = "Sort Order:",
-                        TextColor = Colors.WhiteSmoke,
+                        Style = GetStyle("BaseLabelStyle"), // Use base label style
                         FontSize = SmallFontSize,
                         Margin = new(0,5,0,0)
                     },
                     new Picker
                     {
                         Title = "Select Sort Order",
-                        TextColor = Colors.WhiteSmoke,
-                        TitleColor = Colors.LightGray,
-                        BackgroundColor = Color.FromArgb("#1e1e1e")
+                        // TextColor, BackgroundColor set by implicit Picker style
+                        TitleColor = (Color)(Application.Current?.Resources["AppSecondaryTextColor"] ?? Colors.Gray) // Explicitly set TitleColor
                     }
                     .Bind(Picker.ItemsSourceProperty, nameof(StatsViewModel.ExportSortOrders))
                     .Bind(Picker.SelectedItemProperty, nameof(StatsViewModel.SelectedExportSortOrder)),
                     new Label
                     {
                         Text = "Calendar For Dates:",
-                        TextColor = Colors.WhiteSmoke,
+                        Style = GetStyle("BaseLabelStyle"), // Use base label style
                         FontSize = SmallFontSize,
                         Margin = new(0,10,0,0)
                     },
                     new Picker
                     {
                         Title = "Select Calendar Type",
-                        TextColor = Colors.WhiteSmoke,
-                        TitleColor = Colors.LightGray,
-                        BackgroundColor = Color.FromArgb("#1e1e1e")
+                        // TextColor, BackgroundColor set by implicit Picker style
+                        TitleColor = (Color)(Application.Current?.Resources["AppSecondaryTextColor"] ?? Colors.Gray) // Explicitly set TitleColor
                     }
                     .Bind(Picker.ItemsSourceProperty, nameof(StatsViewModel.ExportCalendarTypes))
                     .Bind(Picker.SelectedItemProperty, nameof(StatsViewModel.SelectedExportCalendarType)),
                     new Button
                     {
                         Text = "Export Daily Progress",
-                        BackgroundColor = Color.FromArgb("#3B71CA"),
+                        BackgroundColor = Color.FromArgb("#3B71CA"), // Example button color
                         TextColor = Colors.WhiteSmoke,
                         Margin = new(0, 15, 0, 0)
                     }
@@ -11983,6 +12330,106 @@ public sealed class StatsPage : ContentPage
             }
         };
     }
+
+    protected override async void OnAppearing()
+    {
+        base.OnAppearing();
+        if (BindingContext is StatsViewModel vm && vm.LoadProgressCommand.CanExecute(null))
+        {
+            await vm.LoadProgressCommand.ExecuteAsync(null);
+        }
+        // Ensure the chart redraws with potentially updated theme colors
+        _barChartView?.Invalidate();
+    }
+
+    private static Style GetStyle(string key)
+    {
+        if (Application.Current != null && Application.Current.Resources.TryGetValue(key, out var resource) && resource is Style style)
+        {
+            return style;
+        }
+        // Fallback to default Label style if the specific keyed style isn't found
+        return new Style(typeof(Label)); // Return a basic Label style if specific one not found
+    }
 }
+</file>
+
+<file path="Source\Views\Plotting\BarChartDrawable.cs">
+using Microsoft.Maui.Graphics;
+using System.Collections.Generic;
+using System.Linq;
+
+namespace Tickly.Views.Plotting;
+
+public sealed class BarChartDrawable : IDrawable
+{
+    public List<PlotDataPoint> DataPoints { get; set; } = [];
+    public Color TextColor { get; set; } = Colors.Black; // Made settable
+
+    private const float BarMargin = 5f;
+    private const float LabelAreaHeight = 30f;
+    private const float ChartAreaPadding = 10f;
+    private const float MaxBarLabelFontSize = 10f;
+
+    public void Draw(ICanvas canvas, RectF dirtyRect)
+    {
+        // Use the TextColor property set externally
+        Color currentTextColor = TextColor ?? Colors.Black;
+
+        if (DataPoints == null || !DataPoints.Any())
+        {
+            canvas.StrokeColor = currentTextColor;
+            canvas.FontSize = 12;
+            canvas.DrawString("No progress data available.", dirtyRect, HorizontalAlignment.Center, VerticalAlignment.Center);
+            return;
+        }
+
+        float chartAreaWidth = dirtyRect.Width - 2 * ChartAreaPadding;
+        float chartAreaHeight = dirtyRect.Height - LabelAreaHeight - 2 * ChartAreaPadding;
+        float chartAreaX = dirtyRect.X + ChartAreaPadding;
+        float chartAreaY = dirtyRect.Y + ChartAreaPadding;
+
+        int numPoints = DataPoints.Count;
+        float totalBarWidthAvailable = chartAreaWidth - (numPoints + 1) * BarMargin;
+        float barWidth = totalBarWidthAvailable / numPoints;
+        barWidth = Math.Max(1f, barWidth);
+
+        double maxValue = 1.0;
+
+        canvas.StrokeSize = 1;
+        canvas.FontColor = currentTextColor;
+        canvas.FontSize = (float)Math.Min(MaxBarLabelFontSize, Math.Max(6.0, barWidth * 0.6));
+
+        float currentX = chartAreaX + BarMargin;
+
+        for (int i = 0; i < numPoints; i++)
+        {
+            var point = DataPoints[i];
+            var barHeight = (float)(point.Value / maxValue * chartAreaHeight);
+            barHeight = Math.Max(0f, barHeight);
+
+            var barRect = new RectF(currentX, chartAreaY + chartAreaHeight - barHeight, barWidth, barHeight);
+
+            canvas.FillColor = point.BarColor;
+            canvas.FillRectangle(barRect);
+
+            canvas.FontColor = currentTextColor;
+            canvas.DrawString(point.Label, currentX, chartAreaY + chartAreaHeight + 5, barWidth, LabelAreaHeight - 10, HorizontalAlignment.Center, VerticalAlignment.Top);
+
+            currentX += barWidth + BarMargin;
+        }
+
+        canvas.StrokeColor = currentTextColor.WithAlpha(0.5f);
+        canvas.DrawLine(chartAreaX, chartAreaY + chartAreaHeight, chartAreaX + chartAreaWidth, chartAreaY + chartAreaHeight);
+    }
+}
+</file>
+
+<file path="Source\Views\Plotting\PlotDataPoint.cs">
+using Microsoft.Maui.Graphics;
+
+namespace Tickly.Views.Plotting;
+
+public readonly record struct PlotDataPoint(string Label, double Value, Color BarColor);
 </file>
 

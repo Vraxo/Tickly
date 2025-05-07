@@ -49,7 +49,7 @@ public sealed partial class StatsViewModel : ObservableObject
         _allProgressData = [];
         _plotData = [];
 
-        Color initialTextColor = Application.Current?.RequestedTheme == AppTheme.Dark ? Colors.WhiteSmoke : Colors.Black;
+        Color initialTextColor = GetCurrentThemeTextColor();
         _chartDrawable = new BarChartDrawable { DataPoints = [], TextColor = initialTextColor };
 
         PlotTimeRanges =
@@ -100,11 +100,13 @@ public sealed partial class StatsViewModel : ObservableObject
     private void UpdatePlotData()
     {
         Debug.WriteLine($"StatsViewModel: UpdatePlotData started for range '{SelectedPlotTimeRange}'.");
+        Color currentTextColor = GetCurrentThemeTextColor();
+
         if (AllProgressData == null || !AllProgressData.Any())
         {
             Debug.WriteLine("StatsViewModel: No progress data available. Clearing plot.");
             PlotData = [];
-            ChartDrawable = new BarChartDrawable { DataPoints = PlotData, TextColor = Application.Current?.RequestedTheme == AppTheme.Dark ? Colors.WhiteSmoke : Colors.Black };
+            ChartDrawable = new BarChartDrawable { DataPoints = PlotData, TextColor = currentTextColor };
             return;
         }
 
@@ -181,7 +183,7 @@ public sealed partial class StatsViewModel : ObservableObject
         var newDrawable = new BarChartDrawable
         {
             DataPoints = PlotData,
-            TextColor = Application.Current?.RequestedTheme == AppTheme.Dark ? Colors.WhiteSmoke : Colors.Black
+            TextColor = currentTextColor // Use the determined theme text color
         };
         ChartDrawable = newDrawable;
         Debug.WriteLine("StatsViewModel: Assigned new BarChartDrawable instance to ChartDrawable property. UI should update.");
@@ -381,5 +383,15 @@ public sealed partial class StatsViewModel : ObservableObject
         }
         Debug.WriteLine("GetCurrentPage: Could not determine the current page reliably.");
         return null;
+    }
+
+    private static Color GetCurrentThemeTextColor()
+    {
+        if (Application.Current != null && Application.Current.Resources.TryGetValue("AppForegroundColor", out var foregroundColor) && foregroundColor is Color color)
+        {
+            return color;
+        }
+        // Fallback based on system theme if dynamic resource isn't available yet
+        return Application.Current?.RequestedTheme == AppTheme.Dark ? Colors.WhiteSmoke : Colors.Black;
     }
 }

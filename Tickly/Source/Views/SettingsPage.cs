@@ -15,7 +15,6 @@ public sealed class SettingsPage : ContentPage
         BindingContext = viewModel;
 
         Title = "Settings";
-        BackgroundColor = Colors.Black;
 
         Content = new ScrollView
         {
@@ -27,33 +26,62 @@ public sealed class SettingsPage : ContentPage
                 {
                     new Label
                     {
+                        Text = "Theme Settings",
+                        TextColor = Colors.WhiteSmoke,
+                        FontSize = LargeFontSize,
+                        FontAttributes = FontAttributes.Bold,
+                        Margin = new(0, 0, 0, 10)
+                    },
+                    new Label
+                    {
+                        Text = "Choose the application theme:",
+                        Style = GetStyle("LightGrayLabel")
+                    },
+                     new RadioButton
+                    {
+                        GroupName = "ThemeGroup",
+                        Content = "Pitch Black"
+                    }
+                    .Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsPitchBlackSelected)),
+
+                    new RadioButton
+                    {
+                        GroupName = "ThemeGroup",
+                        Content = "Dark Gray"
+                    }
+                    .Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsDarkGraySelected)),
+
+                    new BoxView
+                    {
+                        HeightRequest = 1,
+                        BackgroundColor = Color.FromArgb("#333333"),
+                        Margin = new(0, 15, 0, 15)
+                    },
+
+                    new Label
+                    {
                         Text = "Calendar Settings",
                         TextColor = Colors.WhiteSmoke,
                         FontSize = LargeFontSize,
                         FontAttributes = FontAttributes.Bold,
                         Margin = new(0, 0, 0, 10)
                     },
-
                     new Label
                     {
                         Text = "Choose the calendar system for displaying dates:",
-                        TextColor = Colors.LightGray,
-                        FontSize = SmallFontSize
+                        Style = GetStyle("LightGrayLabel")
                     },
-
                     new RadioButton
                     {
                         GroupName = "CalendarGroup",
-                        Content = "Gregorian Calendar",
-                        TextColor = Colors.WhiteSmoke
+                        Content = "Gregorian Calendar"
                     }
                     .Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsGregorianSelected)),
 
                     new RadioButton
                     {
                         GroupName = "CalendarGroup",
-                        Content = "Persian (Shamsi) Calendar",
-                        TextColor = Colors.WhiteSmoke
+                        Content = "Persian (Shamsi) Calendar"
                     }
                     .Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsPersianSelected)),
 
@@ -72,15 +100,12 @@ public sealed class SettingsPage : ContentPage
                         FontAttributes = FontAttributes.Bold,
                         Margin = new(0, 0, 0, 10)
                     },
-
                     new Label
                     {
                         Text = "Export your current tasks to a JSON file or import tasks from a previously exported file (this will replace current tasks).",
-                        TextColor = Colors.LightGray,
-                        FontSize = SmallFontSize,
+                        Style = GetStyle("LightGrayLabel"),
                         LineBreakMode = LineBreakMode.WordWrap
                     },
-
                     new HorizontalStackLayout
                     {
                         Spacing = 10,
@@ -90,7 +115,7 @@ public sealed class SettingsPage : ContentPage
                             new Button
                             {
                                 Text = "Export Tasks",
-                                BackgroundColor = Color.FromArgb("#005A9C"),
+                                BackgroundColor = Color.FromArgb("#4A6FA5"),
                                 TextColor = Colors.WhiteSmoke
                             }
                             .BindCommand(nameof(SettingsViewModel.ExportTasksCommand)),
@@ -98,7 +123,7 @@ public sealed class SettingsPage : ContentPage
                             new Button
                             {
                                 Text = "Import Tasks",
-                                BackgroundColor = Color.FromArgb("#008000"),
+                                BackgroundColor = Color.FromArgb("#5A9A78"),
                                 TextColor = Colors.WhiteSmoke
                             }
                             .BindCommand(nameof(SettingsViewModel.ImportTasksCommand))
@@ -107,5 +132,15 @@ public sealed class SettingsPage : ContentPage
                 }
             }
         };
+    }
+
+    private static Style GetStyle(string key)
+    {
+        if (Application.Current != null && Application.Current.Resources.TryGetValue(key, out var resource) && resource is Style style)
+        {
+            return style;
+        }
+
+        return new Style(typeof(Label));
     }
 }

@@ -7,19 +7,14 @@
          xmlns:fonts="clr-namespace:Fonts"
          x:Class="Tickly.MainPage"
          x:Name="MainTasksPage"
-         BackgroundColor="Black"
+         BackgroundColor="{DynamicResource AppBackgroundColor}"
          Title="Tickly Tasks">
-
-    <!-- REMOVED: Direct ViewModel instantiation -->
-    <!-- <ContentPage.BindingContext> -->
-    <!--     <vm:MainViewModel /> -->
-    <!-- </ContentPage.BindingContext> -->
 
     <Shell.TitleView>
         <Grid ColumnDefinitions="*" VerticalOptions="FillAndExpand" Margin="0,0,10,0">
             <Label Grid.Column="0"
                Text="Tickly Tasks"
-               TextColor="{AppThemeBinding Light=Black, Dark=White}"
+               TextColor="{DynamicResource AppForegroundColor}"
                FontSize="18"
                FontAttributes="Bold"
                VerticalOptions="Center"
@@ -27,7 +22,6 @@
                Margin="10,0,0,0"/>
         </Grid>
     </Shell.TitleView>
-
 
     <ContentPage.Resources>
         <ResourceDictionary>
@@ -48,13 +42,13 @@
             </Style>
 
             <Style TargetType="Label" x:Key="TaskTitleLabelStyle">
-                <Setter Property="TextColor" Value="{AppThemeBinding Light=Black, Dark=White}"/>
+                <Setter Property="TextColor" Value="{DynamicResource AppForegroundColor}"/>
                 <Setter Property="FontSize" Value="16"/>
                 <Setter Property="FontAttributes" Value="Bold"/>
                 <Setter Property="VerticalOptions" Value="Center"/>
             </Style>
             <Style TargetType="Label" x:Key="TaskTimeLabelStyle">
-                <Setter Property="TextColor" Value="Gray"/>
+                <Setter Property="TextColor" Value="{DynamicResource AppSecondaryTextColor}"/>
                 <Setter Property="FontSize" Value="12"/>
                 <Setter Property="VerticalOptions" Value="Center"/>
             </Style>
@@ -65,14 +59,14 @@
                 <Setter Property="Spacing" Value="5"/>
             </Style>
             <Style TargetType="Label" x:Key="EmptyViewLabelStyle">
-                <Setter Property="TextColor" Value="Gray"/>
+                <Setter Property="TextColor" Value="{DynamicResource AppSecondaryTextColor}"/>
                 <Setter Property="HorizontalTextAlignment" Value="Center"/>
             </Style>
             <Style TargetType="Button" x:Key="AddButtonStyle">
                 <Setter Property="Text" Value="+"/>
                 <Setter Property="FontSize" Value="24"/>
                 <Setter Property="FontAttributes" Value="Bold"/>
-                <Setter Property="TextColor" Value="{AppThemeBinding Light=White, Dark=Black}"/>
+                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}"/>
                 <Setter Property="BackgroundColor" Value="{StaticResource Primary}"/>
                 <Setter Property="CornerRadius" Value="28"/>
                 <Setter Property="HeightRequest" Value="56"/>
@@ -87,7 +81,7 @@
                 <Setter Property="FontFamily" Value="FluentUI"/>
                 <Setter Property="Text" Value="{x:Static fonts:FluentUI.arrow_counterclockwise_20_regular}"/>
                 <Setter Property="FontSize" Value="16"/>
-                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"/>
+                <Setter Property="TextColor" Value="{DynamicResource AppSecondaryTextColor}"/>
                 <Setter Property="BackgroundColor" Value="Transparent"/>
                 <Setter Property="Padding" Value="0"/>
                 <Setter Property="WidthRequest" Value="24"/>
@@ -101,7 +95,7 @@
                             <VisualState Name="Normal" />
                             <VisualState Name="Disabled">
                                 <VisualState.Setters>
-                                    <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}"/>
+                                    <Setter Property="TextColor" Value="{DynamicResource Gray600}"/>
                                     <Setter Property="Opacity" Value="0.5"/>
                                 </VisualState.Setters>
                             </VisualState>
@@ -123,7 +117,7 @@
         <ProgressBar Grid.Row="0" Grid.Column="0"
                      Progress="{Binding TaskProgress}"
                      ProgressColor="{Binding TaskProgressColor}"
-                     BackgroundColor="#404040"
+                     BackgroundColor="{DynamicResource AppSurfaceColor}"
                      HeightRequest="5"
                      Margin="0,0,0,5"/>
 
@@ -160,21 +154,15 @@
                         <Grid ColumnSpacing="10">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
-                                <!-- Position Indicator -->
                                 <ColumnDefinition Width="*" />
-                                <!-- Task Title/Time -->
                                 <ColumnDefinition Width="Auto" />
-                                <!-- Checkmark Area -->
                                 <ColumnDefinition Width="Auto" />
-                                <!-- Reset Button Area -->
                             </Grid.ColumnDefinitions>
 
-                            <!-- Position Indicator -->
                             <Frame Grid.Column="0"
                                    Style="{StaticResource PositionIndicatorFrameStyle}"
                                    BackgroundColor="{Binding PositionColor}" />
 
-                            <!-- Task Title and Time -->
                             <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
                                 <VerticalStackLayout.GestureRecognizers>
                                     <TapGestureRecognizer
@@ -185,7 +173,6 @@
                                 <Label Text="{Binding ., Converter={StaticResource TaskTimeConverter}}" Style="{StaticResource TaskTimeLabelStyle}" />
                             </VerticalStackLayout>
 
-                            <!-- Checkmark Area -->
                             <Grid Grid.Column="2"
                                   VerticalOptions="Center"
                                   HorizontalOptions="Center"
@@ -205,7 +192,7 @@
                                         Command="{Binding Source={RelativeSource AncestorType={x:Type vm:MainViewModel}}, Path=MarkTaskDoneCommand}"
                                         CommandParameter="{Binding .}"/>
                                 </Grid.GestureRecognizers>
-                                <Border Stroke="{AppThemeBinding Light=Gray, Dark=LightGray}"
+                                <Border Stroke="{DynamicResource AppForegroundColor}"
                                         StrokeThickness="2"
                                         HeightRequest="24"
                                         WidthRequest="24"
@@ -218,7 +205,6 @@
                                 </Border>
                             </Grid>
 
-                            <!-- Reset Daily Task Button -->
                             <Button Grid.Column="3"
                                     Style="{StaticResource ResetDailyButtonStyle}"
                                     Command="{Binding Source={RelativeSource AncestorType={x:Type vm:MainViewModel}}, Path=ResetDailyTaskCommand}"

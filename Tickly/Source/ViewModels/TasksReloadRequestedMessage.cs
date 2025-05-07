@@ -1,10 +1,10 @@
-﻿using CommunityToolkit.Mvvm.Messaging.Messages; // Assuming it might need messaging base later
+﻿using CommunityToolkit.Mvvm.Messaging.Messages;
 
 namespace Tickly.Messages;
 
-public class TasksReloadRequestedMessage : ValueChangedMessage<bool> // Example: Inherit if needed, otherwise just a simple class
+public class TasksReloadRequestedMessage : ValueChangedMessage<bool>
 {
-    public TasksReloadRequestedMessage() : base(true) // Simple constructor, value doesn't matter much here
+    public TasksReloadRequestedMessage() : base(true)
     {
     }
 }

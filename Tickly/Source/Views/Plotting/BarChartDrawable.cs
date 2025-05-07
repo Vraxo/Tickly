@@ -7,7 +7,7 @@ namespace Tickly.Views.Plotting;
 public sealed class BarChartDrawable : IDrawable
 {
     public List<PlotDataPoint> DataPoints { get; set; } = [];
-    public Color TextColor { get; set; } = Colors.Black;
+    public Color TextColor { get; set; } = Colors.Black; // Made settable
 
     private const float BarMargin = 5f;
     private const float LabelAreaHeight = 30f;
@@ -16,9 +16,12 @@ public sealed class BarChartDrawable : IDrawable
 
     public void Draw(ICanvas canvas, RectF dirtyRect)
     {
+        // Use the TextColor property set externally
+        Color currentTextColor = TextColor ?? Colors.Black;
+
         if (DataPoints == null || !DataPoints.Any())
         {
-            canvas.StrokeColor = TextColor;
+            canvas.StrokeColor = currentTextColor;
             canvas.FontSize = 12;
             canvas.DrawString("No progress data available.", dirtyRect, HorizontalAlignment.Center, VerticalAlignment.Center);
             return;
@@ -32,13 +35,13 @@ public sealed class BarChartDrawable : IDrawable
         int numPoints = DataPoints.Count;
         float totalBarWidthAvailable = chartAreaWidth - (numPoints + 1) * BarMargin;
         float barWidth = totalBarWidthAvailable / numPoints;
-        barWidth = Math.Max(1f, barWidth); // Ensure bar has at least 1px width
+        barWidth = Math.Max(1f, barWidth);
 
         double maxValue = 1.0;
 
         canvas.StrokeSize = 1;
-        canvas.FontColor = TextColor;
-        canvas.FontSize = (float)Math.Min(MaxBarLabelFontSize, Math.Max(6.0, barWidth * 0.6)); // Adjust font size based on bar width
+        canvas.FontColor = currentTextColor;
+        canvas.FontSize = (float)Math.Min(MaxBarLabelFontSize, Math.Max(6.0, barWidth * 0.6));
 
         float currentX = chartAreaX + BarMargin;
 
@@ -46,20 +49,20 @@ public sealed class BarChartDrawable : IDrawable
         {
             var point = DataPoints[i];
             var barHeight = (float)(point.Value / maxValue * chartAreaHeight);
-            barHeight = Math.Max(0f, barHeight); // Ensure non-negative height
+            barHeight = Math.Max(0f, barHeight);
 
             var barRect = new RectF(currentX, chartAreaY + chartAreaHeight - barHeight, barWidth, barHeight);
 
             canvas.FillColor = point.BarColor;
             canvas.FillRectangle(barRect);
 
-            canvas.FontColor = TextColor;
+            canvas.FontColor = currentTextColor;
             canvas.DrawString(point.Label, currentX, chartAreaY + chartAreaHeight + 5, barWidth, LabelAreaHeight - 10, HorizontalAlignment.Center, VerticalAlignment.Top);
 
             currentX += barWidth + BarMargin;
         }
 
-        canvas.StrokeColor = TextColor.WithAlpha(0.5f);
+        canvas.StrokeColor = currentTextColor.WithAlpha(0.5f);
         canvas.DrawLine(chartAreaX, chartAreaY + chartAreaHeight, chartAreaX + chartAreaWidth, chartAreaY + chartAreaHeight);
     }
 }

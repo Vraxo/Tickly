@@ -5,32 +5,23 @@ namespace Tickly.Services;
 
 public static class AppSettings
 {
-    // Key for storing the setting
     public const string CalendarSystemKey = "CalendarSystemPreference";
-    // REMOVED: SortOrderKey
-    // public const string SortOrderKey = "SortOrderPreference";
+    public const string ThemePreferenceKey = "ThemePreference";
 
-    // Backing field - Now initialized by static constructor
     private static CalendarSystemType _selectedCalendarSystem;
-    // REMOVED: _selectedSortOrder
-    // private static SortOrderType _selectedSortOrder;
+    private static ThemeType _selectedTheme;
 
-    // --- Static Constructor ---
     static AppSettings()
     {
-        // Load Calendar from Preferences, default to Gregorian (0) if not found
         int storedCalendarValue = Preferences.Get(CalendarSystemKey, (int)CalendarSystemType.Gregorian);
         _selectedCalendarSystem = (CalendarSystemType)storedCalendarValue;
         Debug.WriteLine($"AppSettings (Static Constructor): Initialized CalendarSystem to {_selectedCalendarSystem} from Preferences.");
 
-        // REMOVED: Sort Order loading
-        // int storedSortValue = Preferences.Get(SortOrderKey, (int)SortOrderType.PriorityHighFirst);
-        // _selectedSortOrder = (SortOrderType)storedSortValue;
-        // Debug.WriteLine($"AppSettings (Static Constructor): Initialized SortOrder to {_selectedSortOrder} from Preferences.");
+        int storedThemeValue = Preferences.Get(ThemePreferenceKey, (int)ThemeType.PitchBlack);
+        _selectedTheme = (ThemeType)storedThemeValue;
+        Debug.WriteLine($"AppSettings (Static Constructor): Initialized Theme to {_selectedTheme} from Preferences.");
     }
-    // --- End Static Constructor ---
 
-    // Public property to access the Calendar setting
     public static CalendarSystemType SelectedCalendarSystem
     {
         get => _selectedCalendarSystem;
@@ -44,7 +35,16 @@ public static class AppSettings
         }
     }
 
-    // REMOVED: SelectedSortOrder property
-    // public static SortOrderType SelectedSortOrder { ... }
-
+    public static ThemeType SelectedTheme
+    {
+        get => _selectedTheme;
+        set
+        {
+            if (_selectedTheme != value)
+            {
+                _selectedTheme = value;
+                Debug.WriteLine($"AppSettings: Theme changed to {value} (will be saved by SettingsViewModel).");
+            }
+        }
+    }
 }
