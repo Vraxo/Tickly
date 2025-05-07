@@ -1,66 +1,25 @@
 ﻿using Microsoft.UI.Xaml;
-using System.Diagnostics;
 
-namespace Tickly.WinUI;
+// To learn more about WinUI, the WinUI project structure,
+// and more about our project templates, see: http://aka.ms/winui-project-info.
 
-public partial class App : MauiWinUIApplication
+namespace Tickly.WinUI
 {
-    public App()
+    /// <summary>
+    /// Provides application-specific behavior to supplement the default Application class.
+    /// </summary>
+    public partial class App : MauiWinUIApplication
     {
-        Debug.WriteLine("Tickly.WinUI.App Constructor: Starting.");
-        Debug.WriteLine("Tickly.WinUI.App Constructor: If you manually added Windows App SDK initialization (e.g., DeploymentManager.Initialize()), REMOVE IT for packaged apps.");
-
-        try
+        /// <summary>
+        /// Initializes the singleton application object.  This is the first line of authored code
+        /// executed, and as such is the logical equivalent of main() or WinMain().
+        /// </summary>
+        public App()
         {
             this.InitializeComponent();
-            Debug.WriteLine("Tickly.WinUI.App Constructor: InitializeComponent() called successfully.");
         }
-        catch (Microsoft.UI.Xaml.Markup.XamlParseException xamlEx)
-        {
-            Debug.WriteLine($"CRITICAL XAML PARSE ERROR in Tickly.WinUI.App.InitializeComponent: {xamlEx.Message}");
-            if (xamlEx.InnerException != null)
-            {
-                Debug.WriteLine($"  Inner Exception: {xamlEx.InnerException.GetType().FullName}: {xamlEx.InnerException.Message}");
-                if (xamlEx.InnerException is System.IO.FileNotFoundException fnfEx)
-                {
-                    Debug.WriteLine($"    Inner FileNotFoundException Details: Could not load file or assembly '{fnfEx.FileName}'.");
-                }
-            }
-            throw;
-        }
-        catch (Exception ex)
-        {
-            Debug.WriteLine($"CRITICAL UNHANDLED ERROR in Tickly.WinUI.App.InitializeComponent: {ex.GetType().FullName} - {ex.Message}");
-            if (ex.InnerException != null)
-            {
-                Debug.WriteLine($"  Inner Exception: {ex.InnerException.GetType().FullName}: {ex.InnerException.Message}");
-            }
-            throw;
-        }
-        Debug.WriteLine("Tickly.WinUI.App Constructor: Finished.");
+
+        protected override MauiApp CreateMauiApp() => MauiProgram.CreateMauiApp();
     }
 
-    protected override MauiApp CreateMauiApp()
-    {
-        Debug.WriteLine("Tickly.WinUI.App.CreateMauiApp: Starting.");
-        try
-        {
-            var mauiApp = MauiProgram.CreateMauiApp();
-            Debug.WriteLine("Tickly.WinUI.App.CreateMauiApp: MauiProgram.CreateMauiApp() returned.");
-            return mauiApp;
-        }
-        catch (Exception ex)
-        {
-            Debug.WriteLine($"CRITICAL ERROR in Tickly.WinUI.App.CreateMauiApp (calling MauiProgram.CreateMauiApp): {ex.GetType().FullName} - {ex.Message}");
-            if (ex.InnerException != null)
-            {
-                Debug.WriteLine($"  Inner Exception: {ex.InnerException.GetType().FullName}: {ex.InnerException.Message}");
-                if (ex.InnerException is System.IO.FileNotFoundException fnfEx)
-                {
-                    Debug.WriteLine($"    Inner FileNotFoundException Details: Could not load file or assembly '{fnfEx.FileName}'.");
-                }
-            }
-            throw;
-        }
-    }
 }

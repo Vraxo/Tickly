@@ -22,6 +22,16 @@ public sealed partial class SettingsViewModel : ObservableObject
     private readonly string _applicationTasksFilePath;
     private const string ExportFilePrefix = "Tickly-Tasks-"; // Define prefix for cleanup
 
+    // Properties for Progress Export
+    public ObservableCollection<string> ExportSortOrders { get; }
+    [ObservableProperty]
+    private string _selectedExportSortOrder;
+
+    public ObservableCollection<string> ExportCalendarTypes { get; }
+    [ObservableProperty]
+    private string _selectedExportCalendarType;
+
+
     public bool IsGregorianSelected
     {
         get => _isGregorianSelected;
@@ -51,6 +61,21 @@ public sealed partial class SettingsViewModel : ObservableObject
         _taskPersistenceService = taskPersistenceService; // Store injected service
         _applicationTasksFilePath = Path.Combine(FileSystem.AppDataDirectory, "tasks.json");
         Debug.WriteLine($"SettingsViewModel: Tasks file path is set to: {_applicationTasksFilePath}");
+
+        // Initialize Progress Export Options
+        ExportSortOrders = new ObservableCollection<string>
+        {
+            "Ascending by Date",
+            "Descending by Date"
+        };
+        _selectedExportSortOrder = ExportSortOrders.FirstOrDefault() ?? "Ascending by Date";
+
+        ExportCalendarTypes = new ObservableCollection<string>
+        {
+            "Gregorian",
+            "Persian"
+        };
+        _selectedExportCalendarType = ExportCalendarTypes.FirstOrDefault() ?? "Gregorian";
 
         LoadSettings();
     }
@@ -383,5 +408,88 @@ public sealed partial class SettingsViewModel : ObservableObject
         }
         Debug.WriteLine("GetCurrentPage: Could not determine the current page.");
         return null;
+    }
+
+    [RelayCommand]
+    private async Task ExportProgressAsync()
+    {
+        Debug.WriteLine("SettingsViewModel.ExportProgressAsync: Starting progress export.");
+        try
+        {
+            List<DailyProgress> dailyProgressList = await _taskPersistenceService.LoadDailyProgressAsync();
+
+            if (dailyProgressList == null || !dailyProgressList.Any())
+            {
+                Debug.WriteLine("SettingsViewModel.ExportProgressAsync: No progress data to export.");
+                await ShowAlertAsync("Export Progress", "No daily progress data found to export.", "OK");
+                return;
+            }
+
+            Debug.WriteLine($"SettingsViewModel.ExportProgressAsync: Loaded {dailyProgressList.Count} progress entries.");
+
+            // Sort
+            IEnumerable<DailyProgress> sortedProgress;
+            if (SelectedExportSortOrder == "Ascending by Date")
+            {
+                sortedProgress = dailyProgressList.OrderBy(p => p.Date);
+                Debug.WriteLine("SettingsViewModel.ExportProgressAsync: Sorting by date ascending.");
+            }
+            else
+            {
+                sortedProgress = dailyProgressList.OrderByDescending(p => p.Date);
+                Debug.WriteLine("SettingsViewModel.ExportProgressAsync: Sorting by date descending.");
+            }
+
+            // Format
+            StringBuilder sb = new();
+            Debug.WriteLine($"SettingsViewModel.ExportProgressAsync: Formatting using {SelectedExportCalendarType} calendar.");
+            foreach (var progress in sortedProgress)
+            {
+                string dateString;
+                if (SelectedExportCalendarType == "Persian")
+                {
+                    dateString = DateUtils.ToPersianDateString(progress.Date);
+                }
+                else
+                {
+                    dateString = DateUtils.ToGregorianDateString(progress.Date);
+                }
+                // Format percentage as "XX%" (e.g., 0.75 -> "75%")
+                string percentageString = progress.PercentageCompleted.ToString("P0", CultureInfo.InvariantCulture);
+                sb.AppendLine($"{dateString}-{percentageString}");
+            }
+
+            string fileContent = sb.ToString();
+            if (string.IsNullOrWhiteSpace(fileContent))
+            {
+                Debug.WriteLine("SettingsViewModel.ExportProgressAsync: Formatted content is empty.");
+                await ShowAlertAsync("Export Progress", "Failed to generate export content.", "OK");
+                return;
+            }
+
+            string fileName = $"Tickly-Progress-Export-{DateTime.Now:yyyyMMddHHmmss}.txt";
+            Debug.WriteLine($"SettingsViewModel.ExportProgressAsync: Preparing to save file: {fileName}");
+
+            using var stream = new MemoryStream(Encoding.UTF8.GetBytes(fileContent));
+            
+            // Ensure FileSaver is available and CommunityToolkit.Maui.Storage is referenced
+            var fileSaverResult = await FileSaver.Default.SaveAsync(fileName, stream, CancellationToken.None);
+
+            if (fileSaverResult.IsSuccessful)
+            {
+                Debug.WriteLine($"SettingsViewModel.ExportProgressAsync: File saved successfully to: {fileSaverResult.FilePath ?? "N/A"}");
+                await ShowAlertAsync("Export Successful", $"Progress data exported successfully to {Path.GetFileName(fileSaverResult.FilePath ?? fileName)}", "OK");
+            }
+            else
+            {
+                Debug.WriteLine($"SettingsViewModel.ExportProgressAsync: File save failed. Error: {fileSaverResult.Exception?.Message ?? "Unknown error"}");
+                await ShowAlertAsync("Export Failed", $"Could not save the file: {fileSaverResult.Exception?.Message ?? "An unknown error occurred."}", "OK");
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"SettingsViewModel.ExportProgressAsync: Exception caught: {ex.GetType().Name} - {ex.Message}\nStackTrace: {ex.StackTrace}");
+            await ShowAlertAsync("Export Error", $"An unexpected error occurred during progress export: {ex.Message}", "OK");
+        }
     }
 }
