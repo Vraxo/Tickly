@@ -1,32 +1,48 @@
 <file path="App.xaml">
-<?xml version = "1.0" encoding = "UTF-8" ?>
-<Application xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
-             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-             xmlns:local="clr-namespace:Tickly"
-             x:Class="Tickly.App">
-    <Application.Resources>
-        <ResourceDictionary>
-            <ResourceDictionary.MergedDictionaries>
-                <ResourceDictionary Source="Resources/Styles/Colors.xaml" />
-                <ResourceDictionary Source="Resources/Styles/Styles.xaml" />
-            </ResourceDictionary.MergedDictionaries>
-        </ResourceDictionary>
-    </Application.Resources>
-</Application>
+<?xml version="1.0" encoding="utf-8"?>
+<maui:MauiWinUIApplication
+    x:Class="Tickly.WinUI.App"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:maui="using:Microsoft.Maui"
+    xmlns:local="using:Tickly.WinUI">
+
+    <!--
+        WinUI specific resources can be added here if needed.
+        However, global styles and resources should be in the shared
+        App.xaml or Resources/Styles/Styles.xaml.
+        The dynamic resources AppEffectiveDarkBackgroundColor/Brush
+        are managed in the shared App.xaml and App.xaml.cs.
+    -->
+
+</maui:MauiWinUIApplication>
 </file>
 
 <file path="App.xaml.cs">
-// App.xaml.cs
-using Microsoft.Maui.LifecycleEvents; // Might be needed depending on exact MAUI version/setup
+using Microsoft.Maui.LifecycleEvents;
 using Tickly.ViewModels;
-using Tickly.Services; // Added for TaskPersistenceService if directly used, or for general service access
+using Tickly.Services;
 using System.Diagnostics;
+using Microsoft.Maui.Controls;
+using Microsoft.Maui;
+using System;
+using System.IO; // Required for Path
+using System.Threading.Tasks; // Required for Task
 
-namespace Tickly; // Make sure this namespace matches your project
+#if WINDOWS
+using Microsoft.UI;
+using Microsoft.UI.Windowing;
+using Windows.Graphics;
+using WinRT.Interop;
+#elif MACCATALYST
+using Foundation;
+using AppKit;
+#endif
+
+namespace Tickly;
 
 public partial class App : Application
 {
-    // Define desired size constants
     const int WindowWidth = 450;
     const int WindowHeight = 800;
 
@@ -40,10 +56,11 @@ public partial class App : Application
     protected override async void OnStart()
     {
         base.OnStart();
-        // Optional: Logic to check and save progress for a missed day could go here,
-        // but it's complex as we wouldn't know the percentage.
-        // The current MainViewModel logic aims to keep today's progress up-to-date.
         Debug.WriteLine("App.OnStart: Application started.");
+
+#if DEBUG
+        await OpenDataDirectory();
+#endif
     }
 
     protected override async void OnSleep()
@@ -73,78 +90,115 @@ public partial class App : Application
     {
         base.OnResume();
         Debug.WriteLine("App.OnResume: Application is resuming.");
-        // Optional: Could trigger a progress check/update here if the day might have changed
-        // while the app was asleep for an extended period.
-        // However, MainViewModel's continuous updates should handle this if it's running.
     }
+
+    private async Task OpenDataDirectory()
+    {
+        string dataPath = FileSystem.AppDataDirectory;
+        Debug.WriteLine($"[DEBUG] Application Data Directory: {dataPath}");
+
+        if (!Directory.Exists(dataPath))
+        {
+            Debug.WriteLine($"[DEBUG] Data directory does not exist. Creating: {dataPath}");
+            try
+            {
+                Directory.CreateDirectory(dataPath);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[DEBUG] Failed to create data directory: {ex.Message}");
+                return; // Cannot open if creation failed
+            }
+        }
+
+        try
+        {
+#if WINDOWS
+            Debug.WriteLine("[DEBUG] Attempting to open directory on Windows...");
+            Process.Start("explorer.exe", $"\"{dataPath}\"");
+            await Task.CompletedTask; // Keep async signature
+#elif MACCATALYST
+            Debug.WriteLine("[DEBUG] Attempting to open directory on MacCatalyst...");
+            Process.Start("open", $"\"{dataPath}\"");
+             await Task.CompletedTask; // Keep async signature
+#elif ANDROID || IOS
+            Debug.WriteLine("[DEBUG] Opening data directory automatically is not supported on this mobile platform.");
+            await Task.CompletedTask; // Keep async signature
+#else
+            Debug.WriteLine("[DEBUG] Platform not configured for opening data directory automatically.");
+             await Task.CompletedTask; // Keep async signature
+#endif
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[DEBUG] Failed to open data directory: {ex.Message}");
+            // Optionally show an alert to the user in debug mode if it fails
+        }
+    }
+
 
     protected override Window CreateWindow(IActivationState activationState)
     {
         Window window = base.CreateWindow(activationState);
 
-        // --- WINDOWS SPECIFIC RESIZING ---
 #if WINDOWS
         window.Created += (s, e) =>
         {
-            // Ensure sender is a Window
             var mauiWindow = s as Window;
-            if (mauiWindow == null) return;
+            if (mauiWindow == null)
+            {
+                return;
+            }
 
-            // Get the Handler and Platform Window (Microsoft.UI.Xaml.Window)
             var handler = mauiWindow.Handler;
             if (handler?.PlatformView is Microsoft.UI.Xaml.Window nativeWindow)
             {
                 try
                 {
-                    // Get the HWND (Window Handle) for the WinUI window
-                    var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(nativeWindow);
-                    if (hwnd == IntPtr.Zero) return;
+                    var hwnd = WindowNative.GetWindowHandle(nativeWindow);
+                    if (hwnd == IntPtr.Zero)
+                    {
+                        return;
+                    }
 
-                    // Get the WindowId from the HWND
-                    Microsoft.UI.WindowId windowId = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(hwnd);
-                    if (windowId.Value == 0) return; // Invalid WindowId
+                    Microsoft.UI.WindowId windowId = Win32Interop.GetWindowIdFromWindow(hwnd);
+                    if (windowId.Value == 0)
+                    {
+                        return;
+                    }
 
-                    // Get the AppWindow from the WindowId
                     Microsoft.UI.Windowing.AppWindow appWindow = Microsoft.UI.Windowing.AppWindow.GetFromWindowId(windowId);
                     if (appWindow != null)
                     {
-                         // Get the primary display area
-                         Microsoft.UI.Windowing.DisplayArea displayArea = Microsoft.UI.Windowing.DisplayArea.GetFromWindowId(windowId, Microsoft.UI.Windowing.DisplayAreaFallback.Nearest);
+                        Microsoft.UI.Windowing.DisplayArea displayArea = Microsoft.UI.Windowing.DisplayArea.GetFromWindowId(windowId, Microsoft.UI.Windowing.DisplayAreaFallback.Nearest);
                         if (displayArea != null)
                         {
-                            // Calculate centered position
                             var mainMonitorWorkArea = displayArea.WorkArea;
                             var centeredX = (mainMonitorWorkArea.Width - WindowWidth) / 2;
                             var centeredY = (mainMonitorWorkArea.Height - WindowHeight) / 2;
 
-                            // Move and resize the window
                             appWindow.MoveAndResize(new Windows.Graphics.RectInt32(centeredX, centeredY, WindowWidth, WindowHeight));
                         }
                         else
                         {
-                            // Fallback if display area info not available - just resize
                             appWindow.ResizeClient(new Windows.Graphics.SizeInt32(WindowWidth, WindowHeight));
                         }
-
-                        // --- Optional: Prevent User Resizing ---
-                        // If you want to lock the window size:
-                        // if (appWindow.Presenter is Microsoft.UI.Windowing.OverlappedPresenter p)
-                        // {
-                        //     p.IsResizable = false;
-                        //     p.IsMaximizable = false;
-                        // }
-                        // --- End Optional ---
+                        appWindow.Title = "Tickly Task Manager";
                     }
                 }
                 catch (Exception ex)
                 {
-                    // Log or handle potential exceptions during window manipulation
-                    System.Diagnostics.Debug.WriteLine($"Error resizing window: {ex.Message}");
+                    System.Diagnostics.Debug.WriteLine($"Error resizing or setting title for window: {ex.Message}");
                 }
             }
         };
+#elif MACCATALYST
+        // You might need to handle window creation/sizing differently for MacCatalyst if needed
+        // Example: Setting a fixed size (may require additional checks for handler availability)
+        // window.Width = WindowWidth;
+        // window.Height = WindowHeight;
+        // Consider centering logic similar to Windows if desired
 #endif
-        // --- END WINDOWS SPECIFIC ---
 
         return window;
     }
@@ -186,6 +240,13 @@ public partial class App : Application
             Route="MainPage" />
     </FlyoutItem>
 
+    <FlyoutItem Title="Statistics" Icon="icon_statistics.png">
+        <ShellContent
+            Title="Statistics"
+            ContentTemplate="{DataTemplate views:StatisticsPage}"
+            Route="StatisticsPage" />
+    </FlyoutItem>
+
     <FlyoutItem Title="Settings" Icon="icon_settings.png">
         <ShellContent
             Title="Settings"
@@ -197,8 +258,7 @@ public partial class App : Application
 </file>
 
 <file path="AppShell.xaml.cs">
-// AppShell.xaml.cs
-using Tickly.Views; // Add this using
+using Tickly.Views;
 
 namespace Tickly;
 
@@ -208,17 +268,19 @@ public partial class AppShell : Shell
     {
         InitializeComponent();
 
-        // Register the route for the modal popup page
         Routing.RegisterRoute(nameof(AddTaskPopupPage), typeof(AddTaskPopupPage));
+        Routing.RegisterRoute(nameof(StatisticsPage), typeof(StatisticsPage));
     }
 }
 </file>
 
 <file path="MauiProgram.cs">
 using Microsoft.Extensions.Logging;
-using Tickly.ViewModels; // Add using for ViewModels
-using Tickly.Views;     // Add using for Views
-using CommunityToolkit.Mvvm.Messaging; // If not already present
+using Tickly.ViewModels;
+using Tickly.Views;
+using CommunityToolkit.Mvvm.Messaging;
+using Tickly.Services;
+using Tickly.Views.Plotting;
 
 namespace Tickly;
 
@@ -239,23 +301,20 @@ public static class MauiProgram
         builder.Logging.AddDebug();
 #endif
 
-        // Register Services
         builder.Services.AddSingleton<TaskPersistenceService>();
-        builder.Services.AddSingleton<RepeatingTaskService>();    // Added
-        builder.Services.AddSingleton<TaskVisualStateService>(); // Added
+        builder.Services.AddSingleton<RepeatingTaskService>();
+        builder.Services.AddSingleton<TaskVisualStateService>();
 
-        // Register ViewModels (Singleton for MainViewModel, Transient for Popup is fine)
         builder.Services.AddSingleton<MainViewModel>();
-        builder.Services.AddSingleton<SettingsViewModel>(); // Settings can also be singleton
-        // No need to register AddTaskPopupPageViewModel if it's created within AddTaskPopupPage code-behind
+        builder.Services.AddSingleton<SettingsViewModel>();
+        builder.Services.AddSingleton<StatisticsViewModel>();
 
-        // Register Pages for Navigation
-        builder.Services.AddSingleton<MainPage>(); // MainPage is usually Singleton
-        builder.Services.AddTransient<AddTaskPopupPage>(); // Popup page should be Transient
-        builder.Services.AddSingleton<SettingsPage>();    // Register SettingsPage
+        builder.Services.AddSingleton<MainPage>();
+        builder.Services.AddTransient<AddTaskPopupPage>();
+        builder.Services.AddSingleton<SettingsPage>();
+        builder.Services.AddSingleton<StatisticsPage>();
 
-        // Register Messenger (if not already implicitly available via CommunityToolkit)
-        // builder.Services.AddSingleton<IMessenger>(WeakReferenceMessenger.Default); // Usually not needed explicitly
+        builder.Services.AddTransient<BarChartDrawable>();
 
         return builder.Build();
     }
@@ -272,12 +331,13 @@ public static class MauiProgram
          xmlns:fonts="clr-namespace:Fonts"
          x:Class="Tickly.MainPage"
          x:Name="MainTasksPage"
-         BackgroundColor="Black"
          Title="Tickly Tasks">
+    <!-- BackgroundColor removed to inherit from style -->
 
-    <ContentPage.BindingContext>
-        <vm:MainViewModel />
-    </ContentPage.BindingContext>
+    <!-- REMOVED: Direct ViewModel instantiation -->
+    <!-- <ContentPage.BindingContext> -->
+    <!--     <vm:MainViewModel /> -->
+    <!-- </ContentPage.BindingContext> -->
 
     <Shell.TitleView>
         <Grid ColumnDefinitions="*" VerticalOptions="FillAndExpand" Margin="0,0,10,0">
@@ -298,7 +358,6 @@ public static class MauiProgram
             <converters:TaskTimeToStringConverter x:Key="TaskTimeConverter" />
             <converters:InverseBooleanConverter x:Key="InverseBooleanConverter" />
             <converters:FutureRepeatingTaskIsEnabledConverter x:Key="FutureRepeatingTaskIsEnabledConverter" />
-            <!-- *** ADD THE NEW CONVERTER *** -->
             <converters:ResetDailyTaskIsEnabledConverter x:Key="ResetDailyTaskIsEnabledConverter" />
 
             <Style TargetType="Frame" x:Key="PositionIndicatorFrameStyle">
@@ -348,7 +407,6 @@ public static class MauiProgram
                 <Setter Property="SemanticProperties.Hint" Value="Add a new task"/>
             </Style>
 
-            <!-- *** ADD Style for the Reset Button *** -->
             <Style TargetType="Button" x:Key="ResetDailyButtonStyle">
                 <Setter Property="FontFamily" Value="FluentUI"/>
                 <Setter Property="Text" Value="{x:Static fonts:FluentUI.arrow_counterclockwise_20_regular}"/>
@@ -528,14 +586,16 @@ public static class MauiProgram
 </file>
 
 <file path="Source\MainPage.xaml.cs">
-// File: MainPage.xaml.cs
+using Tickly.ViewModels; // Add this using statement
+
 namespace Tickly;
 
 public partial class MainPage : ContentPage
 {
-    public MainPage()
+    public MainPage(MainViewModel viewModel) // Inject the ViewModel
     {
         InitializeComponent();
+        BindingContext = viewModel; // Set the BindingContext
     }
 }
 </file>
@@ -658,41 +718,274 @@ namespace Tickly
 </file>
 
 <file path="Platforms\Windows\App.xaml">
-<maui:MauiWinUIApplication
-    x:Class="Tickly.WinUI.App"
-    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:maui="using:Microsoft.Maui"
-    xmlns:local="using:Tickly.WinUI">
+<?xml version = "1.0" encoding = "UTF-8" ?>
+<Application xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+         xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+         xmlns:local="clr-namespace:Tickly"
+         x:Class="Tickly.App">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <!-- *** CORRECTED PATHS *** -->
+                <ResourceDictionary Source="../../Resources/Styles/Colors.xaml" />
+                <ResourceDictionary Source="../../Resources/Styles/Styles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
 
-</maui:MauiWinUIApplication>
+            <!-- Define the Color resource (initial value will be overridden on startup) -->
+            <Color x:Key="AppEffectiveDarkBackgroundColor">#1f1f1f</Color>
+
+            <!-- Define the Brush resource KEY. -->
+            <SolidColorBrush x:Key="AppEffectiveDarkBackgroundBrush" Color="#1f1f1f"/>
+
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>
 </file>
 
 <file path="Platforms\Windows\App.xaml.cs">
-using Microsoft.UI.Xaml;
+using CommunityToolkit.Mvvm.Messaging;
+using Microsoft.UI.Windowing;
+using Microsoft.UI;
+using System.Diagnostics;
+using Tickly.Models;
+using Windows.Graphics;
 
-// To learn more about WinUI, the WinUI project structure,
-// and more about our project templates, see: http://aka.ms/winui-project-info.
+using WinRT.Interop;
 
-namespace Tickly.WinUI
+// Keep only one set of using statements
+using Microsoft.Maui.LifecycleEvents;
+using Tickly.ViewModels;
+using Tickly.Services;
+using System.Diagnostics;
+using Microsoft.Maui.Controls;
+using Microsoft.Maui;
+using System;
+using System.IO; // Required for Path
+using System.Threading.Tasks; // Required for Task
+using CommunityToolkit.Mvvm.Messaging; // Required for messaging
+using Tickly.Models; // Required for DarkModeBackgroundType
+using Tickly.Messages; // Required for DarkModeBackgroundChangedMessage
+
+// Keep only one set of platform directives
+#if WINDOWS
+using Microsoft.UI;
+using Microsoft.UI.Windowing;
+using Windows.Graphics;
+using WinRT.Interop;
+#elif MACCATALYST
+using Foundation;
+using AppKit;
+#endif
+
+namespace Tickly;
+
+public partial class App : Application
 {
-    /// <summary>
-    /// Provides application-specific behavior to supplement the default Application class.
-    /// </summary>
-    public partial class App : MauiWinUIApplication
-    {
-        /// <summary>
-        /// Initializes the singleton application object.  This is the first line of authored code
-        /// executed, and as such is the logical equivalent of main() or WinMain().
-        /// </summary>
-        public App()
-        {
-            this.InitializeComponent();
-        }
+    // Define constants only ONCE
+    const int WindowWidth = 450;
+    const int WindowHeight = 800;
 
-        protected override MauiApp CreateMauiApp() => MauiProgram.CreateMauiApp();
+    public App()
+    {
+        InitializeComponent();
+
+        // Set the initial theme based on saved preference *before* MainPage is created
+        ApplyDarkModePreference();
+
+        MainPage = new AppShell();
+
+        // Register to receive theme change messages AFTER MainPage is set
+        WeakReferenceMessenger.Default.Register<DarkModeBackgroundChangedMessage>(this, (r, m) => ApplyDarkModePreference());
     }
 
+    // Define ApplyDarkModePreference only ONCE
+    private void ApplyDarkModePreference()
+    {
+        try
+        {
+            if (!MainThread.IsMainThread)
+            {
+                MainThread.BeginInvokeOnMainThread(ApplyDarkModePreference);
+                return;
+            }
+
+            var selectedBgType = AppSettings.SelectedDarkModeBackground;
+            Color effectiveColor;
+            Brush effectiveBrush;
+
+            if (selectedBgType == DarkModeBackgroundType.PureBlack)
+            {
+                effectiveColor = (Color)this.Resources["AppDarkBackgroundBlack"];
+                effectiveBrush = (Brush)this.Resources["AppDarkBackgroundBlackBrush"];
+                Debug.WriteLine("App.ApplyDarkModePreference: Applying PureBlack background.");
+            }
+            else // Default to OffBlack
+            {
+                effectiveColor = (Color)this.Resources["AppDarkBackgroundOffBlack"];
+                effectiveBrush = (Brush)this.Resources["AppDarkBackgroundOffBlackBrush"];
+                Debug.WriteLine("App.ApplyDarkModePreference: Applying OffBlack background.");
+            }
+
+            // Update the dynamic resources
+            this.Resources["AppEffectiveDarkBackgroundColor"] = effectiveColor;
+            this.Resources["AppEffectiveDarkBackgroundBrush"] = effectiveBrush;
+
+            Debug.WriteLine($"App.ApplyDarkModePreference: Updated AppEffectiveDarkBackground resources.");
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"App.ApplyDarkModePreference: Error updating theme resources: {ex.Message}");
+        }
+    }
+
+    // Define OnStart only ONCE
+    protected override async void OnStart()
+    {
+        base.OnStart();
+        Debug.WriteLine("App.OnStart: Application started.");
+
+#if DEBUG
+        await OpenDataDirectory();
+#endif
+    }
+
+    // Define OnSleep only ONCE
+    protected override async void OnSleep()
+    {
+        base.OnSleep();
+        Debug.WriteLine("App.OnSleep: Application is going to sleep. Saving final progress.");
+        try
+        {
+            // Use GetService safely
+            var mainViewModel = IPlatformApplication.Current?.Services?.GetService<MainViewModel>();
+            if (mainViewModel != null)
+            {
+                await mainViewModel.FinalizeAndSaveProgressAsync();
+                Debug.WriteLine("App.OnSleep: FinalizeAndSaveProgressAsync completed.");
+            }
+            else
+            {
+                Debug.WriteLine("App.OnSleep: MainViewModel not resolved. Cannot save progress.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"App.OnSleep: Error during saving progress: {ex.Message}");
+        }
+    }
+
+    // Define OnResume only ONCE
+    protected override async void OnResume()
+    {
+        base.OnResume();
+        Debug.WriteLine("App.OnResume: Application is resuming.");
+    }
+
+    // Define OpenDataDirectory only ONCE
+    private async Task OpenDataDirectory()
+    {
+        string dataPath = FileSystem.AppDataDirectory;
+        Debug.WriteLine($"[DEBUG] Application Data Directory: {dataPath}");
+
+        if (!Directory.Exists(dataPath))
+        {
+            Debug.WriteLine($"[DEBUG] Data directory does not exist. Creating: {dataPath}");
+            try
+            {
+                Directory.CreateDirectory(dataPath);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[DEBUG] Failed to create data directory: {ex.Message}");
+                return; // Cannot open if creation failed
+            }
+        }
+
+        try
+        {
+#if WINDOWS
+            Debug.WriteLine("[DEBUG] Attempting to open directory on Windows...");
+            Process.Start("explorer.exe", $"\"{dataPath}\"");
+            await Task.CompletedTask; // Keep async signature
+#elif MACCATALYST
+            Debug.WriteLine("[DEBUG] Attempting to open directory on MacCatalyst...");
+            Process.Start("open", $"\"{dataPath}\"");
+             await Task.CompletedTask; // Keep async signature
+#elif ANDROID || IOS
+            Debug.WriteLine("[DEBUG] Opening data directory automatically is not supported on this mobile platform.");
+            await Task.CompletedTask; // Keep async signature
+#else
+            Debug.WriteLine("[DEBUG] Platform not configured for opening data directory automatically.");
+             await Task.CompletedTask; // Keep async signature
+#endif
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[DEBUG] Failed to open data directory: {ex.Message}");
+            // Optionally show an alert to the user in debug mode if it fails
+        }
+    }
+
+    // Define CreateWindow only ONCE
+    protected override Window CreateWindow(IActivationState activationState)
+    {
+        Window window = base.CreateWindow(activationState);
+
+#if WINDOWS
+        window.Created += (s, e) =>
+        {
+            var mauiWindow = s as Window;
+            if (mauiWindow == null) return;
+
+            var handler = mauiWindow.Handler;
+            if (handler?.PlatformView is Microsoft.UI.Xaml.Window nativeWindow)
+            {
+                try
+                {
+                    IntPtr hwnd = WindowNative.GetWindowHandle(nativeWindow);
+                    if (hwnd == IntPtr.Zero) return;
+
+                    WindowId windowId = Win32Interop.GetWindowIdFromWindow(hwnd);
+                    if (windowId.Value == 0) return;
+
+                    AppWindow appWindow = AppWindow.GetFromWindowId(windowId);
+                    if (appWindow != null)
+                    {
+                        DisplayArea displayArea = DisplayArea.GetFromWindowId(windowId, DisplayAreaFallback.Nearest);
+                        if (displayArea != null)
+                        {
+                            var mainMonitorWorkArea = displayArea.WorkArea;
+                            // Use the constants defined at the top of the class
+                            var centeredX = (mainMonitorWorkArea.Width - WindowWidth) / 2;
+                            var centeredY = (mainMonitorWorkArea.Height - WindowHeight) / 2;
+                            appWindow.MoveAndResize(new RectInt32(centeredX, centeredY, WindowWidth, WindowHeight));
+                        }
+                        else
+                        {
+                            // Fallback if DisplayArea is null for some reason
+                            appWindow.ResizeClient(new SizeInt32(WindowWidth, WindowHeight));
+                        }
+                        appWindow.Title = "Tickly Task Manager";
+                        // Optional: Prevent resizing
+                        // if (appWindow.Presenter is OverlappedPresenter p)
+                        // {
+                        //    p.IsResizable = false;
+                        //    p.IsMaximizable = false;
+                        // }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"Error resizing or setting title for window: {ex.Message}");
+                }
+            }
+        };
+#elif MACCATALYST
+        // Mac window sizing/positioning logic if needed
+#endif
+
+        return window;
+    }
 }
 </file>
 
@@ -8623,9 +8916,9 @@ namespace Fonts
 <file path="Resources\Styles\Colors.xaml">
 <?xml version="1.0" encoding="UTF-8" ?>
 <?xaml-comp compile="true" ?>
-<ResourceDictionary 
-    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
-    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml">
+<ResourceDictionary
+xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml">
 
     <!-- Note: For Android please see also Platforms\Android\Resources\values\colors.xml -->
 
@@ -8637,7 +8930,9 @@ namespace Fonts
     <Color x:Key="Tertiary">#2B0B98</Color>
 
     <Color x:Key="White">White</Color>
+    <Color x:Key="WhiteSmoke">#F5F5F5</Color>
     <Color x:Key="Black">Black</Color>
+    <Color x:Key="LightGray">#D3D3D3</Color>
     <Color x:Key="Magenta">#D600AA</Color>
     <Color x:Key="MidnightBlue">#190649</Color>
     <Color x:Key="OffBlack">#1f1f1f</Color>
@@ -8651,11 +8946,18 @@ namespace Fonts
     <Color x:Key="Gray900">#212121</Color>
     <Color x:Key="Gray950">#141414</Color>
 
+    <!-- Specific Dark Background Colors -->
+    <Color x:Key="AppDarkBackgroundOffBlack">#1f1f1f</Color>
+    <Color x:Key="AppDarkBackgroundBlack">#000000</Color>
+
+
     <SolidColorBrush x:Key="PrimaryBrush" Color="{StaticResource Primary}"/>
     <SolidColorBrush x:Key="SecondaryBrush" Color="{StaticResource Secondary}"/>
     <SolidColorBrush x:Key="TertiaryBrush" Color="{StaticResource Tertiary}"/>
     <SolidColorBrush x:Key="WhiteBrush" Color="{StaticResource White}"/>
+    <SolidColorBrush x:Key="WhiteSmokeBrush" Color="{StaticResource WhiteSmoke}"/>
     <SolidColorBrush x:Key="BlackBrush" Color="{StaticResource Black}"/>
+    <SolidColorBrush x:Key="LightGrayBrush" Color="{StaticResource LightGray}"/>
 
     <SolidColorBrush x:Key="Gray100Brush" Color="{StaticResource Gray100}"/>
     <SolidColorBrush x:Key="Gray200Brush" Color="{StaticResource Gray200}"/>
@@ -8665,474 +8967,40 @@ namespace Fonts
     <SolidColorBrush x:Key="Gray600Brush" Color="{StaticResource Gray600}"/>
     <SolidColorBrush x:Key="Gray900Brush" Color="{StaticResource Gray900}"/>
     <SolidColorBrush x:Key="Gray950Brush" Color="{StaticResource Gray950}"/>
+
+    <!-- Specific Dark Background Brushes -->
+    <SolidColorBrush x:Key="AppDarkBackgroundOffBlackBrush" Color="{StaticResource AppDarkBackgroundOffBlack}"/>
+    <SolidColorBrush x:Key="AppDarkBackgroundBlackBrush" Color="{StaticResource AppDarkBackgroundBlack}"/>
+
 </ResourceDictionary>
 </file>
 
 <file path="Resources\Styles\Styles.xaml">
-<?xml version="1.0" encoding="UTF-8" ?>
-<?xaml-comp compile="true" ?>
-<ResourceDictionary 
-    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
-    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml">
+<?xml version = "1.0" encoding = "UTF-8" ?>
+<Application xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+         xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+         xmlns:local="clr-namespace:Tickly"
+         x:Class="Tickly.App">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Resources/Styles/Colors.xaml" />
+                <ResourceDictionary Source="Resources/Styles/Styles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
 
-    <Style TargetType="ActivityIndicator">
-        <Setter Property="Color" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource White}}" />
-    </Style>
+            <!-- Define the Color resource (initial value will be overridden on startup) -->
+            <!-- This COLOR object will be replaced by the C# code -->
+            <Color x:Key="AppEffectiveDarkBackgroundColor">#1f1f1f</Color>
 
-    <Style TargetType="IndicatorView">
-        <Setter Property="IndicatorColor" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray500}}"/>
-        <Setter Property="SelectedIndicatorColor" Value="{AppThemeBinding Light={StaticResource Gray950}, Dark={StaticResource Gray100}}"/>
-    </Style>
+            <!-- Define the Brush resource KEY. -->
+            <!-- The actual BRUSH OBJECT will be set by C# code later, -->
+            <!-- referencing a brush from Colors.xaml. -->
+            <!-- Provide a default *inline* color for the initial brush. -->
+            <SolidColorBrush x:Key="AppEffectiveDarkBackgroundBrush" Color="#1f1f1f"/>
 
-    <Style TargetType="Border">
-        <Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray500}}" />
-        <Setter Property="StrokeShape" Value="Rectangle"/>
-        <Setter Property="StrokeThickness" Value="1"/>
-    </Style>
-
-    <Style TargetType="BoxView">
-        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource Gray950}, Dark={StaticResource Gray200}}" />
-    </Style>
-
-    <Style TargetType="CheckBox">
-        <Setter Property="Color" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource White}}" />
-        <Setter Property="MinimumHeightRequest" Value="44"/>
-        <Setter Property="MinimumWidthRequest" Value="44"/>
-        <Setter Property="VisualStateManager.VisualStateGroups">
-            <VisualStateGroupList>
-                <VisualStateGroup x:Name="CommonStates">
-                    <VisualState x:Name="Normal" />
-                    <VisualState x:Name="Disabled">
-                        <VisualState.Setters>
-                            <Setter Property="Color" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}" />
-                        </VisualState.Setters>
-                    </VisualState>
-                </VisualStateGroup>
-            </VisualStateGroupList>
-        </Setter>
-    </Style>
-
-    <Style TargetType="DatePicker">
-        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource White}}" />
-        <Setter Property="BackgroundColor" Value="Transparent" />
-        <Setter Property="FontFamily" Value="OpenSansRegular"/>
-        <Setter Property="FontSize" Value="14"/>
-        <Setter Property="MinimumHeightRequest" Value="44"/>
-        <Setter Property="MinimumWidthRequest" Value="44"/>
-        <Setter Property="VisualStateManager.VisualStateGroups">
-            <VisualStateGroupList>
-                <VisualStateGroup x:Name="CommonStates">
-                    <VisualState x:Name="Normal" />
-                    <VisualState x:Name="Disabled">
-                        <VisualState.Setters>
-                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray500}}" />
-                        </VisualState.Setters>
-                    </VisualState>
-                </VisualStateGroup>
-            </VisualStateGroupList>
-        </Setter>
-    </Style>
-
-    <Style TargetType="Editor">
-        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource White}}" />
-        <Setter Property="BackgroundColor" Value="Transparent" />
-        <Setter Property="FontFamily" Value="OpenSansRegular"/>
-        <Setter Property="FontSize" Value="14" />
-        <Setter Property="PlaceholderColor" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray500}}" />
-        <Setter Property="MinimumHeightRequest" Value="44"/>
-        <Setter Property="MinimumWidthRequest" Value="44"/>
-        <Setter Property="VisualStateManager.VisualStateGroups">
-            <VisualStateGroupList>
-                <VisualStateGroup x:Name="CommonStates">
-                    <VisualState x:Name="Normal" />
-                    <VisualState x:Name="Disabled">
-                        <VisualState.Setters>
-                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}" />
-                        </VisualState.Setters>
-                    </VisualState>
-                </VisualStateGroup>
-            </VisualStateGroupList>
-        </Setter>
-    </Style>
-
-    <Style TargetType="Entry">
-        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource White}}" />
-        <Setter Property="BackgroundColor" Value="Transparent" />
-        <Setter Property="FontFamily" Value="OpenSansRegular"/>
-        <Setter Property="FontSize" Value="14" />
-        <Setter Property="PlaceholderColor" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray500}}" />
-        <Setter Property="MinimumHeightRequest" Value="44"/>
-        <Setter Property="MinimumWidthRequest" Value="44"/>
-        <Setter Property="VisualStateManager.VisualStateGroups">
-            <VisualStateGroupList>
-                <VisualStateGroup x:Name="CommonStates">
-                    <VisualState x:Name="Normal" />
-                    <VisualState x:Name="Disabled">
-                        <VisualState.Setters>
-                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}" />
-                        </VisualState.Setters>
-                    </VisualState>
-                </VisualStateGroup>
-            </VisualStateGroupList>
-        </Setter>
-    </Style>
-
-    <Style TargetType="Frame">
-        <Setter Property="HasShadow" Value="False" />
-        <Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray950}}" />
-        <Setter Property="CornerRadius" Value="8" />
-        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}" />
-    </Style>
-
-    <Style TargetType="ImageButton">
-        <Setter Property="Opacity" Value="1" />
-        <Setter Property="BorderColor" Value="Transparent"/>
-        <Setter Property="BorderWidth" Value="0"/>
-        <Setter Property="CornerRadius" Value="0"/>
-        <Setter Property="MinimumHeightRequest" Value="44"/>
-        <Setter Property="MinimumWidthRequest" Value="44"/>
-        <Setter Property="VisualStateManager.VisualStateGroups">
-            <VisualStateGroupList>
-                <VisualStateGroup x:Name="CommonStates">
-                    <VisualState x:Name="Normal" />
-                    <VisualState x:Name="Disabled">
-                        <VisualState.Setters>
-                            <Setter Property="Opacity" Value="0.5" />
-                        </VisualState.Setters>
-                    </VisualState>
-                    <VisualState x:Name="PointerOver" />
-                </VisualStateGroup>
-            </VisualStateGroupList>
-        </Setter>
-    </Style>
-
-    <Style TargetType="Label">
-        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource White}}" />
-        <Setter Property="BackgroundColor" Value="Transparent" />
-        <Setter Property="FontFamily" Value="OpenSansRegular" />
-        <Setter Property="FontSize" Value="14" />
-        <Setter Property="VisualStateManager.VisualStateGroups">
-            <VisualStateGroupList>
-                <VisualStateGroup x:Name="CommonStates">
-                    <VisualState x:Name="Normal" />
-                    <VisualState x:Name="Disabled">
-                        <VisualState.Setters>
-                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}" />
-                        </VisualState.Setters>
-                    </VisualState>
-                </VisualStateGroup>
-            </VisualStateGroupList>
-        </Setter>
-    </Style>
-
-    <Style TargetType="Span">
-        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource White}}" />
-    </Style>
-
-    <Style TargetType="Label" x:Key="Headline">
-        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource MidnightBlue}, Dark={StaticResource White}}" />
-        <Setter Property="FontSize" Value="32" />
-        <Setter Property="HorizontalOptions" Value="Center" />
-        <Setter Property="HorizontalTextAlignment" Value="Center" />
-    </Style>
-
-    <Style TargetType="Label" x:Key="SubHeadline">
-        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource MidnightBlue}, Dark={StaticResource White}}" />
-        <Setter Property="FontSize" Value="24" />
-        <Setter Property="HorizontalOptions" Value="Center" />
-        <Setter Property="HorizontalTextAlignment" Value="Center" />
-    </Style>
-
-    <Style TargetType="ListView">
-        <Setter Property="SeparatorColor" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray500}}" />
-        <Setter Property="RefreshControlColor" Value="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray200}}" />
-    </Style>
-
-    <Style TargetType="Picker">
-        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource White}}" />
-        <Setter Property="TitleColor" Value="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray200}}" />
-        <Setter Property="BackgroundColor" Value="Transparent" />
-        <Setter Property="FontFamily" Value="OpenSansRegular"/>
-        <Setter Property="FontSize" Value="14" />
-        <Setter Property="MinimumHeightRequest" Value="44"/>
-        <Setter Property="MinimumWidthRequest" Value="44"/>
-        <Setter Property="VisualStateManager.VisualStateGroups">
-            <VisualStateGroupList>
-                <VisualStateGroup x:Name="CommonStates">
-                    <VisualState x:Name="Normal" />
-                    <VisualState x:Name="Disabled">
-                        <VisualState.Setters>
-                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}" />
-                            <Setter Property="TitleColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}" />
-                        </VisualState.Setters>
-                    </VisualState>
-                </VisualStateGroup>
-            </VisualStateGroupList>
-        </Setter>
-    </Style>
-
-    <Style TargetType="ProgressBar">
-        <Setter Property="ProgressColor" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource White}}" />
-        <Setter Property="VisualStateManager.VisualStateGroups">
-            <VisualStateGroupList>
-                <VisualStateGroup x:Name="CommonStates">
-                    <VisualState x:Name="Normal" />
-                    <VisualState x:Name="Disabled">
-                        <VisualState.Setters>
-                            <Setter Property="ProgressColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}" />
-                        </VisualState.Setters>
-                    </VisualState>
-                </VisualStateGroup>
-            </VisualStateGroupList>
-        </Setter>
-    </Style>
-
-    <Style TargetType="RadioButton">
-        <Setter Property="BackgroundColor" Value="Transparent"/>
-        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource White}}" />
-        <Setter Property="FontFamily" Value="OpenSansRegular"/>
-        <Setter Property="FontSize" Value="14"/>
-        <Setter Property="MinimumHeightRequest" Value="44"/>
-        <Setter Property="MinimumWidthRequest" Value="44"/>
-        <Setter Property="VisualStateManager.VisualStateGroups">
-            <VisualStateGroupList>
-                <VisualStateGroup x:Name="CommonStates">
-                    <VisualState x:Name="Normal" />
-                    <VisualState x:Name="Disabled">
-                        <VisualState.Setters>
-                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}" />
-                        </VisualState.Setters>
-                    </VisualState>
-                </VisualStateGroup>
-            </VisualStateGroupList>
-        </Setter>
-    </Style>
-
-    <Style TargetType="RefreshView">
-        <Setter Property="RefreshColor" Value="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray200}}" />
-    </Style>
-
-    <Style TargetType="SearchBar">
-        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource White}}" />
-        <Setter Property="PlaceholderColor" Value="{StaticResource Gray500}" />
-        <Setter Property="CancelButtonColor" Value="{StaticResource Gray500}" />
-        <Setter Property="BackgroundColor" Value="Transparent" />
-        <Setter Property="FontFamily" Value="OpenSansRegular" />
-        <Setter Property="FontSize" Value="14" />
-        <Setter Property="MinimumHeightRequest" Value="44"/>
-        <Setter Property="MinimumWidthRequest" Value="44"/>
-        <Setter Property="VisualStateManager.VisualStateGroups">
-            <VisualStateGroupList>
-                <VisualStateGroup x:Name="CommonStates">
-                    <VisualState x:Name="Normal" />
-                    <VisualState x:Name="Disabled">
-                        <VisualState.Setters>
-                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}" />
-                            <Setter Property="PlaceholderColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}" />
-                        </VisualState.Setters>
-                    </VisualState>
-                </VisualStateGroup>
-            </VisualStateGroupList>
-        </Setter>
-    </Style>
-
-    <Style TargetType="SearchHandler">
-        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource White}}" />
-        <Setter Property="PlaceholderColor" Value="{StaticResource Gray500}" />
-        <Setter Property="BackgroundColor" Value="Transparent" />
-        <Setter Property="FontFamily" Value="OpenSansRegular" />
-        <Setter Property="FontSize" Value="14" />
-        <Setter Property="VisualStateManager.VisualStateGroups">
-            <VisualStateGroupList>
-                <VisualStateGroup x:Name="CommonStates">
-                    <VisualState x:Name="Normal" />
-                    <VisualState x:Name="Disabled">
-                        <VisualState.Setters>
-                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}" />
-                            <Setter Property="PlaceholderColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}" />
-                        </VisualState.Setters>
-                    </VisualState>
-                </VisualStateGroup>
-            </VisualStateGroupList>
-        </Setter>
-    </Style>
-
-    <Style TargetType="Shadow">
-        <Setter Property="Radius" Value="15" />
-        <Setter Property="Opacity" Value="0.5" />
-        <Setter Property="Brush" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource White}}" />
-        <Setter Property="Offset" Value="10,10" />
-    </Style>
-
-    <Style TargetType="Slider">
-        <Setter Property="MinimumTrackColor" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource White}}" />
-        <Setter Property="MaximumTrackColor" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray600}}" />
-        <Setter Property="ThumbColor" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource White}}" />
-        <Setter Property="VisualStateManager.VisualStateGroups">
-            <VisualStateGroupList>
-                <VisualStateGroup x:Name="CommonStates">
-                    <VisualState x:Name="Normal" />
-                    <VisualState x:Name="Disabled">
-                        <VisualState.Setters>
-                            <Setter Property="MinimumTrackColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}"/>
-                            <Setter Property="MaximumTrackColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}"/>
-                            <Setter Property="ThumbColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}"/>
-                        </VisualState.Setters>
-                    </VisualState>
-                </VisualStateGroup>
-            </VisualStateGroupList>
-        </Setter>
-    </Style>
-
-    <Style TargetType="SwipeItem">
-        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}" />
-    </Style>
-
-    <Style TargetType="Switch">
-        <Setter Property="OnColor" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource White}}" />
-        <Setter Property="ThumbColor" Value="{StaticResource White}" />
-        <Setter Property="VisualStateManager.VisualStateGroups">
-            <VisualStateGroupList>
-                <VisualStateGroup x:Name="CommonStates">
-                    <VisualState x:Name="Normal" />
-                    <VisualState x:Name="Disabled">
-                        <VisualState.Setters>
-                            <Setter Property="OnColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}" />
-                            <Setter Property="ThumbColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}" />
-                        </VisualState.Setters>
-                    </VisualState>
-                    <VisualState x:Name="On">
-                        <VisualState.Setters>
-                            <Setter Property="OnColor" Value="{AppThemeBinding Light={StaticResource Secondary}, Dark={StaticResource Gray200}}" />
-                            <Setter Property="ThumbColor" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource White}}" />
-                        </VisualState.Setters>
-                    </VisualState>
-                    <VisualState x:Name="Off">
-                        <VisualState.Setters>
-                            <Setter Property="ThumbColor" Value="{AppThemeBinding Light={StaticResource Gray400}, Dark={StaticResource Gray500}}" />
-                        </VisualState.Setters>
-                    </VisualState>
-                </VisualStateGroup>
-            </VisualStateGroupList>
-        </Setter>
-    </Style>
-
-    <Style TargetType="TimePicker">
-        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource White}}" />
-        <Setter Property="BackgroundColor" Value="Transparent"/>
-        <Setter Property="FontFamily" Value="OpenSansRegular"/>
-        <Setter Property="FontSize" Value="14"/>
-        <Setter Property="MinimumHeightRequest" Value="44"/>
-        <Setter Property="MinimumWidthRequest" Value="44"/>
-        <Setter Property="VisualStateManager.VisualStateGroups">
-            <VisualStateGroupList>
-                <VisualStateGroup x:Name="CommonStates">
-                    <VisualState x:Name="Normal" />
-                    <VisualState x:Name="Disabled">
-                        <VisualState.Setters>
-                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}" />
-                        </VisualState.Setters>
-                    </VisualState>
-                </VisualStateGroup>
-            </VisualStateGroupList>
-        </Setter>
-    </Style>
-  
-    <!--
-    <Style TargetType="TitleBar">
-        <Setter Property="MinimumHeightRequest" Value="32"/>
-        <Setter Property="VisualStateManager.VisualStateGroups">
-            <VisualStateGroupList>
-                <VisualStateGroup x:Name="TitleActiveStates">
-                    <VisualState x:Name="TitleBarTitleActive">
-                        <VisualState.Setters>
-                            <Setter Property="BackgroundColor" Value="Transparent" />
-                            <Setter Property="ForegroundColor" Value="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource White}}" />
-                        </VisualState.Setters>
-                    </VisualState>
-                    <VisualState x:Name="TitleBarTitleInactive">
-                        <VisualState.Setters>
-                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}" />
-                            <Setter Property="ForegroundColor" Value="{AppThemeBinding Light={StaticResource Gray400}, Dark={StaticResource Gray500}}" />
-                        </VisualState.Setters>
-                    </VisualState>
-                </VisualStateGroup>
-            </VisualStateGroupList>
-        </Setter>
-    </Style>
-    -->
-
-    <Style TargetType="Page" ApplyToDerivedTypes="True">
-        <Setter Property="Padding" Value="0"/>
-        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource OffBlack}}" />
-    </Style>
-
-    <Style TargetType="Shell" ApplyToDerivedTypes="True">
-        <Setter Property="Shell.BackgroundColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource OffBlack}}" />
-        <Setter Property="Shell.ForegroundColor" Value="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource SecondaryDarkText}}" />
-        <Setter Property="Shell.TitleColor" Value="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource SecondaryDarkText}}" />
-        <Setter Property="Shell.DisabledColor" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray950}}" />
-        <Setter Property="Shell.UnselectedColor" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray200}}" />
-        <Setter Property="Shell.NavBarHasShadow" Value="False" />
-        <Setter Property="Shell.TabBarBackgroundColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}" />
-        <Setter Property="Shell.TabBarForegroundColor" Value="{AppThemeBinding Light={StaticResource Magenta}, Dark={StaticResource White}}" />
-        <Setter Property="Shell.TabBarTitleColor" Value="{AppThemeBinding Light={StaticResource Magenta}, Dark={StaticResource White}}" />
-        <Setter Property="Shell.TabBarUnselectedColor" Value="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray200}}" />
-    </Style>
-
-    <Style TargetType="NavigationPage">
-        <Setter Property="BarBackgroundColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource OffBlack}}" />
-        <Setter Property="BarTextColor" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource White}}" />
-        <Setter Property="IconColor" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource White}}" />
-    </Style>
-
-    <Style TargetType="TabbedPage">
-        <Setter Property="BarBackgroundColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Gray950}}" />
-        <Setter Property="BarTextColor" Value="{AppThemeBinding Light={StaticResource Magenta}, Dark={StaticResource White}}" />
-        <Setter Property="UnselectedTabColor" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray950}}" />
-        <Setter Property="SelectedTabColor" Value="{AppThemeBinding Light={StaticResource Gray950}, Dark={StaticResource Gray200}}" />
-    </Style>
-
-    <Style TargetType="Button">
-        <!-- Existing setters might be here -->
-        <Setter Property="FontSize" Value="14" />
-        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Primary}}" />
-        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource White}}" />
-        <!-- ... etc ... -->
-
-        <Setter Property="VisualStateManager.VisualStateGroups">
-            <VisualStateGroupList>
-                <VisualStateGroup x:Name="CommonStates">
-                    <VisualState x:Name="Normal">
-                        <VisualState.Setters>
-                            <Setter Property="Scale" Value="1.0" />
-                            <!-- Optional: Reset background if needed, often handled by base setter -->
-                            <!-- <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource White}}" /> -->
-                        </VisualState.Setters>
-                    </VisualState>
-
-                    <!-- ADD OR MODIFY THIS -->
-                    <VisualState x:Name="Pressed">
-                        <VisualState.Setters>
-                            <Setter Property="Scale" Value="0.95" />
-                            <!-- Optional: Define a pressed background color -->
-                            <!-- Note: Might need separate Light/Dark values -->
-                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light='#3E1F9F', Dark='#DDDDDD'}" />
-                        </VisualState.Setters>
-                    </VisualState>
-
-                    <VisualState x:Name="Disabled">
-                        <VisualState.Setters>
-                            <Setter Property="TextColor" Value="#A0A0A0" />
-                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light='#C0C0C0', Dark='#444444'}" />
-                        </VisualState.Setters>
-                    </VisualState>
-                </VisualStateGroup>
-            </VisualStateGroupList>
-        </Setter>
-    </Style>
-
-</ResourceDictionary>
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>
 </file>
 
 <file path="Source\Converters\FutureRepeatingTaskIsEnabledConverter.cs">
@@ -9586,6 +9454,22 @@ public class DailyProgress
 }
 </file>
 
+<file path="Source\Models\DarkModeBackgroundType.cs">
+namespace Tickly.Models;
+
+public enum DarkModeBackgroundType
+{
+    OffBlack, // The default dark greyish
+    PureBlack // The pure #000000
+}
+</file>
+
+<file path="Source\Models\PlotDataPoint.cs">
+namespace Tickly.Models;
+
+public record PlotDataPoint(string Label, double Value, Color BarColor);
+</file>
+
 <file path="Source\Models\Settings.cs">
 // Models/Settings.cs (New File or add to existing Models)
 namespace Tickly.Models;
@@ -9687,21 +9571,21 @@ public enum TaskTimeType
 
 <file path="Source\Services\AppSettings.cs">
 using System.Diagnostics;
+
+using System.Diagnostics;
 using Tickly.Models;
 
 namespace Tickly.Services;
 
 public static class AppSettings
 {
-    // Key for storing the setting
+    // Keys for storing the settings
     public const string CalendarSystemKey = "CalendarSystemPreference";
-    // REMOVED: SortOrderKey
-    // public const string SortOrderKey = "SortOrderPreference";
+    public const string DarkModeBackgroundKey = "DarkModeBackgroundPreference"; // New Key
 
-    // Backing field - Now initialized by static constructor
+    // Backing fields - Now initialized by static constructor
     private static CalendarSystemType _selectedCalendarSystem;
-    // REMOVED: _selectedSortOrder
-    // private static SortOrderType _selectedSortOrder;
+    private static DarkModeBackgroundType _selectedDarkModeBackground; // New Field
 
     // --- Static Constructor ---
     static AppSettings()
@@ -9711,10 +9595,11 @@ public static class AppSettings
         _selectedCalendarSystem = (CalendarSystemType)storedCalendarValue;
         Debug.WriteLine($"AppSettings (Static Constructor): Initialized CalendarSystem to {_selectedCalendarSystem} from Preferences.");
 
-        // REMOVED: Sort Order loading
-        // int storedSortValue = Preferences.Get(SortOrderKey, (int)SortOrderType.PriorityHighFirst);
-        // _selectedSortOrder = (SortOrderType)storedSortValue;
-        // Debug.WriteLine($"AppSettings (Static Constructor): Initialized SortOrder to {_selectedSortOrder} from Preferences.");
+        // Load Dark Mode Background from Preferences, default to OffBlack (0) if not found
+        int storedDarkModeBgValue = Preferences.Get(DarkModeBackgroundKey, (int)DarkModeBackgroundType.OffBlack);
+        _selectedDarkModeBackground = (DarkModeBackgroundType)storedDarkModeBgValue;
+        Debug.WriteLine($"AppSettings (Static Constructor): Initialized DarkModeBackground to {_selectedDarkModeBackground} from Preferences.");
+
     }
     // --- End Static Constructor ---
 
@@ -9727,14 +9612,26 @@ public static class AppSettings
             if (_selectedCalendarSystem != value)
             {
                 _selectedCalendarSystem = value;
+                // Saving is handled by ViewModel
                 Debug.WriteLine($"AppSettings: CalendarSystem changed to {value} (will be saved by SettingsViewModel).");
             }
         }
     }
 
-    // REMOVED: SelectedSortOrder property
-    // public static SortOrderType SelectedSortOrder { ... }
-
+    // Public property to access the Dark Mode Background setting
+    public static DarkModeBackgroundType SelectedDarkModeBackground
+    {
+        get => _selectedDarkModeBackground;
+        set
+        {
+            if (_selectedDarkModeBackground != value)
+            {
+                _selectedDarkModeBackground = value;
+                // Saving is handled by ViewModel
+                Debug.WriteLine($"AppSettings: DarkModeBackground changed to {value} (will be saved by SettingsViewModel).");
+            }
+        }
+    }
 }
 </file>
 
@@ -10636,137 +10533,161 @@ public sealed partial class MainViewModel : ObservableObject
 </file>
 
 <file path="Source\ViewModels\SettingsViewModel.cs">
-using System.Collections.ObjectModel;
 using System.Diagnostics;
-using System.Globalization;
-using System.Text;
-using System.Text.Json;
-using CommunityToolkit.Maui.Storage;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
+using Microsoft.Maui.ApplicationModel.DataTransfer;
 using Tickly.Messages;
 using Tickly.Models;
 using Tickly.Services;
-using Tickly.Utils; // Added for DateUtils
 
 namespace Tickly.ViewModels;
 
 public sealed partial class SettingsViewModel : ObservableObject
 {
-    private readonly TaskPersistenceService _taskPersistenceService; // Added
-    private bool _isGregorianSelected;
-    private bool _isPersianSelected;
     private readonly string _applicationTasksFilePath;
-    private const string ExportFilePrefix = "Tickly-Tasks-"; // Define prefix for cleanup
+    private const string TaskExportFilePrefix = "Tickly-Tasks-Export-";
 
-    // Properties for Progress Export
-    public ObservableCollection<string> ExportSortOrders { get; }
     [ObservableProperty]
-    private string _selectedExportSortOrder;
+    private bool _isGregorianSelected;
 
-    public ObservableCollection<string> ExportCalendarTypes { get; }
     [ObservableProperty]
-    private string _selectedExportCalendarType;
+    private bool _isPersianSelected;
+
+    // New properties for Dark Mode Background
+    [ObservableProperty]
+    private bool _isDarkModeOffBlackSelected;
+
+    [ObservableProperty]
+    private bool _isDarkModePureBlackSelected;
 
 
-    public bool IsGregorianSelected
+    public SettingsViewModel(TaskPersistenceService taskPersistenceService)
     {
-        get => _isGregorianSelected;
-        set
-        {
-            if (SetProperty(ref _isGregorianSelected, value) && value)
-            {
-                OnCalendarSelectionChanged(true);
-            }
-        }
-    }
-
-    public bool IsPersianSelected
-    {
-        get => _isPersianSelected;
-        set
-        {
-            if (SetProperty(ref _isPersianSelected, value) && value)
-            {
-                OnCalendarSelectionChanged(false);
-            }
-        }
-    }
-
-    public SettingsViewModel(TaskPersistenceService taskPersistenceService) // Injected
-    {
-        _taskPersistenceService = taskPersistenceService; // Store injected service
         _applicationTasksFilePath = Path.Combine(FileSystem.AppDataDirectory, "tasks.json");
         Debug.WriteLine($"SettingsViewModel: Tasks file path is set to: {_applicationTasksFilePath}");
-
-        // Initialize Progress Export Options
-        ExportSortOrders = new ObservableCollection<string>
-        {
-            "Ascending by Date",
-            "Descending by Date"
-        };
-        _selectedExportSortOrder = ExportSortOrders.FirstOrDefault() ?? "Ascending by Date";
-
-        ExportCalendarTypes = new ObservableCollection<string>
-        {
-            "Gregorian",
-            "Persian"
-        };
-        _selectedExportCalendarType = ExportCalendarTypes.FirstOrDefault() ?? "Gregorian";
-
         LoadSettings();
+    }
+
+    // --- Calendar Settings ---
+    partial void OnIsGregorianSelectedChanged(bool value)
+    {
+        if (value)
+        {
+            OnCalendarSelectionChanged(true);
+        }
+    }
+
+    partial void OnIsPersianSelectedChanged(bool value)
+    {
+        if (value)
+        {
+            OnCalendarSelectionChanged(false);
+        }
     }
 
     private void OnCalendarSelectionChanged(bool isGregorianNowSelected)
     {
         if (isGregorianNowSelected)
         {
-            SetProperty(ref _isPersianSelected, false, nameof(IsPersianSelected));
+            // Ensure the other radio button becomes unchecked
+            if (IsPersianSelected) SetProperty(ref _isPersianSelected, false, nameof(IsPersianSelected));
             UpdateCalendarSetting(CalendarSystemType.Gregorian);
         }
-        else
+        else // Persian is selected
         {
-            SetProperty(ref _isGregorianSelected, false, nameof(IsGregorianSelected));
+            // Ensure the other radio button becomes unchecked
+            if (IsGregorianSelected) SetProperty(ref _isGregorianSelected, false, nameof(IsGregorianSelected));
             UpdateCalendarSetting(CalendarSystemType.Persian);
         }
     }
 
     private void UpdateCalendarSetting(CalendarSystemType newSystem)
     {
-        if (AppSettings.SelectedCalendarSystem == newSystem)
-        {
-            return;
-        }
+        if (AppSettings.SelectedCalendarSystem == newSystem) return;
 
         AppSettings.SelectedCalendarSystem = newSystem;
         Preferences.Set(AppSettings.CalendarSystemKey, (int)newSystem);
+        Debug.WriteLine($"SettingsViewModel: Saved CalendarSystem Preference: {newSystem}");
         WeakReferenceMessenger.Default.Send(new CalendarSettingChangedMessage());
     }
 
+    // --- Dark Mode Background Settings ---
+    partial void OnIsDarkModeOffBlackSelectedChanged(bool value)
+    {
+        if (value)
+        {
+            OnDarkModeBackgroundSelectionChanged(true);
+        }
+    }
+
+    partial void OnIsDarkModePureBlackSelectedChanged(bool value)
+    {
+        if (value)
+        {
+            OnDarkModeBackgroundSelectionChanged(false);
+        }
+    }
+
+    private void OnDarkModeBackgroundSelectionChanged(bool isOffBlackNowSelected)
+    {
+        if (isOffBlackNowSelected)
+        {
+            // Ensure the other radio button becomes unchecked
+            if (IsDarkModePureBlackSelected) SetProperty(ref _isDarkModePureBlackSelected, false, nameof(IsDarkModePureBlackSelected));
+            UpdateDarkModeBackgroundSetting(DarkModeBackgroundType.OffBlack);
+        }
+        else // PureBlack is selected
+        {
+            // Ensure the other radio button becomes unchecked
+            if (IsDarkModeOffBlackSelected) SetProperty(ref _isDarkModeOffBlackSelected, false, nameof(IsDarkModeOffBlackSelected));
+            UpdateDarkModeBackgroundSetting(DarkModeBackgroundType.PureBlack);
+        }
+    }
+
+    private void UpdateDarkModeBackgroundSetting(DarkModeBackgroundType newBackgroundType)
+    {
+        if (AppSettings.SelectedDarkModeBackground == newBackgroundType) return;
+
+        AppSettings.SelectedDarkModeBackground = newBackgroundType;
+        Preferences.Set(AppSettings.DarkModeBackgroundKey, (int)newBackgroundType);
+        Debug.WriteLine($"SettingsViewModel: Saved DarkModeBackground Preference: {newBackgroundType}");
+        // Send a message so the App can update the dynamic resource
+        WeakReferenceMessenger.Default.Send(new DarkModeBackgroundChangedMessage());
+    }
+
+
     private void LoadSettings()
     {
-        CalendarSystemType currentSystem = AppSettings.SelectedCalendarSystem;
-
-        bool shouldBeGregorian = currentSystem == CalendarSystemType.Gregorian;
-        bool shouldBePersian = currentSystem == CalendarSystemType.Persian;
-
+        // Load Calendar Setting
+        CalendarSystemType currentCalendarSystem = AppSettings.SelectedCalendarSystem;
+        bool shouldBeGregorian = currentCalendarSystem == CalendarSystemType.Gregorian;
         SetProperty(ref _isGregorianSelected, shouldBeGregorian, nameof(IsGregorianSelected));
-        SetProperty(ref _isPersianSelected, shouldBePersian, nameof(IsPersianSelected));
-
-        if (!_isGregorianSelected && !_isPersianSelected)
+        SetProperty(ref _isPersianSelected, !shouldBeGregorian, nameof(IsPersianSelected)); // Set the opposite
+        if (!_isGregorianSelected && !_isPersianSelected) // Safety default
         {
             SetProperty(ref _isGregorianSelected, true, nameof(IsGregorianSelected));
-            AppSettings.SelectedCalendarSystem = CalendarSystemType.Gregorian;
-            Preferences.Set(AppSettings.CalendarSystemKey, (int)CalendarSystemType.Gregorian);
         }
+
+        // Load Dark Mode Background Setting
+        DarkModeBackgroundType currentDarkModeBg = AppSettings.SelectedDarkModeBackground;
+        bool shouldBeOffBlack = currentDarkModeBg == DarkModeBackgroundType.OffBlack;
+        SetProperty(ref _isDarkModeOffBlackSelected, shouldBeOffBlack, nameof(IsDarkModeOffBlackSelected));
+        SetProperty(ref _isDarkModePureBlackSelected, !shouldBeOffBlack, nameof(IsDarkModePureBlackSelected)); // Set the opposite
+        if (!_isDarkModeOffBlackSelected && !_isDarkModePureBlackSelected) // Safety default
+        {
+            SetProperty(ref _isDarkModeOffBlackSelected, true, nameof(IsDarkModeOffBlackSelected));
+        }
+
+        Debug.WriteLine($"SettingsViewModel: Loaded Settings - Calendar: {currentCalendarSystem}, DarkBg: {currentDarkModeBg}");
     }
 
     [RelayCommand]
     private async Task ExportTasksAsync()
     {
-        string temporaryExportPath = string.Empty; // Keep track for potential logging if needed
-        Debug.WriteLine("ExportTasksAsync: Starting export process.");
+        string temporaryExportPath = string.Empty;
+        Debug.WriteLine("ExportTasksAsync: Starting task export process.");
 
         try
         {
@@ -10779,100 +10700,57 @@ public sealed partial class SettingsViewModel : ObservableObject
             }
             Debug.WriteLine("ExportTasksAsync: Source tasks file found.");
 
-            // *** Step 1: Clean up OLD export files ***
-            CleanUpOldExportFiles();
+            CleanUpOldExportFiles(TaskExportFilePrefix, ".json");
 
-            // Log source file size
-            try
-            {
-                FileInfo sourceInfo = new(_applicationTasksFilePath);
-                Debug.WriteLine($"ExportTasksAsync: Source file size: {sourceInfo.Length} bytes.");
-                if (sourceInfo.Length == 0)
-                {
-                    Debug.WriteLine("ExportTasksAsync: WARNING - Source file is 0 bytes.");
-                }
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"ExportTasksAsync: Could not get source file info: {ex.Message}");
-            }
+            LogFileInfo(_applicationTasksFilePath, "Source Task");
 
-            // *** Step 2: Create the NEW temporary file ***
-            string exportFilename = $"{ExportFilePrefix}{DateTime.Now:yyyy-MM-dd_HH-mm-ss}.json";
+            string exportFilename = $"{TaskExportFilePrefix}{DateTime.Now:yyyy-MM-dd_HH-mm-ss}.json";
             temporaryExportPath = Path.Combine(FileSystem.CacheDirectory, exportFilename);
-            Debug.WriteLine($"ExportTasksAsync: Temporary export path set to: {temporaryExportPath}");
+            Debug.WriteLine($"ExportTasksAsync: Temporary task export path set to: {temporaryExportPath}");
 
-            string? cacheDir = Path.GetDirectoryName(temporaryExportPath);
-            if (cacheDir is not null && !Directory.Exists(cacheDir))
-            {
-                Directory.CreateDirectory(cacheDir);
-                Debug.WriteLine($"ExportTasksAsync: Created cache directory: {cacheDir}");
-            }
+            EnsureDirectoryExists(temporaryExportPath);
 
-            Debug.WriteLine($"ExportTasksAsync: Attempting to copy file from '{_applicationTasksFilePath}' to '{temporaryExportPath}'");
+            Debug.WriteLine($"ExportTasksAsync: Attempting to copy task file from '{_applicationTasksFilePath}' to '{temporaryExportPath}'");
             File.Copy(_applicationTasksFilePath, temporaryExportPath, true);
-            Debug.WriteLine("ExportTasksAsync: File copy successful.");
+            Debug.WriteLine("ExportTasksAsync: Task file copy successful.");
 
             if (!File.Exists(temporaryExportPath))
             {
-                Debug.WriteLine($"ExportTasksAsync: ERROR - Temporary file does not exist after copy attempt: {temporaryExportPath}");
+                Debug.WriteLine($"ExportTasksAsync: ERROR - Temporary task file does not exist after copy attempt: {temporaryExportPath}");
                 await SettingsViewModel.ShowAlertAsync("Export Error", "Failed to create temporary export file.", "OK");
                 return;
             }
-            Debug.WriteLine($"ExportTasksAsync: Temporary file confirmed to exist: {temporaryExportPath}");
+            LogFileInfo(temporaryExportPath, "Temporary Task");
 
-            // Log temporary file size
-            try
-            {
-                FileInfo tempInfo = new(temporaryExportPath);
-                Debug.WriteLine($"ExportTasksAsync: Temporary file size AFTER copy: {tempInfo.Length} bytes.");
-                if (tempInfo.Length == 0)
-                {
-                    Debug.WriteLine($"ExportTasksAsync: ERROR - Temporary file is 0 bytes after copy!");
-                }
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"ExportTasksAsync: Could not get temporary file info: {ex.Message}");
-            }
-
-            // *** Step 3: Share the NEW file ***
             ShareFileRequest request = new()
             {
                 Title = "Export Tickly Tasks",
                 File = new ShareFile(temporaryExportPath, "application/json")
             };
-            Debug.WriteLine("ExportTasksAsync: ShareFileRequest created. Title: " + request.Title + ", File Path: " + request.File.FullPath);
+            Debug.WriteLine("ExportTasksAsync: ShareFileRequest created for tasks. Title: " + request.Title + ", File Path: " + request.File.FullPath);
 
-            Debug.WriteLine("ExportTasksAsync: Calling Share.RequestAsync...");
+            Debug.WriteLine("ExportTasksAsync: Calling Share.RequestAsync for tasks...");
             await Share.RequestAsync(request);
-            Debug.WriteLine("ExportTasksAsync: Share.RequestAsync completed.");
-
-            // *** Step 4: NO IMMEDIATE DELETION ***
-            // The file remains in the cache directory. It will be cleaned up
-            // the *next* time the user exports.
-
+            Debug.WriteLine("ExportTasksAsync: Share.RequestAsync for tasks completed.");
         }
         catch (Exception exception)
         {
             Debug.WriteLine($"ExportTasksAsync: Exception caught: {exception.GetType().Name} - {exception.Message}\nStackTrace: {exception.StackTrace}");
-            await SettingsViewModel.ShowAlertAsync("Export Error", $"An error occurred during export: {exception.Message}", "OK");
+            await SettingsViewModel.ShowAlertAsync("Export Error", $"An error occurred during task export: {exception.Message}", "OK");
         }
-        // The finally block is now removed as we don't delete the current file.
     }
 
-    // *** NEW METHOD for cleanup ***
-    private void CleanUpOldExportFiles()
+    private void CleanUpOldExportFiles(string prefix, string extension)
     {
         try
         {
             string cacheDir = FileSystem.CacheDirectory;
-            string searchPattern = $"{ExportFilePrefix}*.json";
+            string searchPattern = $"{prefix}*{extension}";
             Debug.WriteLine($"CleanUpOldExportFiles: Searching for old files in '{cacheDir}' with pattern '{searchPattern}'");
 
             if (!Directory.Exists(cacheDir))
             {
-                Debug.WriteLine($"CleanUpOldExportFiles: Cache directory not found.");
+                Debug.WriteLine($"CleanUpOldExportFiles: Cache directory not found: {cacheDir}");
                 return;
             }
 
@@ -10886,21 +10764,53 @@ public sealed partial class SettingsViewModel : ObservableObject
                     Debug.WriteLine($"CleanUpOldExportFiles: Deleted old file: {file}");
                     count++;
                 }
+                catch (IOException ioEx)
+                {
+                    Debug.WriteLine($"CleanUpOldExportFiles: IO Error deleting old file '{file}': {ioEx.Message}");
+                }
+                catch (UnauthorizedAccessException uaEx)
+                {
+                    Debug.WriteLine($"CleanUpOldExportFiles: Access Error deleting old file '{file}': {uaEx.Message}");
+                }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"CleanUpOldExportFiles: Error deleting old file '{file}': {ex.Message}");
-                    // Log but continue trying to delete others
+                    Debug.WriteLine($"CleanUpOldExportFiles: General Error deleting old file '{file}': {ex.Message}");
                 }
             }
-            Debug.WriteLine($"CleanUpOldExportFiles: Deleted {count} old export files.");
+            Debug.WriteLine($"CleanUpOldExportFiles: Deleted {count} old export files matching pattern '{searchPattern}'.");
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"CleanUpOldExportFiles: Error during cleanup: {ex.Message}");
-            // Log the error but don't let cleanup failure prevent the export
+            Debug.WriteLine($"CleanUpOldExportFiles: Error during cleanup for pattern '{prefix}*{extension}': {ex.Message}");
         }
     }
 
+    private void EnsureDirectoryExists(string filePath)
+    {
+        string? directory = Path.GetDirectoryName(filePath);
+        if (directory is not null && !Directory.Exists(directory))
+        {
+            Directory.CreateDirectory(directory);
+            Debug.WriteLine($"EnsureDirectoryExists: Created directory: {directory}");
+        }
+    }
+
+    private void LogFileInfo(string filePath, string fileDescription)
+    {
+        try
+        {
+            FileInfo fileInfo = new(filePath);
+            Debug.WriteLine($"LogFileInfo: {fileDescription} file size: {fileInfo.Length} bytes. Path: {filePath}");
+            if (fileInfo.Length == 0)
+            {
+                Debug.WriteLine($"LogFileInfo: WARNING - {fileDescription} file is 0 bytes!");
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"LogFileInfo: Could not get {fileDescription} file info: {ex.Message}. Path: {filePath}");
+        }
+    }
 
     [RelayCommand]
     private async Task ImportTasksAsync()
@@ -10923,7 +10833,7 @@ public sealed partial class SettingsViewModel : ObservableObject
             };
 
             Debug.WriteLine("ImportTasksAsync: Calling FilePicker.PickAsync...");
-            FileResult? result = await FilePicker.PickAsync(options);
+            FileResult? result = await FilePicker.Default.PickAsync(options);
 
             if (result is null)
             {
@@ -10931,21 +10841,32 @@ public sealed partial class SettingsViewModel : ObservableObject
                 return;
             }
 
-            Debug.WriteLine($"ImportTasksAsync: File picked: {result.FullPath}");
+            Debug.WriteLine($"ImportTasksAsync: File picked: {result.FileName} ({result.FullPath})");
             string fileContent;
 
             try
             {
                 Debug.WriteLine($"ImportTasksAsync: Reading file content from: {result.FullPath}");
-                fileContent = await File.ReadAllTextAsync(result.FullPath);
-                Debug.WriteLine("ImportTasksAsync: File content read successfully. Validating JSON...");
-                _ = JsonSerializer.Deserialize<List<TaskItem>>(fileContent);
-                Debug.WriteLine("ImportTasksAsync: JSON validation successful.");
+                using var stream = await result.OpenReadAsync();
+                using var reader = new StreamReader(stream);
+                fileContent = await reader.ReadToEndAsync();
+
+                Debug.WriteLine($"ImportTasksAsync: File content read successfully ({fileContent.Length} chars). Validating JSON...");
+                if (string.IsNullOrWhiteSpace(fileContent))
+                {
+                    throw new System.Text.Json.JsonException("Imported file content is empty or whitespace.");
+                }
+                var validationList = System.Text.Json.JsonSerializer.Deserialize<List<TaskItem>>(fileContent);
+                if (validationList == null)
+                {
+                    throw new System.Text.Json.JsonException("Deserialization resulted in null list.");
+                }
+                Debug.WriteLine($"ImportTasksAsync: JSON validation successful ({validationList.Count} tasks potentially found).");
             }
-            catch (JsonException jsonException)
+            catch (System.Text.Json.JsonException jsonException)
             {
-                Debug.WriteLine($"ImportTasksAsync: Invalid JSON format during import: {jsonException.Message}");
-                await SettingsViewModel.ShowAlertAsync("Import Failed", "The selected file is not a valid JSON task file.", "OK");
+                Debug.WriteLine($"ImportTasksAsync: Invalid JSON format during import validation: {jsonException.Message}");
+                await SettingsViewModel.ShowAlertAsync("Import Failed", "The selected file does not contain valid Tickly task data.", "OK");
                 return;
             }
             catch (Exception readException)
@@ -10969,16 +10890,16 @@ public sealed partial class SettingsViewModel : ObservableObject
 
             try
             {
-                Debug.WriteLine($"ImportTasksAsync: Copying file from '{result.FullPath}' to '{_applicationTasksFilePath}'");
-                File.Copy(result.FullPath, _applicationTasksFilePath, true);
-                Debug.WriteLine("ImportTasksAsync: File copy successful. Sending reload message.");
+                Debug.WriteLine($"ImportTasksAsync: Writing imported content to '{_applicationTasksFilePath}'");
+                await File.WriteAllTextAsync(_applicationTasksFilePath, fileContent);
+                Debug.WriteLine("ImportTasksAsync: File write successful. Sending reload message.");
                 WeakReferenceMessenger.Default.Send(new TasksReloadRequestedMessage());
                 await ShowAlertAsync("Import Successful", "Tasks imported successfully. The task list has been updated.", "OK");
             }
-            catch (Exception copyException)
+            catch (Exception writeException)
             {
-                Debug.WriteLine($"ImportTasksAsync: Error copying imported file: {copyException.GetType().Name} - {copyException.Message}");
-                await ShowAlertAsync("Import Failed", $"Could not replace the tasks file: {copyException.Message}", "OK");
+                Debug.WriteLine($"ImportTasksAsync: Error writing imported file: {writeException.GetType().Name} - {writeException.Message}");
+                await ShowAlertAsync("Import Failed", $"Could not replace the tasks file: {writeException.Message}", "OK");
             }
         }
         catch (Exception exception)
@@ -10988,7 +10909,6 @@ public sealed partial class SettingsViewModel : ObservableObject
         }
     }
 
-    // Static helper to display alerts using the current page context
     private static async Task ShowAlertAsync(string title, string message, string cancelAction)
     {
         if (!MainThread.IsMainThread)
@@ -11009,7 +10929,6 @@ public sealed partial class SettingsViewModel : ObservableObject
         }
     }
 
-    // Static helper to display confirmations using the current page context
     private static async Task<bool> ShowConfirmationAsync(string title, string message, string acceptAction, string cancelAction)
     {
         if (!MainThread.IsMainThread)
@@ -11025,10 +10944,9 @@ public sealed partial class SettingsViewModel : ObservableObject
         else
         {
             Debug.WriteLine($"ShowConfirmation: Could not find current page to display confirmation: {title}");
-            return false; // Assume cancellation if page not found
+            return false;
         }
     }
-
 
     private static Page? GetCurrentPage()
     {
@@ -11038,109 +10956,335 @@ public sealed partial class SettingsViewModel : ObservableObject
         }
         if (Application.Current?.MainPage is Page mainPage)
         {
+            if (mainPage is NavigationPage navPage && navPage.CurrentPage != null)
+            {
+                return navPage.CurrentPage;
+            }
+            if (mainPage is TabbedPage tabbedPage && tabbedPage.CurrentPage != null)
+            {
+                return tabbedPage.CurrentPage;
+            }
             return mainPage;
         }
         if (Application.Current?.Windows is { Count: > 0 } windows && windows[0].Page is not null)
         {
+            if (windows[0].Page is NavigationPage navPage && navPage.CurrentPage != null)
+            {
+                return navPage.CurrentPage;
+            }
             return windows[0].Page;
         }
-        Debug.WriteLine("GetCurrentPage: Could not determine the current page.");
+        Debug.WriteLine("GetCurrentPage: Could not determine the current page reliably.");
         return null;
+    }
+}
+
+// New Message Type
+public class DarkModeBackgroundChangedMessage { }
+</file>
+
+<file path="Source\ViewModels\StatisticsViewModel.cs">
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using Microsoft.Maui.ApplicationModel.DataTransfer;
+using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.Diagnostics;
+using System.Globalization;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using Tickly.Models;
+using Tickly.Services;
+using Tickly.Utils;
+using Tickly.Views.Plotting;
+
+namespace Tickly.ViewModels;
+
+public sealed partial class StatisticsViewModel : ObservableObject
+{
+    private readonly TaskPersistenceService _taskPersistenceService;
+
+    [ObservableProperty]
+    private ObservableCollection<DailyProgress> _allProgressData;
+
+    [ObservableProperty]
+    private List<PlotDataPoint> _plotData; // Keep for potential direct use if needed elsewhere
+
+    [ObservableProperty]
+    private ObservableCollection<string> _plotTimeRanges;
+
+    [ObservableProperty]
+    private string _selectedPlotTimeRange;
+
+    public ObservableCollection<string> ExportSortOrders { get; }
+
+    [ObservableProperty]
+    private string _selectedExportSortOrder;
+
+    public ObservableCollection<string> ExportCalendarTypes { get; }
+
+    [ObservableProperty]
+    private string _selectedExportCalendarType;
+
+    [ObservableProperty]
+    private BarChartDrawable _chartDrawable;
+
+    public StatisticsViewModel(TaskPersistenceService taskPersistenceService)
+    {
+        _taskPersistenceService = taskPersistenceService;
+        _allProgressData = [];
+        _plotData = [];
+        // Initialize with an empty drawable initially
+        _chartDrawable = new BarChartDrawable { DataPoints = [], TextColor = Application.Current?.RequestedTheme == AppTheme.Dark ? Colors.WhiteSmoke : Colors.Black };
+
+        PlotTimeRanges =
+        [
+            "Last 7 Days",
+            "Last 30 Days",
+            "Last 3 Months",
+            "Last 6 Months",
+            "Last Year",
+            "All Time"
+        ];
+        SelectedPlotTimeRange = PlotTimeRanges.FirstOrDefault() ?? "Last 7 Days";
+
+        ExportSortOrders =
+        [
+            "Ascending by Date",
+            "Descending by Date"
+        ];
+        SelectedExportSortOrder = ExportSortOrders.FirstOrDefault() ?? "Ascending by Date";
+
+        ExportCalendarTypes =
+        [
+            "Gregorian",
+            "Persian"
+        ];
+        SelectedExportCalendarType = ExportCalendarTypes.FirstOrDefault() ?? "Gregorian";
+
+        LoadProgressCommand.Execute(null);
+    }
+
+    partial void OnSelectedPlotTimeRangeChanged(string value)
+    {
+        Debug.WriteLine($"StatisticsViewModel: Time range changed to '{value}'. Updating plot data.");
+        UpdatePlotData();
+    }
+
+    [RelayCommand]
+    private async Task LoadProgressAsync()
+    {
+        Debug.WriteLine("StatisticsViewModel: LoadProgressAsync started.");
+        var progress = await _taskPersistenceService.LoadDailyProgressAsync();
+        Debug.WriteLine($"StatisticsViewModel: Loaded {progress.Count} progress entries.");
+        AllProgressData = new ObservableCollection<DailyProgress>(progress.OrderBy(p => p.Date));
+        Debug.WriteLine("StatisticsViewModel: AllProgressData populated and sorted.");
+        UpdatePlotData();
+    }
+
+    private void UpdatePlotData()
+    {
+        Debug.WriteLine($"StatisticsViewModel: UpdatePlotData started for range '{SelectedPlotTimeRange}'.");
+        if (AllProgressData == null || !AllProgressData.Any())
+        {
+            Debug.WriteLine("StatisticsViewModel: No progress data available. Clearing plot.");
+            PlotData = [];
+            ChartDrawable = new BarChartDrawable { DataPoints = PlotData, TextColor = Application.Current?.RequestedTheme == AppTheme.Dark ? Colors.WhiteSmoke : Colors.Black };
+            // OnPropertyChanged(nameof(ChartDrawable)); // Handled by [ObservableProperty] setter
+            return;
+        }
+
+        DateTime startDate = DateTime.MinValue;
+        DateTime today = DateTime.Today;
+
+        switch (SelectedPlotTimeRange)
+        {
+            case "Last 7 Days":
+                startDate = today.AddDays(-6);
+                break;
+            case "Last 30 Days":
+                startDate = today.AddDays(-29);
+                break;
+            case "Last 3 Months":
+                startDate = today.AddMonths(-3).AddDays(1); // Approx
+                break;
+            case "Last 6 Months":
+                startDate = today.AddMonths(-6).AddDays(1); // Approx
+                break;
+            case "Last Year":
+                startDate = today.AddYears(-1).AddDays(1); // Approx
+                break;
+            case "All Time":
+            default:
+                startDate = AllProgressData.Min(p => p.Date);
+                break;
+        }
+        Debug.WriteLine($"StatisticsViewModel: Date range calculated: {startDate:yyyy-MM-dd} to {today:yyyy-MM-dd}");
+
+        var filteredProgress = AllProgressData
+            .Where(p => p.Date.Date >= startDate.Date && p.Date.Date <= today.Date)
+            .OrderBy(p => p.Date)
+            .ToList();
+
+        Debug.WriteLine($"StatisticsViewModel: Filtered data count: {filteredProgress.Count}");
+
+        // Simple downsampling for "All Time" if too many points, e.g., show weekly/monthly averages
+        if (SelectedPlotTimeRange == "All Time" && filteredProgress.Count > 90) // Example threshold
+        {
+            Debug.WriteLine($"StatisticsViewModel: Plot has {filteredProgress.Count} points for All Time. Consider aggregation for performance/readability.");
+        }
+
+
+        CalendarSystemType calendarSystem = AppSettings.SelectedCalendarSystem;
+        CultureInfo formatCulture = calendarSystem == CalendarSystemType.Persian ? new("fa-IR") : CultureInfo.InvariantCulture;
+        string dateFormat = "dd MMM";
+        if (SelectedPlotTimeRange == "Last Year" || (SelectedPlotTimeRange == "All Time" && (today - startDate).TotalDays > 365))
+        {
+            dateFormat = "MMM yy"; // Use month/year for longer ranges
+        }
+
+
+        List<PlotDataPoint> newPlotData = [];
+        foreach (var progress in filteredProgress)
+        {
+            string label;
+            if (calendarSystem == CalendarSystemType.Persian)
+            {
+                PersianCalendar pc = new();
+                label = $"{pc.GetDayOfMonth(progress.Date):00} {GetPersianAbbreviatedMonthName(pc.GetMonth(progress.Date))}";
+                if (dateFormat == "MMM yy")
+                {
+                    label = $"{GetPersianAbbreviatedMonthName(pc.GetMonth(progress.Date))} {pc.GetYear(progress.Date) % 100:00}";
+                }
+            }
+            else
+            {
+                label = progress.Date.ToString(dateFormat, formatCulture);
+            }
+            newPlotData.Add(new PlotDataPoint(label, progress.PercentageCompleted, DetermineBarColor(progress.PercentageCompleted)));
+        }
+        PlotData = newPlotData; // Update the backing list (optional if not used elsewhere)
+        Debug.WriteLine($"StatisticsViewModel: Created new PlotData list with {PlotData.Count} points.");
+
+        // *** Create a new Drawable instance ***
+        var newDrawable = new BarChartDrawable
+        {
+            DataPoints = PlotData,
+            TextColor = Application.Current?.RequestedTheme == AppTheme.Dark ? Colors.WhiteSmoke : Colors.Black
+        };
+        ChartDrawable = newDrawable; // Assign the new instance, triggers OnPropertyChanged
+        Debug.WriteLine("StatisticsViewModel: Assigned new BarChartDrawable instance to ChartDrawable property. UI should update.");
+
+        // OnPropertyChanged(nameof(ChartDrawable)); // No longer needed explicitly due to [ObservableProperty]
+    }
+
+    private string GetPersianAbbreviatedMonthName(int month)
+    {
+        string[] names = ["", "فر", "ار", "خر", "تی", "مر", "شه", "مه", "آب", "آذ", "دی", "به", "اس"];
+        return (month >= 1 && month <= 12) ? names[month] : "?";
+    }
+
+
+    private Color DetermineBarColor(double percentage)
+    {
+        // Simple Green-Yellow-Red gradient
+        if (percentage >= 0.75) return Colors.LimeGreen;
+        if (percentage >= 0.40) return Colors.Yellow;
+        return Colors.Red;
     }
 
     [RelayCommand]
     private async Task ExportProgressAsync()
     {
-        Debug.WriteLine("SettingsViewModel.ExportProgressAsync: Starting progress export.");
+        string temporaryExportPath = string.Empty;
         try
         {
             List<DailyProgress> dailyProgressList = await _taskPersistenceService.LoadDailyProgressAsync();
 
             if (dailyProgressList == null || !dailyProgressList.Any())
             {
-                Debug.WriteLine("SettingsViewModel.ExportProgressAsync: No progress data to export.");
                 await ShowAlertAsync("Export Progress", "No daily progress data found to export.", "OK");
                 return;
             }
 
-            Debug.WriteLine($"SettingsViewModel.ExportProgressAsync: Loaded {dailyProgressList.Count} progress entries.");
+            IEnumerable<DailyProgress> sortedProgress = SelectedExportSortOrder == "Ascending by Date"
+                ? dailyProgressList.OrderBy(p => p.Date)
+                : dailyProgressList.OrderByDescending(p => p.Date);
 
-            // Sort
-            IEnumerable<DailyProgress> sortedProgress;
-            if (SelectedExportSortOrder == "Ascending by Date")
-            {
-                sortedProgress = dailyProgressList.OrderBy(p => p.Date);
-                Debug.WriteLine("SettingsViewModel.ExportProgressAsync: Sorting by date ascending.");
-            }
-            else
-            {
-                sortedProgress = dailyProgressList.OrderByDescending(p => p.Date);
-                Debug.WriteLine("SettingsViewModel.ExportProgressAsync: Sorting by date descending.");
-            }
-
-            // Format
             StringBuilder sb = new();
-            Debug.WriteLine($"SettingsViewModel.ExportProgressAsync: Formatting using {SelectedExportCalendarType} calendar.");
             foreach (var progress in sortedProgress)
             {
-                string dateString;
-                if (SelectedExportCalendarType == "Persian")
-                {
-                    dateString = DateUtils.ToPersianDateString(progress.Date);
-                }
-                else
-                {
-                    dateString = DateUtils.ToGregorianDateString(progress.Date);
-                }
-                // Format percentage as "XX%" (e.g., 0.75 -> "75%")
+                string dateString = SelectedExportCalendarType == "Persian"
+                    ? DateUtils.ToPersianDateString(progress.Date)
+                    : DateUtils.ToGregorianDateString(progress.Date);
                 string percentageString = progress.PercentageCompleted.ToString("P0", CultureInfo.InvariantCulture);
-                sb.AppendLine($"{dateString}-{percentageString}");
+                sb.AppendLine($"{dateString} - {percentageString}");
             }
 
             string fileContent = sb.ToString();
             if (string.IsNullOrWhiteSpace(fileContent))
             {
-                Debug.WriteLine("SettingsViewModel.ExportProgressAsync: Formatted content is empty.");
                 await ShowAlertAsync("Export Progress", "Failed to generate export content.", "OK");
                 return;
             }
 
-            string fileName = $"Tickly-Progress-Export-{DateTime.Now:yyyyMMddHHmmss}.txt";
-            Debug.WriteLine($"SettingsViewModel.ExportProgressAsync: Preparing to save file: {fileName}");
+            string exportFilename = $"Tickly-Progress-Export-{DateTime.Now:yyyy-MM-dd_HH-mm-ss}.txt";
+            temporaryExportPath = Path.Combine(FileSystem.CacheDirectory, exportFilename);
 
-            using var stream = new MemoryStream(Encoding.UTF8.GetBytes(fileContent));
-            
-            // Ensure FileSaver is available and CommunityToolkit.Maui.Storage is referenced
-            var fileSaverResult = await FileSaver.Default.SaveAsync(fileName, stream, CancellationToken.None);
+            string? directory = Path.GetDirectoryName(temporaryExportPath);
+            if (directory != null && !Directory.Exists(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
 
-            if (fileSaverResult.IsSuccessful)
+            await File.WriteAllTextAsync(temporaryExportPath, fileContent);
+
+            ShareFileRequest request = new()
             {
-                Debug.WriteLine($"SettingsViewModel.ExportProgressAsync: File saved successfully to: {fileSaverResult.FilePath ?? "N/A"}");
-                await ShowAlertAsync("Export Successful", $"Progress data exported successfully to {Path.GetFileName(fileSaverResult.FilePath ?? fileName)}", "OK");
-            }
-            else
-            {
-                Debug.WriteLine($"SettingsViewModel.ExportProgressAsync: File save failed. Error: {fileSaverResult.Exception?.Message ?? "Unknown error"}");
-                await ShowAlertAsync("Export Failed", $"Could not save the file: {fileSaverResult.Exception?.Message ?? "An unknown error occurred."}", "OK");
-            }
+                Title = "Export Tickly Progress",
+                File = new ShareFile(temporaryExportPath, "text/plain")
+            };
+            await Share.RequestAsync(request);
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"SettingsViewModel.ExportProgressAsync: Exception caught: {ex.GetType().Name} - {ex.Message}\nStackTrace: {ex.StackTrace}");
-            await ShowAlertAsync("Export Error", $"An unexpected error occurred during progress export: {ex.Message}", "OK");
+            Debug.WriteLine($"ExportProgressAsync: Exception: {ex.Message}");
+            await ShowAlertAsync("Export Error", $"An unexpected error occurred: {ex.Message}", "OK");
+        }
+    }
+
+    private static async Task ShowAlertAsync(string title, string message, string cancelAction)
+    {
+        // Use Application.Current.Dispatcher to ensure UI operations run on the main thread
+        if (Application.Current?.Dispatcher != null)
+        {
+            await Application.Current.Dispatcher.DispatchAsync(async () =>
+            {
+                Page? currentPage = Application.Current?.MainPage;
+                if (currentPage is Shell shell)
+                {
+                    currentPage = shell.CurrentPage;
+                }
+                await (currentPage?.DisplayAlert(title, message, cancelAction) ?? Task.CompletedTask);
+            });
+        }
+        else
+        {
+            Debug.WriteLine($"ShowAlertAsync: Application.Current or Dispatcher is null. Cannot display alert '{title}'.");
         }
     }
 }
 </file>
 
 <file path="Source\ViewModels\TasksReloadRequestedMessage.cs">
-namespace Tickly.Messages
+namespace Tickly.Messages;
+
+public class TasksReloadRequestedMessage
 {
-    internal class TasksReloadRequestedMessage
+    public TasksReloadRequestedMessage()
     {
-        public TasksReloadRequestedMessage()
-        {
-        }
     }
 }
 </file>
@@ -11605,6 +11749,8 @@ namespace Tickly.Views
 
 <file path="Source\Views\SettingsPage.cs">
 using CommunityToolkit.Maui.Markup;
+
+using CommunityToolkit.Maui.Markup;
 using Microsoft.Maui.Controls;
 using Microsoft.Maui.Graphics;
 using Tickly.ViewModels;
@@ -11613,16 +11759,15 @@ namespace Tickly.Views;
 
 public sealed class SettingsPage : ContentPage
 {
-    // Define font sizes for consistency
-    private const double LargeFontSize = 20; // Example value for Large
-    private const double SmallFontSize = 12; // Example value for Small
+    private const double LargeFontSize = 20;
+    private const double SmallFontSize = 12;
 
-    public SettingsPage(SettingsViewModel viewModel) // ViewModel injected
+    public SettingsPage(SettingsViewModel viewModel)
     {
-        BindingContext = viewModel; // Use injected ViewModel
+        BindingContext = viewModel;
 
         Title = "Settings";
-        BackgroundColor = Colors.Black;
+        // REMOVED: BackgroundColor = Colors.Black; // Now handled by style
 
         Content = new ScrollView
         {
@@ -11632,11 +11777,12 @@ public sealed class SettingsPage : ContentPage
                 Spacing = 15,
                 Children =
                 {
+                    // --- Calendar Settings ---
                     new Label
                     {
                         Text = "Calendar Settings",
                         TextColor = Colors.WhiteSmoke,
-                        FontSize = LargeFontSize, // Use numeric value
+                        FontSize = LargeFontSize,
                         FontAttributes = FontAttributes.Bold,
                         Margin = new(0, 0, 0, 10)
                     },
@@ -11645,7 +11791,7 @@ public sealed class SettingsPage : ContentPage
                     {
                         Text = "Choose the calendar system for displaying dates:",
                         TextColor = Colors.LightGray,
-                        FontSize = SmallFontSize // Use numeric value
+                        FontSize = SmallFontSize
                     },
 
                     new RadioButton
@@ -11664,18 +11810,47 @@ public sealed class SettingsPage : ContentPage
                     }
                     .Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsPersianSelected)),
 
-                    new BoxView
-                    {
-                        HeightRequest = 1,
-                        BackgroundColor = Color.FromArgb("#333333"),
-                        Margin = new(0, 15, 0, 15)
-                    },
+                    new BoxView { HeightRequest = 1, BackgroundColor = Color.FromArgb("#333333"), Margin = new(0, 15) },
 
+                    // --- Dark Mode Background Setting ---
+                    new Label
+                    {
+                        Text = "Dark Mode Background",
+                        TextColor = Colors.WhiteSmoke,
+                        FontSize = LargeFontSize,
+                        FontAttributes = FontAttributes.Bold,
+                        Margin = new(0, 0, 0, 10)
+                    },
+                    new Label
+                    {
+                        Text = "Choose the background color for dark mode:",
+                        TextColor = Colors.LightGray,
+                        FontSize = SmallFontSize
+                    },
+                     new RadioButton
+                    {
+                        GroupName = "DarkModeBgGroup",
+                        Content = "Off-Black (Default Dark)",
+                        TextColor = Colors.WhiteSmoke
+                    }
+                    .Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsDarkModeOffBlackSelected)),
+
+                    new RadioButton
+                    {
+                        GroupName = "DarkModeBgGroup",
+                        Content = "Pure Black",
+                        TextColor = Colors.WhiteSmoke
+                    }
+                    .Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsDarkModePureBlackSelected)),
+
+                    new BoxView { HeightRequest = 1, BackgroundColor = Color.FromArgb("#333333"), Margin = new(0, 15) },
+
+                    // --- Data Management ---
                     new Label
                     {
                         Text = "Data Management",
                         TextColor = Colors.WhiteSmoke,
-                        FontSize = LargeFontSize, // Use numeric value
+                        FontSize = LargeFontSize,
                         FontAttributes = FontAttributes.Bold,
                         Margin = new(0, 0, 0, 10)
                     },
@@ -11684,7 +11859,7 @@ public sealed class SettingsPage : ContentPage
                     {
                         Text = "Export your current tasks to a JSON file or import tasks from a previously exported file (this will replace current tasks).",
                         TextColor = Colors.LightGray,
-                        FontSize = SmallFontSize, // Use numeric value
+                        FontSize = SmallFontSize,
                         LineBreakMode = LineBreakMode.WordWrap
                     },
 
@@ -11710,80 +11885,271 @@ public sealed class SettingsPage : ContentPage
                             }
                             .BindCommand(nameof(SettingsViewModel.ImportTasksCommand))
                         }
-                    },
-
-                    // --- New Section for Exporting Daily Progress ---
-                    new BoxView
-                    {
-                        HeightRequest = 1,
-                        BackgroundColor = Color.FromArgb("#333333"),
-                        Margin = new(0, 15, 0, 15)
-                    },
-
-                    new Label
-                    {
-                        Text = "Export Daily Progress",
-                        TextColor = Colors.WhiteSmoke,
-                        FontSize = LargeFontSize,
-                        FontAttributes = FontAttributes.Bold,
-                        Margin = new(0, 0, 0, 10)
-                    },
-
-                    new Label
-                    {
-                        Text = "Export your daily task completion percentages to a .txt file.",
-                        TextColor = Colors.LightGray,
-                        FontSize = SmallFontSize,
-                        LineBreakMode = LineBreakMode.WordWrap,
-                        Margin = new(0,0,0,10)
-                    },
-
-                    new Label
-                    {
-                        Text = "Sort Order:",
-                        TextColor = Colors.WhiteSmoke,
-                        FontSize = SmallFontSize,
-                        Margin = new(0,5,0,0)
-                    },
-                    new Picker
-                    {
-                        Title = "Select Sort Order",
-                        TextColor = Colors.WhiteSmoke,
-                        TitleColor = Colors.LightGray,
-                        BackgroundColor = Color.FromArgb("#1e1e1e")
                     }
-                    .Bind(Picker.ItemsSourceProperty, nameof(SettingsViewModel.ExportSortOrders))
-                    .Bind(Picker.SelectedItemProperty, nameof(SettingsViewModel.SelectedExportSortOrder)),
-
-                    new Label
-                    {
-                        Text = "Calendar For Dates:",
-                        TextColor = Colors.WhiteSmoke,
-                        FontSize = SmallFontSize,
-                        Margin = new(0,10,0,0)
-                    },
-                    new Picker
-                    {
-                        Title = "Select Calendar Type",
-                        TextColor = Colors.WhiteSmoke,
-                        TitleColor = Colors.LightGray,
-                        BackgroundColor = Color.FromArgb("#1e1e1e")
-                    }
-                    .Bind(Picker.ItemsSourceProperty, nameof(SettingsViewModel.ExportCalendarTypes))
-                    .Bind(Picker.SelectedItemProperty, nameof(SettingsViewModel.SelectedExportCalendarType)),
-                    
-                    new Button
-                    {
-                        Text = "Export Daily Progress",
-                        BackgroundColor = Color.FromArgb("#3B71CA"), // A different blue
-                        TextColor = Colors.WhiteSmoke,
-                        Margin = new(0, 15, 0, 0)
-                    }
-                    .BindCommand(nameof(SettingsViewModel.ExportProgressCommand))
-                    // --- End New Section ---
                 }
             }
         };
+    }
+}
+</file>
+
+<file path="Source\Views\StatisticsPage.xaml">
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+         xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+         xmlns:vm="clr-namespace:Tickly.ViewModels"
+         xmlns:plotting="clr-namespace:Tickly.Views.Plotting"
+         x:Class="Tickly.Views.StatisticsPage"
+         x:DataType="vm:StatisticsViewModel"
+         Title="Daily Progress Statistics">
+    <!-- BackgroundColor removed to inherit from style -->
+
+    <ScrollView>
+        <VerticalStackLayout Padding="20" Spacing="15">
+
+            <Label Text="Progress Over Time"
+               FontSize="Large"
+               FontAttributes="Bold"
+               TextColor="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource WhiteSmoke}}"
+               HorizontalOptions="Center" />
+
+            <Picker Title="Select Time Range"
+                ItemsSource="{Binding PlotTimeRanges}"
+                SelectedItem="{Binding SelectedPlotTimeRange}"
+                TextColor="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource WhiteSmoke}}"
+                TitleColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray300}}"
+                BackgroundColor="{AppThemeBinding Light={StaticResource Gray100}, Dark={StaticResource Gray900}}" />
+
+            <GraphicsView x:Name="ProgressChartView"
+                      Drawable="{Binding ChartDrawable}"
+                      HeightRequest="250"
+                      WidthRequest="350"
+                      HorizontalOptions="FillAndExpand"
+                      BackgroundColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Gray950}}" />
+            <!-- Kept Gray950 for chart contrast -->
+
+            <BoxView HeightRequest="1" BackgroundColor="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}" Margin="0,15,0,15"/>
+
+            <Label Text="Export Daily Progress"
+               FontSize="Large"
+               FontAttributes="Bold"
+               TextColor="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource WhiteSmoke}}"
+               HorizontalOptions="Start" Margin="0,0,0,10"/>
+
+            <Label Text="Export your daily task completion percentages to a .txt file."
+               TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource LightGray}}"
+               FontSize="Small"
+               LineBreakMode="WordWrap"
+               Margin="0,0,0,10"/>
+
+            <Label Text="Sort Order:"
+               TextColor="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource WhiteSmoke}}"
+               FontSize="Small" Margin="0,5,0,0"/>
+            <Picker ItemsSource="{Binding ExportSortOrders}"
+                SelectedItem="{Binding SelectedExportSortOrder}"
+                Title="Select Sort Order"
+                TextColor="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource WhiteSmoke}}"
+                TitleColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray300}}"
+                BackgroundColor="{AppThemeBinding Light={StaticResource Gray100}, Dark={StaticResource Gray900}}" />
+
+            <Label Text="Calendar For Dates:"
+               TextColor="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource WhiteSmoke}}"
+               FontSize="Small" Margin="0,10,0,0"/>
+            <Picker ItemsSource="{Binding ExportCalendarTypes}"
+                SelectedItem="{Binding SelectedExportCalendarType}"
+                Title="Select Calendar Type"
+                TextColor="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource WhiteSmoke}}"
+                TitleColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray300}}"
+                BackgroundColor="{AppThemeBinding Light={StaticResource Gray100}, Dark={StaticResource Gray900}}" />
+
+            <Button Text="Export Progress Data"
+                Command="{Binding ExportProgressCommand}"
+                BackgroundColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryDark}}"
+                TextColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}"
+                Margin="0,15,0,0"
+                HorizontalOptions="Start"/>
+
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>
+</file>
+
+<file path="Source\Views\StatisticsPage.xaml.cs">
+using Tickly.ViewModels;
+
+namespace Tickly.Views;
+
+public partial class StatisticsPage : ContentPage
+{
+    private readonly StatisticsViewModel _viewModel;
+
+    public StatisticsPage(StatisticsViewModel viewModel)
+    {
+        InitializeComponent();
+        _viewModel = viewModel;
+        BindingContext = _viewModel;
+    }
+
+    protected override void OnAppearing()
+    {
+        base.OnAppearing();
+        _viewModel.LoadProgressCommand.Execute(null);
+    }
+}
+</file>
+
+<file path="Source\Views\Plotting\BarChartDrawable.cs">
+using System.Diagnostics;
+
+using Microsoft.Maui.Graphics;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
+using Tickly.Models;
+
+namespace Tickly.Views.Plotting;
+
+public class BarChartDrawable : IDrawable
+{
+    public List<PlotDataPoint> DataPoints { get; set; } = [];
+    public Color TextColor { get; set; } = Colors.Grey;
+    public float MaxValueFontSize { get; set; } = 10f;
+    public float LabelFontSize { get; set; } = 8f;
+    private const float minBarHeight = 1f; // Minimum height for zero-value bars
+    private const float axisLabelPadding = 5f; // Padding between chart area and axis labels
+    private const double MaxScaleValue = 1.0; // <<< Define constant for 100%
+
+    public void Draw(ICanvas canvas, RectF dirtyRect)
+    {
+        // ... (initial debug logs remain the same) ...
+        Debug.WriteLine($"BarChartDrawable.Draw: --- Drawing Started ---");
+        Debug.WriteLine($"BarChartDrawable.Draw: DirtyRect: X={dirtyRect.X}, Y={dirtyRect.Y}, W={dirtyRect.Width}, H={dirtyRect.Height}");
+        Debug.WriteLine($"BarChartDrawable.Draw: TextColor={TextColor}, DataPoints Count={(DataPoints?.Count ?? -1)}");
+
+        // Log DataPoints passed to Draw
+        Debug.WriteLine($"BarChartDrawable.Draw: Received DataPoints for drawing:");
+        if (DataPoints != null)
+        {
+            for (int dpIdx = 0; dpIdx < DataPoints.Count; dpIdx++)
+            {
+                Debug.WriteLine($"  - DP[{dpIdx}]: Label='{DataPoints[dpIdx].Label}', Value={DataPoints[dpIdx].Value:F2}");
+            }
+        }
+        else
+        {
+            Debug.WriteLine("  - DataPoints list is NULL");
+        }
+
+
+        if (DataPoints == null || !DataPoints.Any())
+        {
+            Debug.WriteLine("BarChartDrawable.Draw: No DataPoints found or DataPoints is null. Drawing 'No data' message.");
+            canvas.StrokeColor = TextColor;
+            canvas.FontSize = MaxValueFontSize;
+            canvas.DrawString("No data to display", dirtyRect.Center.X, dirtyRect.Center.Y, 0, 0, HorizontalAlignment.Center, VerticalAlignment.Center);
+            Debug.WriteLine("BarChartDrawable.Draw: --- Drawing Finished (No Data) ---");
+            return;
+        }
+
+        var padding = 20f;
+        var availableHeight = dirtyRect.Height - (2 * padding);
+        var availableWidth = dirtyRect.Width - (2 * padding);
+
+        Debug.WriteLine($"BarChartDrawable.Draw: availableHeight={availableHeight}, availableWidth={availableWidth}");
+        Debug.WriteLine($"BarChartDrawable.Draw: MaxValueFontSize={MaxValueFontSize}, LabelFontSize={LabelFontSize}, axisLabelPadding={axisLabelPadding}");
+
+        if (availableHeight <= 0 || availableWidth <= 0)
+        {
+            Debug.WriteLine($"BarChartDrawable.Draw: Not enough space after padding. Available H={availableHeight}, W={availableWidth}");
+            Debug.WriteLine("BarChartDrawable.Draw: --- Drawing Finished (No Space) ---");
+            return;
+        }
+
+        var chartHeight = availableHeight - MaxValueFontSize - LabelFontSize - axisLabelPadding;
+        var chartWidth = availableWidth;
+
+        Debug.WriteLine($"BarChartDrawable.Draw: Final chartHeight={chartHeight}, chartWidth={chartWidth}");
+
+        var chartOriginX = dirtyRect.Left + padding;
+        var chartOriginY = dirtyRect.Top + padding + MaxValueFontSize + axisLabelPadding;
+        var chartBottomY = chartOriginY + chartHeight;
+
+        if (DataPoints.Count == 0 || chartHeight <= 0 || chartWidth <= 0)
+        {
+            Debug.WriteLine($"BarChartDrawable.Draw: Calculated dimensions or DataPoints count is zero/negative. Cannot draw chart area. Count={DataPoints.Count}, chartH={chartHeight}, chartW={chartWidth}");
+            canvas.StrokeColor = TextColor;
+            canvas.FontSize = MaxValueFontSize;
+            canvas.DrawString("Invalid chart dimensions or no data", dirtyRect.Center.X, dirtyRect.Center.Y, 0, 0, HorizontalAlignment.Center, VerticalAlignment.Center);
+            Debug.WriteLine("BarChartDrawable.Draw: --- Drawing Finished (Invalid Dimensions/Count) ---");
+            return;
+        }
+
+        var totalBarPlusSpacing = chartWidth / DataPoints.Count;
+        var barWidth = totalBarPlusSpacing * 0.8f;
+        var barSpacing = totalBarPlusSpacing - barWidth;
+
+        Debug.WriteLine($"BarChartDrawable.Draw: Calculated - BarWidth={barWidth}, BarSpacing={barSpacing}, TotalBarPlusSpacing={totalBarPlusSpacing}");
+
+        // <<< Use the constant MaxScaleValue for scaling and label >>>
+        var maxValueForScaling = MaxScaleValue;
+        Debug.WriteLine($"BarChartDrawable.Draw: Using Max Value for scaling = {maxValueForScaling}");
+
+        // --- Draw Axis Labels ---
+        canvas.FontColor = TextColor;
+        canvas.FontSize = MaxValueFontSize;
+        float maxValY = dirtyRect.Top + padding;
+        float maxValX = dirtyRect.Left + padding;
+        // <<< Use the constant MaxScaleValue for the label >>>
+        Debug.WriteLine($"BarChartDrawable.Draw: Drawing MaxValue Label '{maxValueForScaling:P0}' at X={maxValX}, Y={maxValY}");
+        canvas.DrawString($"{maxValueForScaling:P0}", maxValX, maxValY, 0, 0, HorizontalAlignment.Left, VerticalAlignment.Top);
+
+        float zeroValY = chartBottomY;
+        float zeroValX = dirtyRect.Left + padding;
+        Debug.WriteLine($"BarChartDrawable.Draw: Drawing Zero Label '0%' at X={zeroValX}, Y={zeroValY}");
+        canvas.DrawString("0%", zeroValX, zeroValY, 0, 0, HorizontalAlignment.Left, VerticalAlignment.Top);
+
+
+        // --- Draw Bars and Labels ---
+        Debug.WriteLine($"BarChartDrawable.Draw: Starting loop through {DataPoints.Count} data points.");
+        for (int i = 0; i < DataPoints.Count; i++)
+        {
+            var dataPoint = DataPoints[i];
+            // <<< Scale relative to MaxScaleValue (1.0) >>>
+            var calculatedBarHeight = (float)(dataPoint.Value / maxValueForScaling * chartHeight);
+            if (calculatedBarHeight < 0) calculatedBarHeight = 0;
+
+            Debug.WriteLine($"BarChartDrawable.Draw: Index {i}: H_Calc = ({dataPoint.Value:F2} / {maxValueForScaling:F2}) * {chartHeight:F2} = {calculatedBarHeight:F2}");
+
+            var barHeight = (calculatedBarHeight <= 0 && dataPoint.Value == 0) ? minBarHeight : calculatedBarHeight;
+            if (barHeight < minBarHeight && barHeight > 0) barHeight = minBarHeight;
+
+            var y = chartBottomY - barHeight;
+            var x = chartOriginX + (i * totalBarPlusSpacing) + (barSpacing / 2);
+
+            Debug.WriteLine($"BarChartDrawable.Draw: Index {i}: Label='{dataPoint.Label}', Value={dataPoint.Value}, Color={dataPoint.BarColor}");
+            Debug.WriteLine($"BarChartDrawable.Draw: Index {i}: Final BarHeight={barHeight}, X={x}, Y={y}");
+
+
+            canvas.FillColor = dataPoint.BarColor;
+            if (barWidth > 0 && barHeight > 0)
+            {
+                Debug.WriteLine($"BarChartDrawable.Draw: Index {i}: Drawing Bar Rectangle at X={x}, Y={y}, W={barWidth}, H={barHeight}");
+                canvas.FillRectangle(x, y, barWidth, barHeight);
+            }
+            else
+            {
+                Debug.WriteLine($"BarChartDrawable.Draw: Index {i}: Skipping bar drawing (barHeight={barHeight}, barWidth={barWidth}).");
+            }
+
+            float labelX = x + barWidth / 2;
+            float labelY = chartBottomY + 2;
+            canvas.FontSize = LabelFontSize;
+            canvas.FontColor = TextColor;
+            Debug.WriteLine($"BarChartDrawable.Draw: Index {i}: Drawing Label '{dataPoint.Label}' at X={labelX}, Y={labelY}");
+            canvas.DrawString(dataPoint.Label, labelX, labelY, 0, 0, HorizontalAlignment.Center, VerticalAlignment.Top);
+        }
+
+        Debug.WriteLine("BarChartDrawable.Draw: --- Drawing Finished (Completed Loop) ---");
     }
 }
 </file>

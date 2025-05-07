@@ -1,8 +1,9 @@
 ﻿using Microsoft.Extensions.Logging;
-using Tickly.ViewModels; // Add using for ViewModels
-using Tickly.Views;     // Add using for Views
+using Tickly.ViewModels;
+using Tickly.Views;
 using CommunityToolkit.Mvvm.Messaging;
-using Tickly.Services; // If not already present
+using Tickly.Services;
+using Tickly.Views.Plotting;
 
 namespace Tickly;
 
@@ -23,23 +24,20 @@ public static class MauiProgram
         builder.Logging.AddDebug();
 #endif
 
-        // Register Services
         builder.Services.AddSingleton<TaskPersistenceService>();
-        builder.Services.AddSingleton<RepeatingTaskService>();    // Added
-        builder.Services.AddSingleton<TaskVisualStateService>(); // Added
+        builder.Services.AddSingleton<RepeatingTaskService>();
+        builder.Services.AddSingleton<TaskVisualStateService>();
 
-        // Register ViewModels (Singleton for MainViewModel, Transient for Popup is fine)
         builder.Services.AddSingleton<MainViewModel>();
-        builder.Services.AddSingleton<SettingsViewModel>(); // Settings can also be singleton
-        // No need to register AddTaskPopupPageViewModel if it's created within AddTaskPopupPage code-behind
+        builder.Services.AddSingleton<SettingsViewModel>();
+        builder.Services.AddSingleton<StatisticsViewModel>();
 
-        // Register Pages for Navigation
-        builder.Services.AddSingleton<MainPage>(); // MainPage is usually Singleton
-        builder.Services.AddTransient<AddTaskPopupPage>(); // Popup page should be Transient
-        builder.Services.AddSingleton<SettingsPage>();    // Register SettingsPage
+        builder.Services.AddSingleton<MainPage>();
+        builder.Services.AddTransient<AddTaskPopupPage>();
+        builder.Services.AddSingleton<SettingsPage>();
+        builder.Services.AddSingleton<StatisticsPage>();
 
-        // Register Messenger (if not already implicitly available via CommunityToolkit)
-        // builder.Services.AddSingleton<IMessenger>(WeakReferenceMessenger.Default); // Usually not needed explicitly
+        builder.Services.AddTransient<BarChartDrawable>();
 
         return builder.Build();
     }

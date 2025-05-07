@@ -7,8 +7,8 @@
          xmlns:fonts="clr-namespace:Fonts"
          x:Class="Tickly.MainPage"
          x:Name="MainTasksPage"
-         BackgroundColor="Black"
          Title="Tickly Tasks">
+    <!-- BackgroundColor removed to inherit from style -->
 
     <!-- REMOVED: Direct ViewModel instantiation -->
     <!-- <ContentPage.BindingContext> -->
