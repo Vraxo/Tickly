@@ -23,6 +23,8 @@ public sealed partial class SettingsViewModel : ObservableObject
     private bool _isPersianSelected;
     private bool _isPitchBlackSelected;
     private bool _isDarkGraySelected;
+    private bool _isNordSelected;
+    private bool _isLightSelected; // Added Light property
     private readonly string _applicationTasksFilePath;
     private const string TaskExportFilePrefix = "Tickly-Tasks-Export-";
 
@@ -57,7 +59,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         {
             if (SetProperty(ref _isPitchBlackSelected, value) && value)
             {
-                OnThemeSelectionChanged(true);
+                OnThemeSelectionChanged(ThemeType.PitchBlack);
             }
         }
     }
@@ -69,10 +71,35 @@ public sealed partial class SettingsViewModel : ObservableObject
         {
             if (SetProperty(ref _isDarkGraySelected, value) && value)
             {
-                OnThemeSelectionChanged(false);
+                OnThemeSelectionChanged(ThemeType.DarkGray);
             }
         }
     }
+
+    public bool IsNordSelected
+    {
+        get => _isNordSelected;
+        set
+        {
+            if (SetProperty(ref _isNordSelected, value) && value)
+            {
+                OnThemeSelectionChanged(ThemeType.Nord);
+            }
+        }
+    }
+
+    public bool IsLightSelected // Added Light property
+    {
+        get => _isLightSelected;
+        set
+        {
+            if (SetProperty(ref _isLightSelected, value) && value)
+            {
+                OnThemeSelectionChanged(ThemeType.Light);
+            }
+        }
+    }
+
 
     public SettingsViewModel(TaskPersistenceService taskPersistenceService)
     {
@@ -109,17 +136,15 @@ public sealed partial class SettingsViewModel : ObservableObject
         WeakReferenceMessenger.Default.Send(new CalendarSettingChangedMessage());
     }
 
-    private void OnThemeSelectionChanged(bool isPitchBlackNowSelected)
+    private void OnThemeSelectionChanged(ThemeType selectedTheme)
     {
-        if (isPitchBlackNowSelected)
+        if (AppSettings.SelectedTheme != selectedTheme)
         {
-            SetProperty(ref _isDarkGraySelected, false, nameof(IsDarkGraySelected));
-            UpdateThemeSetting(ThemeType.PitchBlack);
-        }
-        else
-        {
-            SetProperty(ref _isPitchBlackSelected, false, nameof(IsPitchBlackSelected));
-            UpdateThemeSetting(ThemeType.DarkGray);
+            SetProperty(ref _isPitchBlackSelected, selectedTheme == ThemeType.PitchBlack, nameof(IsPitchBlackSelected));
+            SetProperty(ref _isDarkGraySelected, selectedTheme == ThemeType.DarkGray, nameof(IsDarkGraySelected));
+            SetProperty(ref _isNordSelected, selectedTheme == ThemeType.Nord, nameof(IsNordSelected));
+            SetProperty(ref _isLightSelected, selectedTheme == ThemeType.Light, nameof(IsLightSelected)); // Update Light flag
+            UpdateThemeSetting(selectedTheme);
         }
     }
 
@@ -137,6 +162,7 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     private void LoadSettings()
     {
+        // Load Calendar Setting
         CalendarSystemType currentSystem = AppSettings.SelectedCalendarSystem;
         bool shouldBeGregorian = currentSystem == CalendarSystemType.Gregorian;
         bool shouldBePersian = currentSystem == CalendarSystemType.Persian;
@@ -144,21 +170,38 @@ public sealed partial class SettingsViewModel : ObservableObject
         SetProperty(ref _isPersianSelected, shouldBePersian, nameof(IsPersianSelected));
         if (!_isGregorianSelected && !_isPersianSelected)
         {
-            SetProperty(ref _isGregorianSelected, true, nameof(IsGregorianSelected));
+            SetProperty(ref _isGregorianSelected, true, nameof(IsGregorianSelected)); // Default if unset
             AppSettings.SelectedCalendarSystem = CalendarSystemType.Gregorian;
             Preferences.Set(AppSettings.CalendarSystemKey, (int)CalendarSystemType.Gregorian);
         }
 
+        // Load Theme Setting
         ThemeType currentTheme = AppSettings.SelectedTheme;
         bool shouldBePitchBlack = currentTheme == ThemeType.PitchBlack;
         bool shouldBeDarkGray = currentTheme == ThemeType.DarkGray;
+        bool shouldBeNord = currentTheme == ThemeType.Nord;
+        bool shouldBeLight = currentTheme == ThemeType.Light;
         SetProperty(ref _isPitchBlackSelected, shouldBePitchBlack, nameof(IsPitchBlackSelected));
         SetProperty(ref _isDarkGraySelected, shouldBeDarkGray, nameof(IsDarkGraySelected));
-        if (!_isPitchBlackSelected && !_isDarkGraySelected)
+        SetProperty(ref _isNordSelected, shouldBeNord, nameof(IsNordSelected));
+        SetProperty(ref _isLightSelected, shouldBeLight, nameof(IsLightSelected));
+
+        // Default theme if no preference is found (respect system theme first)
+        if (!Preferences.ContainsKey(AppSettings.ThemePreferenceKey))
         {
-            SetProperty(ref _isPitchBlackSelected, true, nameof(IsPitchBlackSelected));
-            AppSettings.SelectedTheme = ThemeType.PitchBlack;
-            Preferences.Set(AppSettings.ThemePreferenceKey, (int)ThemeType.PitchBlack);
+            AppTheme systemTheme = Application.Current?.RequestedTheme ?? AppTheme.Dark;
+            ThemeType defaultTheme = systemTheme == AppTheme.Light ? ThemeType.Light : ThemeType.PitchBlack;
+            OnThemeSelectionChanged(defaultTheme); // Set the default based on system
+                                                   // Don't save preference here, let the user explicitly choose first
+            Debug.WriteLine($"LoadSettings: No theme preference found. Defaulting based on system theme to: {defaultTheme}");
+        }
+        else if (!_isPitchBlackSelected && !_isDarkGraySelected && !_isNordSelected && !_isLightSelected)
+        {
+            // Fallback if preference exists but somehow doesn't match any known enum value
+            AppTheme systemTheme = Application.Current?.RequestedTheme ?? AppTheme.Dark;
+            ThemeType fallbackTheme = systemTheme == AppTheme.Light ? ThemeType.Light : ThemeType.PitchBlack;
+            OnThemeSelectionChanged(fallbackTheme);
+            Debug.WriteLine($"LoadSettings: Invalid theme preference found. Falling back based on system theme to: {fallbackTheme}");
         }
     }
 

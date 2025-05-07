@@ -6,28 +6,18 @@
 
     <!-- Core Palette -->
     <Color x:Key="Primary">#512BD4</Color>
-    <!-- Vibrant Purple -->
     <Color x:Key="PrimaryDarkText">#242424</Color>
-    <!-- Dark text for light primary bg -->
     <Color x:Key="Secondary">#DFD8F7</Color>
-    <!-- Light Purple -->
     <Color x:Key="SecondaryDarkText">#AC99EA</Color>
-    <!-- Lighter Purple Text for Dark BG -->
     <Color x:Key="Tertiary">#2B0B98</Color>
-    <!-- Deep Purple -->
 
     <Color x:Key="White">#FFFFFF</Color>
     <Color x:Key="Black">#000000</Color>
     <Color x:Key="OffBlack">#121212</Color>
-    <!-- Slightly off-black -->
     <Color x:Key="DarkGrayBackground">#1E1E1E</Color>
-    <!-- Dark Gray for BG -->
     <Color x:Key="DarkGraySurface">#2C2C2C</Color>
-    <!-- Slightly lighter Dark Gray for surfaces -->
     <Color x:Key="WhiteSmoke">#F5F5F5</Color>
-    <!-- Common light text color -->
     <Color x:Key="LightGrayText">#D3D3D3</Color>
-    <!-- Lighter text for dark themes -->
 
     <!-- Grays -->
     <Color x:Key="Gray100">#E1E1E1</Color>
@@ -39,23 +29,71 @@
     <Color x:Key="Gray900">#212121</Color>
     <Color x:Key="Gray950">#141414</Color>
 
+    <!-- Nord Palette -->
+    <Color x:Key="NordPolarNight0">#2E3440</Color>
+    <Color x:Key="NordPolarNight1">#3B4252</Color>
+    <Color x:Key="NordPolarNight2">#434C5E</Color>
+    <Color x:Key="NordPolarNight3">#4C566A</Color>
+    <Color x:Key="NordSnowStorm0">#D8DEE9</Color>
+    <Color x:Key="NordSnowStorm1">#E5E9F0</Color>
+    <Color x:Key="NordSnowStorm2">#ECEFF4</Color>
+    <Color x:Key="NordFrost0">#8FBCBB</Color>
+    <Color x:Key="NordFrost1">#88C0D0</Color>
+    <Color x:Key="NordFrost2">#81A1C1</Color>
+    <Color x:Key="NordFrost3">#5E81AC</Color>
+    <Color x:Key="NordAurora0">#BF616A</Color>
+    <Color x:Key="NordAurora1">#D08770</Color>
+    <Color x:Key="NordAurora2">#EBCB8B</Color>
+    <Color x:Key="NordAurora3">#A3BE8C</Color>
+    <Color x:Key="NordAurora4">#B48EAD</Color>
+
     <!-- Specific Theme Colors -->
     <Color x:Key="PitchBlackBackgroundColor">#000000</Color>
     <Color x:Key="PitchBlackSurfaceColor">#121212</Color>
     <Color x:Key="PitchBlackForegroundColor">#F5F5F5</Color>
+    <Color x:Key="PitchBlackSecondaryTextColor">#A0A0A0</Color>
+    <Color x:Key="PitchBlackPrimaryActionBackgroundColor">#212121</Color>
+    <!-- Gray900 -->
+    <Color x:Key="PitchBlackPrimaryActionForegroundColor">#F5F5F5</Color>
+    <!-- WhiteSmoke -->
 
     <Color x:Key="DarkGrayBackgroundColor">#1E1E1E</Color>
     <Color x:Key="DarkGraySurfaceColor">#2C2C2C</Color>
     <Color x:Key="DarkGrayForegroundColor">#E0E0E0</Color>
-    <!-- Slightly adjusted for dark gray -->
+    <Color x:Key="DarkGraySecondaryTextColor">#B0B0B0</Color>
+    <Color x:Key="DarkGrayPrimaryActionBackgroundColor">#404040</Color>
+    <!-- Gray600 -->
+    <Color x:Key="DarkGrayPrimaryActionForegroundColor">#F5F5F5</Color>
+    <!-- WhiteSmoke -->
 
-    <!-- DYNAMIC THEME RESOURCES (Initialized to PitchBlack) -->
+    <Color x:Key="NordBackgroundColor">#2E3440</Color>
+    <Color x:Key="NordSurfaceColor">#3B4252</Color>
+    <Color x:Key="NordForegroundColor">#D8DEE9</Color>
+    <Color x:Key="NordSecondaryTextColor">#E5E9F0</Color>
+    <Color x:Key="NordPrimaryActionBackgroundColor">#5E81AC</Color>
+    <!-- NordFrost3 -->
+    <Color x:Key="NordPrimaryActionForegroundColor">#2E3440</Color>
+    <!-- NordPolarNight0 -->
+
+    <Color x:Key="LightBackgroundColor">#F0F0F0</Color>
+    <Color x:Key="LightSurfaceColor">#FFFFFF</Color>
+    <Color x:Key="LightForegroundColor">#1F1F1F</Color>
+    <Color x:Key="LightSecondaryTextColor">#555555</Color>
+    <Color x:Key="LightPrimaryActionBackgroundColor">#512BD4</Color>
+    <!-- Primary -->
+    <Color x:Key="LightPrimaryActionForegroundColor">#FFFFFF</Color>
+    <!-- White -->
+
+    <!-- DYNAMIC THEME RESOURCES (Initialized to system preference or PitchBlack, App.xaml.cs will update) -->
     <Color x:Key="AppBackgroundColor">#000000</Color>
     <Color x:Key="AppSurfaceColor">#121212</Color>
     <Color x:Key="AppForegroundColor">#F5F5F5</Color>
-    <!-- Default/PitchBlack Text -->
     <Color x:Key="AppSecondaryTextColor">#A0A0A0</Color>
-    <!-- Grayer text -->
+    <Color x:Key="AppPrimaryActionBackgroundColor">#512BD4</Color>
+    <!-- Default to Primary (will be overridden) -->
+    <Color x:Key="AppPrimaryActionForegroundColor">#000000</Color>
+    <!-- Default to Black (will be overridden) -->
+
 
     <!-- Brushes (Mostly static, except maybe foreground/background if needed) -->
     <SolidColorBrush x:Key="PrimaryBrush" Color="{StaticResource Primary}"/>

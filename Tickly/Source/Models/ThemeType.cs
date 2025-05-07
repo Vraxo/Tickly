@@ -3,5 +3,7 @@
 public enum ThemeType
 {
     PitchBlack,
-    DarkGray
+    DarkGray,
+    Nord,
+    Light
 }

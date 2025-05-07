@@ -66,14 +66,16 @@
                 <Setter Property="Text" Value="+"/>
                 <Setter Property="FontSize" Value="24"/>
                 <Setter Property="FontAttributes" Value="Bold"/>
-                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}"/>
-                <Setter Property="BackgroundColor" Value="{StaticResource Primary}"/>
+                <Setter Property="TextColor" Value="{DynamicResource AppPrimaryActionForegroundColor}"/>
+                <Setter Property="BackgroundColor" Value="{DynamicResource AppPrimaryActionBackgroundColor}"/>
                 <Setter Property="CornerRadius" Value="28"/>
                 <Setter Property="HeightRequest" Value="56"/>
                 <Setter Property="WidthRequest" Value="56"/>
                 <Setter Property="HorizontalOptions" Value="End"/>
                 <Setter Property="VerticalOptions" Value="End"/>
                 <Setter Property="Margin" Value="20"/>
+                <Setter Property="Padding" Value="0"/>
+                <!-- Removed default padding -->
                 <Setter Property="SemanticProperties.Hint" Value="Add a new task"/>
             </Style>
 

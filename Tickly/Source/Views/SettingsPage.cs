@@ -27,7 +27,7 @@ public sealed class SettingsPage : ContentPage
                     new Label
                     {
                         Text = "Theme Settings",
-                        TextColor = Colors.WhiteSmoke,
+                        // Style = GetStyle("Headline"), // Use implicit style
                         FontSize = LargeFontSize,
                         FontAttributes = FontAttributes.Bold,
                         Margin = new(0, 0, 0, 10)
@@ -35,8 +35,14 @@ public sealed class SettingsPage : ContentPage
                     new Label
                     {
                         Text = "Choose the application theme:",
-                        Style = GetStyle("LightGrayLabel")
+                        Style = GetStyle("LightGrayLabel") // Keep explanatory text style consistent
                     },
+                    new RadioButton
+                    {
+                        GroupName = "ThemeGroup",
+                        Content = "Light" // Add Light option
+                    }
+                    .Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsLightSelected)),
                      new RadioButton
                     {
                         GroupName = "ThemeGroup",
@@ -51,17 +57,24 @@ public sealed class SettingsPage : ContentPage
                     }
                     .Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsDarkGraySelected)),
 
+                    new RadioButton
+                    {
+                        GroupName = "ThemeGroup",
+                        Content = "Nord"
+                    }
+                    .Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsNordSelected)),
+
                     new BoxView
                     {
                         HeightRequest = 1,
-                        BackgroundColor = Color.FromArgb("#333333"),
+                        BackgroundColor = Color.FromArgb("#333333"), // Use a dynamic separator?
                         Margin = new(0, 15, 0, 15)
                     },
 
                     new Label
                     {
                         Text = "Calendar Settings",
-                        TextColor = Colors.WhiteSmoke,
+                        // Style = GetStyle("Headline"), // Use implicit style
                         FontSize = LargeFontSize,
                         FontAttributes = FontAttributes.Bold,
                         Margin = new(0, 0, 0, 10)
@@ -88,14 +101,14 @@ public sealed class SettingsPage : ContentPage
                     new BoxView
                     {
                         HeightRequest = 1,
-                        BackgroundColor = Color.FromArgb("#333333"),
+                        BackgroundColor = Color.FromArgb("#333333"), // Use a dynamic separator?
                         Margin = new(0, 15, 0, 15)
                     },
 
                     new Label
                     {
                         Text = "Data Management",
-                        TextColor = Colors.WhiteSmoke,
+                        // Style = GetStyle("Headline"), // Use implicit style
                         FontSize = LargeFontSize,
                         FontAttributes = FontAttributes.Bold,
                         Margin = new(0, 0, 0, 10)
@@ -115,7 +128,7 @@ public sealed class SettingsPage : ContentPage
                             new Button
                             {
                                 Text = "Export Tasks",
-                                BackgroundColor = Color.FromArgb("#4A6FA5"),
+                                BackgroundColor = Color.FromArgb("#4A6FA5"), // Consider theming these?
                                 TextColor = Colors.WhiteSmoke
                             }
                             .BindCommand(nameof(SettingsViewModel.ExportTasksCommand)),
@@ -123,7 +136,7 @@ public sealed class SettingsPage : ContentPage
                             new Button
                             {
                                 Text = "Import Tasks",
-                                BackgroundColor = Color.FromArgb("#5A9A78"),
+                                BackgroundColor = Color.FromArgb("#5A9A78"), // Consider theming these?
                                 TextColor = Colors.WhiteSmoke
                             }
                             .BindCommand(nameof(SettingsViewModel.ImportTasksCommand))
@@ -134,13 +147,22 @@ public sealed class SettingsPage : ContentPage
         };
     }
 
+    // Helper to get styles safely
     private static Style GetStyle(string key)
     {
+        // Attempt to find the specific style
         if (Application.Current != null && Application.Current.Resources.TryGetValue(key, out var resource) && resource is Style style)
         {
             return style;
         }
 
+        // Fallback to the base Label style if the specific key isn't found
+        if (Application.Current != null && Application.Current.Resources.TryGetValue("BaseLabelStyle", out var baseResource) && baseResource is Style baseStyle)
+        {
+            return baseStyle;
+        }
+
+        // Absolute fallback if even BaseLabelStyle is missing
         return new Style(typeof(Label));
     }
 }

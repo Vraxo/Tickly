@@ -16,7 +16,7 @@ public partial class App : Application
     public App()
     {
         InitializeComponent();
-        ApplyTheme(AppSettings.SelectedTheme); // Apply theme on startup
+        ApplyTheme(AppSettings.SelectedTheme);
         MainPage = new AppShell();
         WeakReferenceMessenger.Default.Register<ThemeChangedMessage>(this, (r, m) => ApplyTheme(m.Value));
     }
@@ -27,25 +27,67 @@ public partial class App : Application
 
         MainThread.BeginInvokeOnMainThread(() =>
         {
-            string backgroundKey = theme == ThemeType.DarkGray ? "DarkGrayBackgroundColor" : "PitchBlackBackgroundColor";
-            string surfaceKey = theme == ThemeType.DarkGray ? "DarkGraySurfaceColor" : "PitchBlackSurfaceColor";
-            string foregroundKey = theme == ThemeType.DarkGray ? "DarkGrayForegroundColor" : "PitchBlackForegroundColor";
-            string secondaryTextKey = theme == ThemeType.DarkGray ? "LightGrayText" : "Gray500"; // Adjust secondary text based on theme
+            string backgroundKey;
+            string surfaceKey;
+            string foregroundKey;
+            string secondaryTextKey;
+            string primaryActionBgKey;
+            string primaryActionFgKey;
+
+            switch (theme)
+            {
+                case ThemeType.Light:
+                    backgroundKey = "LightBackgroundColor";
+                    surfaceKey = "LightSurfaceColor";
+                    foregroundKey = "LightForegroundColor";
+                    secondaryTextKey = "LightSecondaryTextColor";
+                    primaryActionBgKey = "LightPrimaryActionBackgroundColor";
+                    primaryActionFgKey = "LightPrimaryActionForegroundColor";
+                    Application.Current.UserAppTheme = AppTheme.Light;
+                    break;
+                case ThemeType.DarkGray:
+                    backgroundKey = "DarkGrayBackgroundColor";
+                    surfaceKey = "DarkGraySurfaceColor";
+                    foregroundKey = "DarkGrayForegroundColor";
+                    secondaryTextKey = "DarkGraySecondaryTextColor";
+                    primaryActionBgKey = "DarkGrayPrimaryActionBackgroundColor"; // Use specific Dark Gray key
+                    primaryActionFgKey = "DarkGrayPrimaryActionForegroundColor"; // Use specific Dark Gray key
+                    Application.Current.UserAppTheme = AppTheme.Dark;
+                    break;
+                case ThemeType.Nord:
+                    backgroundKey = "NordBackgroundColor";
+                    surfaceKey = "NordSurfaceColor";
+                    foregroundKey = "NordForegroundColor";
+                    secondaryTextKey = "NordSecondaryTextColor";
+                    primaryActionBgKey = "NordPrimaryActionBackgroundColor"; // Use specific Nord key
+                    primaryActionFgKey = "NordPrimaryActionForegroundColor"; // Use specific Nord key
+                    Application.Current.UserAppTheme = AppTheme.Dark;
+                    break;
+                case ThemeType.PitchBlack:
+                default:
+                    backgroundKey = "PitchBlackBackgroundColor";
+                    surfaceKey = "PitchBlackSurfaceColor";
+                    foregroundKey = "PitchBlackForegroundColor";
+                    secondaryTextKey = "PitchBlackSecondaryTextColor";
+                    primaryActionBgKey = "PitchBlackPrimaryActionBackgroundColor"; // Use specific Pitch Black key
+                    primaryActionFgKey = "PitchBlackPrimaryActionForegroundColor"; // Use specific Pitch Black key
+                    Application.Current.UserAppTheme = AppTheme.Dark;
+                    break;
+            }
 
             Application.Current.Resources["AppBackgroundColor"] = Application.Current.Resources[backgroundKey];
             Application.Current.Resources["AppSurfaceColor"] = Application.Current.Resources[surfaceKey];
             Application.Current.Resources["AppForegroundColor"] = Application.Current.Resources[foregroundKey];
-            Application.Current.Resources["AppSecondaryTextColor"] = Application.Current.Resources[secondaryTextKey]; // Apply secondary text color too
+            Application.Current.Resources["AppSecondaryTextColor"] = Application.Current.Resources[secondaryTextKey];
+            Application.Current.Resources["AppPrimaryActionBackgroundColor"] = Application.Current.Resources[primaryActionBgKey];
+            Application.Current.Resources["AppPrimaryActionForegroundColor"] = Application.Current.Resources[primaryActionFgKey];
 
-            Debug.WriteLine($"Theme applied: {theme}. Background: {Application.Current.Resources["AppBackgroundColor"]}, Surface: {Application.Current.Resources["AppSurfaceColor"]}, Foreground: {Application.Current.Resources["AppForegroundColor"]}");
+            Debug.WriteLine($"Theme applied: {theme}. MAUI Theme: {Application.Current.UserAppTheme}. Background: {Application.Current.Resources["AppBackgroundColor"]}, Surface: {Application.Current.Resources["AppSurfaceColor"]}, Foreground: {Application.Current.Resources["AppForegroundColor"]}, Secondary: {Application.Current.Resources["AppSecondaryTextColor"]}, ActionBG: {Application.Current.Resources["AppPrimaryActionBackgroundColor"]}, ActionFG: {Application.Current.Resources["AppPrimaryActionForegroundColor"]}");
 
-            // Force Shell to re-evaluate styles if needed (might not be necessary with DynamicResource)
             if (MainPage is Shell shell)
             {
-                // Attempt to force redraw if DynamicResource doesn't update shell immediately
-                var currentBg = shell.BackgroundColor;
-                shell.BackgroundColor = Colors.Transparent; // Temporary change
-                shell.BackgroundColor = currentBg; // Restore (or re-bind if using DynamicResource)
+                shell.BackgroundColor = Colors.Transparent;
+                shell.BackgroundColor = (Color)Application.Current.Resources["AppBackgroundColor"];
             }
         });
     }
@@ -63,15 +105,8 @@ public partial class App : Application
         try
         {
             var mainViewModel = IPlatformApplication.Current?.Services?.GetService<MainViewModel>();
-            if (mainViewModel != null)
-            {
-                await mainViewModel.FinalizeAndSaveProgressAsync();
-                Debug.WriteLine("App.OnSleep: FinalizeAndSaveProgressAsync completed.");
-            }
-            else
-            {
-                Debug.WriteLine("App.OnSleep: MainViewModel not resolved. Cannot save progress.");
-            }
+            mainViewModel?.FinalizeAndSaveProgressAsync().FireAndForgetSafeAsync();
+            Debug.WriteLine("App.OnSleep: FinalizeAndSaveProgressAsync completed or task running.");
         }
         catch (Exception ex)
         {
@@ -133,5 +168,22 @@ public partial class App : Application
 #endif
 
         return window;
+    }
+}
+
+// Simple Fire and Forget helper
+internal static class TaskExtensions
+{
+    internal static async void FireAndForgetSafeAsync(this Task task,
+        Action<Exception>? errorHandler = null)
+    {
+        try
+        {
+            await task;
+        }
+        catch (Exception ex)
+        {
+            errorHandler?.Invoke(ex);
+        }
     }
 }
