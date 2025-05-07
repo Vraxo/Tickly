@@ -106,11 +106,14 @@ public partial class App : Application
                         {
                             appWindow.ResizeClient(new Windows.Graphics.SizeInt32(WindowWidth, WindowHeight));
                         }
+
+                        // Optional resizing lock (kept original commented-out state)
+                        // if (appWindow.Presenter is Microsoft.UI.Windowing.OverlappedPresenter p)
+                        // {
+                        //     p.IsResizable = false;
+                        //     p.IsMaximizable = false;
+                        // }
                     }
-                }
-                catch (System.IO.FileNotFoundException fnfEx)
-                {
-                    System.Diagnostics.Debug.WriteLine($"App.CreateWindow: CRITICAL - WinRT Interop component missing: {fnfEx.FileName} - {fnfEx.Message}. Ensure Windows App SDK dependencies are correct. This specific catch is within CreateWindow; the startup error might be earlier.");
                 }
                 catch (Exception ex)
                 {
@@ -193,114 +196,55 @@ public partial class AppShell : Shell
 
 <file path="MauiProgram.cs">
 using Microsoft.Extensions.Logging;
-using Tickly.ViewModels;
-using Tickly.Views;
+using Tickly.ViewModels; // Add using for ViewModels
+using Tickly.Views;     // Add using for Views
 using CommunityToolkit.Mvvm.Messaging;
-using Tickly.Services;
-using CommunityToolkit.Maui;
-using Microcharts.Maui;
-using System.Diagnostics;
+using Tickly.Services; // If not already present
+using CommunityToolkit.Maui; // Added for Community Toolkit MAUI extension
+using Microcharts.Maui; // Added for Microcharts MAUI extension
 
 namespace Tickly;
 
 public static class MauiProgram
 {
-    static MauiProgram()
-    {
-        Debug.WriteLine("MauiProgram: Static constructor executing.");
-        Debug.WriteLine("MauiProgram: Static constructor finished.");
-    }
-
     public static MauiApp CreateMauiApp()
     {
-        Debug.WriteLine("MauiProgram.CreateMauiApp: Method started.");
-        try
-        {
-            Debug.WriteLine("MauiProgram.CreateMauiApp: Creating MauiAppBuilder...");
-            var builder = MauiApp.CreateBuilder();
-            Debug.WriteLine("MauiProgram.CreateMauiApp: MauiAppBuilder created.");
-
-            Debug.WriteLine("MauiProgram.CreateMauiApp: Configuring UseMauiApp<App>...");
-            builder.UseMauiApp<App>();
-            Debug.WriteLine("MauiProgram.CreateMauiApp: UseMauiApp<App> configured.");
-
-            Debug.WriteLine("MauiProgram.CreateMauiApp: Configuring UseMauiCommunityToolkit...");
-            builder.UseMauiCommunityToolkit();
-            Debug.WriteLine("MauiProgram.CreateMauiApp: UseMauiCommunityToolkit configured.");
-
-            Debug.WriteLine("MauiProgram.CreateMauiApp: Configuring UseMicrocharts...");
-            builder.UseMicrocharts();
-            Debug.WriteLine("MauiProgram.CreateMauiApp: UseMicrocharts configured.");
-
-            Debug.WriteLine("MauiProgram.CreateMauiApp: Configuring fonts...");
-            builder.ConfigureFonts(fonts =>
+        var builder = MauiApp.CreateBuilder();
+        builder
+            .UseMauiApp<App>()
+            .UseMauiCommunityToolkit() // Added Community Toolkit
+            .UseMicrocharts() // Configure Microcharts
+            .ConfigureFonts(fonts =>
             {
-                Debug.WriteLine("MauiProgram.CreateMauiApp: Adding OpenSans-Regular.ttf...");
                 fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
-                Debug.WriteLine("MauiProgram.CreateMauiApp: Adding OpenSans-Semibold.ttf...");
                 fonts.AddFont("OpenSans-Semibold.ttf", "OpenSansSemibold");
             });
-            Debug.WriteLine("MauiProgram.CreateMauiApp: Fonts configured.");
 
 #if DEBUG
-            Debug.WriteLine("MauiProgram.CreateMauiApp: Adding Debug Logging...");
-            builder.Logging.AddDebug();
-            Debug.WriteLine("MauiProgram.CreateMauiApp: Debug Logging added.");
+        builder.Logging.AddDebug();
 #endif
 
-            Debug.WriteLine("MauiProgram.CreateMauiApp: Registering TaskPersistenceService...");
-            builder.Services.AddSingleton<TaskPersistenceService>();
-            Debug.WriteLine("MauiProgram.CreateMauiApp: Registering RepeatingTaskService...");
-            builder.Services.AddSingleton<RepeatingTaskService>();
-            Debug.WriteLine("MauiProgram.CreateMauiApp: Registering TaskVisualStateService...");
-            builder.Services.AddSingleton<TaskVisualStateService>();
+        // Register Services
+        builder.Services.AddSingleton<TaskPersistenceService>();
+        builder.Services.AddSingleton<RepeatingTaskService>();    // Added
+        builder.Services.AddSingleton<TaskVisualStateService>(); // Added
 
-            Debug.WriteLine("MauiProgram.CreateMauiApp: Registering MainViewModel...");
-            builder.Services.AddSingleton<MainViewModel>();
-            Debug.WriteLine("MauiProgram.CreateMauiApp: Registering SettingsViewModel...");
-            builder.Services.AddSingleton<SettingsViewModel>();
-            Debug.WriteLine("MauiProgram.CreateMauiApp: Registering ProgressViewModel...");
-            builder.Services.AddSingleton<ProgressViewModel>();
+        // Register ViewModels (Singleton for MainViewModel, Transient for Popup is fine)
+        builder.Services.AddSingleton<MainViewModel>();
+        builder.Services.AddSingleton<SettingsViewModel>(); // Settings can also be singleton
+        builder.Services.AddSingleton<ProgressViewModel>(); // Register ProgressViewModel
+        // No need to register AddTaskPopupPageViewModel if it's created within AddTaskPopupPage code-behind
 
-            Debug.WriteLine("MauiProgram.CreateMauiApp: Registering MainPage...");
-            builder.Services.AddSingleton<MainPage>();
-            Debug.WriteLine("MauiProgram.CreateMauiApp: Registering AddTaskPopupPage...");
-            builder.Services.AddTransient<AddTaskPopupPage>();
-            Debug.WriteLine("MauiProgram.CreateMauiApp: Registering SettingsPage...");
-            builder.Services.AddSingleton<SettingsPage>();
-            Debug.WriteLine("MauiProgram.CreateMauiApp: Registering ProgressPage...");
-            builder.Services.AddSingleton<ProgressPage>();
-            Debug.WriteLine("MauiProgram.CreateMauiApp: All services and pages registered.");
+        // Register Pages for Navigation
+        builder.Services.AddSingleton<MainPage>(); // MainPage is usually Singleton
+        builder.Services.AddTransient<AddTaskPopupPage>(); // Popup page should be Transient
+        builder.Services.AddSingleton<SettingsPage>();    // Register SettingsPage
+        builder.Services.AddSingleton<ProgressPage>();    // Register ProgressPage
 
-            Debug.WriteLine("MauiProgram.CreateMauiApp: Building MauiApp...");
-            MauiApp app = builder.Build();
-            Debug.WriteLine("MauiProgram.CreateMauiApp: MauiApp built successfully.");
-            return app;
-        }
-        catch (Exception ex)
-        {
-            Debug.WriteLine($"CRITICAL ERROR in MauiProgram.CreateMauiApp: {ex.GetType().FullName} - {ex.Message}");
-            Exception? currentEx = ex;
-            int indentLevel = 0;
-            while (currentEx != null)
-            {
-                string indent = new(' ', indentLevel * 2);
-                Debug.WriteLine($"{indent}Exception (level {indentLevel}): {currentEx.GetType().FullName}: {currentEx.Message}");
-                if (currentEx is System.IO.FileNotFoundException fnfEx)
-                {
-                    Debug.WriteLine($"{indent}  FileNotFoundException Details: Could not load file or assembly '{fnfEx.FileName}'. FusionLog: {fnfEx.FusionLog}");
-                }
-                else if (currentEx is TypeInitializationException tiEx)
-                {
-                    Debug.WriteLine($"{indent}  TypeInitializationException for Type: {tiEx.TypeName}");
-                }
-                Debug.WriteLine($"{indent}  StackTrace: {currentEx.StackTrace}");
+        // Register Messenger (if not already implicitly available via CommunityToolkit)
+        // builder.Services.AddSingleton<IMessenger>(WeakReferenceMessenger.Default); // Usually not needed explicitly
 
-                currentEx = currentEx.InnerException;
-                indentLevel++;
-            }
-            throw;
-        }
+        return builder.Build();
     }
 }
 </file>
@@ -709,70 +653,29 @@ namespace Tickly
 
 <file path="Platforms\Windows\App.xaml.cs">
 using Microsoft.UI.Xaml;
-using System.Diagnostics;
 
-namespace Tickly.WinUI;
+// To learn more about WinUI, the WinUI project structure,
+// and more about our project templates, see: http://aka.ms/winui-project-info.
 
-public partial class App : MauiWinUIApplication
+namespace Tickly.WinUI
 {
-    public App()
+    /// <summary>
+    /// Provides application-specific behavior to supplement the default Application class.
+    /// </summary>
+    public partial class App : MauiWinUIApplication
     {
-        Debug.WriteLine("Tickly.WinUI.App Constructor: Starting.");
-        Debug.WriteLine("Tickly.WinUI.App Constructor: If you manually added Windows App SDK initialization (e.g., DeploymentManager.Initialize()), REMOVE IT for packaged apps.");
-
-        try
+        /// <summary>
+        /// Initializes the singleton application object.  This is the first line of authored code
+        /// executed, and as such is the logical equivalent of main() or WinMain().
+        /// </summary>
+        public App()
         {
             this.InitializeComponent();
-            Debug.WriteLine("Tickly.WinUI.App Constructor: InitializeComponent() called successfully.");
         }
-        catch (Microsoft.UI.Xaml.Markup.XamlParseException xamlEx)
-        {
-            Debug.WriteLine($"CRITICAL XAML PARSE ERROR in Tickly.WinUI.App.InitializeComponent: {xamlEx.Message}");
-            if (xamlEx.InnerException != null)
-            {
-                Debug.WriteLine($"  Inner Exception: {xamlEx.InnerException.GetType().FullName}: {xamlEx.InnerException.Message}");
-                if (xamlEx.InnerException is System.IO.FileNotFoundException fnfEx)
-                {
-                    Debug.WriteLine($"    Inner FileNotFoundException Details: Could not load file or assembly '{fnfEx.FileName}'.");
-                }
-            }
-            throw;
-        }
-        catch (Exception ex)
-        {
-            Debug.WriteLine($"CRITICAL UNHANDLED ERROR in Tickly.WinUI.App.InitializeComponent: {ex.GetType().FullName} - {ex.Message}");
-            if (ex.InnerException != null)
-            {
-                Debug.WriteLine($"  Inner Exception: {ex.InnerException.GetType().FullName}: {ex.InnerException.Message}");
-            }
-            throw;
-        }
-        Debug.WriteLine("Tickly.WinUI.App Constructor: Finished.");
+
+        protected override MauiApp CreateMauiApp() => MauiProgram.CreateMauiApp();
     }
 
-    protected override MauiApp CreateMauiApp()
-    {
-        Debug.WriteLine("Tickly.WinUI.App.CreateMauiApp: Starting.");
-        try
-        {
-            var mauiApp = MauiProgram.CreateMauiApp();
-            Debug.WriteLine("Tickly.WinUI.App.CreateMauiApp: MauiProgram.CreateMauiApp() returned.");
-            return mauiApp;
-        }
-        catch (Exception ex)
-        {
-            Debug.WriteLine($"CRITICAL ERROR in Tickly.WinUI.App.CreateMauiApp (calling MauiProgram.CreateMauiApp): {ex.GetType().FullName} - {ex.Message}");
-            if (ex.InnerException != null)
-            {
-                Debug.WriteLine($"  Inner Exception: {ex.InnerException.GetType().FullName}: {ex.InnerException.Message}");
-                if (ex.InnerException is System.IO.FileNotFoundException fnfEx)
-                {
-                    Debug.WriteLine($"    Inner FileNotFoundException Details: Could not load file or assembly '{fnfEx.FileName}'.");
-                }
-            }
-            throw;
-        }
-    }
 }
 </file>
 
