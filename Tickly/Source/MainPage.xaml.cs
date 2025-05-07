@@ -1,12 +1,12 @@
-﻿using Tickly.ViewModels; // Add this using statement
+﻿using Tickly.ViewModels;
 
 namespace Tickly;
 
 public partial class MainPage : ContentPage
 {
-    public MainPage(MainViewModel viewModel) // Inject the ViewModel
+    public MainPage(MainViewModel viewModel)
     {
         InitializeComponent();
-        BindingContext = viewModel; // Set the BindingContext
+        BindingContext = viewModel;
     }
 }

@@ -17,7 +17,7 @@ public static class MauiProgram
             {
                 fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
                 fonts.AddFont("OpenSans-Semibold.ttf", "OpenSansSemibold");
-                fonts.AddFont("FluentSystemIcons-Regular.ttf", "FluentUI"); // Ensure FluentUI is added
+                fonts.AddFont("FluentSystemIcons-Regular.ttf", "FluentUI");
             });
 
 #if DEBUG
@@ -30,12 +30,12 @@ public static class MauiProgram
 
         builder.Services.AddSingleton<MainViewModel>();
         builder.Services.AddSingleton<SettingsViewModel>();
-        builder.Services.AddSingleton<StatsViewModel>(); // Register StatsViewModel
+        builder.Services.AddSingleton<StatsViewModel>(); // Corrected registration
 
         builder.Services.AddSingleton<MainPage>();
         builder.Services.AddTransient<AddTaskPopupPage>();
         builder.Services.AddSingleton<SettingsPage>();
-        builder.Services.AddSingleton<StatsPage>(); // Register StatsPage
+        builder.Services.AddSingleton<StatsPage>();
 
         return builder.Build();
     }
