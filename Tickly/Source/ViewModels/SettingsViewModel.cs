@@ -39,6 +39,9 @@ public sealed partial class SettingsViewModel : ObservableObject
     private bool _isHighContrastDarkSelected;
     private bool _isHighContrastLightSelected;
 
+    // Windows Specific Setting
+    private bool _useSystemBackground; // Field for the new setting
+
     private const string OldTaskExportFilePrefix = "Tickly-Tasks-Export-";
     private const string NewDataExportFilePrefix = "Tickly_";
 
@@ -56,73 +59,50 @@ public sealed partial class SettingsViewModel : ObservableObject
     #endregion
 
     #region Theme Properties Getters/Setters
-    public bool IsPitchBlackSelected
+    public bool IsPitchBlackSelected { get => _isPitchBlackSelected; set { if (SetProperty(ref _isPitchBlackSelected, value) && value) OnThemeSelectionChanged(ThemeType.PitchBlack); } }
+    public bool IsDarkGraySelected { get => _isDarkGraySelected; set { if (SetProperty(ref _isDarkGraySelected, value) && value) OnThemeSelectionChanged(ThemeType.DarkGray); } }
+    public bool IsNordSelected { get => _isNordSelected; set { if (SetProperty(ref _isNordSelected, value) && value) OnThemeSelectionChanged(ThemeType.Nord); } }
+    public bool IsCatppuccinMochaSelected { get => _isCatppuccinMochaSelected; set { if (SetProperty(ref _isCatppuccinMochaSelected, value) && value) OnThemeSelectionChanged(ThemeType.CatppuccinMocha); } }
+    public bool IsSolarizedDarkSelected { get => _isSolarizedDarkSelected; set { if (SetProperty(ref _isSolarizedDarkSelected, value) && value) OnThemeSelectionChanged(ThemeType.SolarizedDark); } }
+    public bool IsGruvboxDarkSelected { get => _isGruvboxDarkSelected; set { if (SetProperty(ref _isGruvboxDarkSelected, value) && value) OnThemeSelectionChanged(ThemeType.GruvboxDark); } }
+    public bool IsMonokaiSelected { get => _isMonokaiSelected; set { if (SetProperty(ref _isMonokaiSelected, value) && value) OnThemeSelectionChanged(ThemeType.Monokai); } }
+    public bool IsLightSelected { get => _isLightSelected; set { if (SetProperty(ref _isLightSelected, value) && value) OnThemeSelectionChanged(ThemeType.Light); } }
+    public bool IsSolarizedLightSelected { get => _isSolarizedLightSelected; set { if (SetProperty(ref _isSolarizedLightSelected, value) && value) OnThemeSelectionChanged(ThemeType.SolarizedLight); } }
+    public bool IsSepiaSelected { get => _isSepiaSelected; set { if (SetProperty(ref _isSepiaSelected, value) && value) OnThemeSelectionChanged(ThemeType.Sepia); } }
+    public bool IsHighContrastDarkSelected { get => _isHighContrastDarkSelected; set { if (SetProperty(ref _isHighContrastDarkSelected, value) && value) OnThemeSelectionChanged(ThemeType.HighContrastDark); } }
+    public bool IsHighContrastLightSelected { get => _isHighContrastLightSelected; set { if (SetProperty(ref _isHighContrastLightSelected, value) && value) OnThemeSelectionChanged(ThemeType.HighContrastLight); } }
+    #endregion
+
+    #region Windows Settings Properties
+    public bool UseSystemBackground
     {
-        get => _isPitchBlackSelected;
-        set { if (SetProperty(ref _isPitchBlackSelected, value) && value) OnThemeSelectionChanged(ThemeType.PitchBlack); }
-    }
-    public bool IsDarkGraySelected
-    {
-        get => _isDarkGraySelected;
-        set { if (SetProperty(ref _isDarkGraySelected, value) && value) OnThemeSelectionChanged(ThemeType.DarkGray); }
-    }
-    public bool IsNordSelected
-    {
-        get => _isNordSelected;
-        set { if (SetProperty(ref _isNordSelected, value) && value) OnThemeSelectionChanged(ThemeType.Nord); }
-    }
-    public bool IsCatppuccinMochaSelected
-    {
-        get => _isCatppuccinMochaSelected;
-        set { if (SetProperty(ref _isCatppuccinMochaSelected, value) && value) OnThemeSelectionChanged(ThemeType.CatppuccinMocha); }
-    }
-    public bool IsSolarizedDarkSelected
-    {
-        get => _isSolarizedDarkSelected;
-        set { if (SetProperty(ref _isSolarizedDarkSelected, value) && value) OnThemeSelectionChanged(ThemeType.SolarizedDark); }
-    }
-    public bool IsGruvboxDarkSelected
-    {
-        get => _isGruvboxDarkSelected;
-        set { if (SetProperty(ref _isGruvboxDarkSelected, value) && value) OnThemeSelectionChanged(ThemeType.GruvboxDark); }
-    }
-    public bool IsMonokaiSelected
-    {
-        get => _isMonokaiSelected;
-        set { if (SetProperty(ref _isMonokaiSelected, value) && value) OnThemeSelectionChanged(ThemeType.Monokai); }
-    }
-    public bool IsLightSelected
-    {
-        get => _isLightSelected;
-        set { if (SetProperty(ref _isLightSelected, value) && value) OnThemeSelectionChanged(ThemeType.Light); }
-    }
-    public bool IsSolarizedLightSelected
-    {
-        get => _isSolarizedLightSelected;
-        set { if (SetProperty(ref _isSolarizedLightSelected, value) && value) OnThemeSelectionChanged(ThemeType.SolarizedLight); }
-    }
-    public bool IsSepiaSelected
-    {
-        get => _isSepiaSelected;
-        set { if (SetProperty(ref _isSepiaSelected, value) && value) OnThemeSelectionChanged(ThemeType.Sepia); }
-    }
-    public bool IsHighContrastDarkSelected
-    {
-        get => _isHighContrastDarkSelected;
-        set { if (SetProperty(ref _isHighContrastDarkSelected, value) && value) OnThemeSelectionChanged(ThemeType.HighContrastDark); }
-    }
-    public bool IsHighContrastLightSelected
-    {
-        get => _isHighContrastLightSelected;
-        set { if (SetProperty(ref _isHighContrastLightSelected, value) && value) OnThemeSelectionChanged(ThemeType.HighContrastLight); }
+        get => _useSystemBackground;
+        set
+        {
+            // Use SetProperty to automatically handle backing field update and notification
+            if (SetProperty(ref _useSystemBackground, value))
+            {
+                OnSystemBackgroundSelectionChanged(value);
+            }
+        }
     }
     #endregion
+
 
     public SettingsViewModel(DataExportService dataExportService, DataImportService dataImportService)
     {
         _dataExportService = dataExportService;
         _dataImportService = dataImportService;
         LoadSettings();
+    }
+
+    // Method called when UseSystemBackground changes
+    private void OnSystemBackgroundSelectionChanged(bool useSystemBackground)
+    {
+        AppSettings.UseWindowsSystemBackground = useSystemBackground;
+        Preferences.Set(AppSettings.UseWindowsSystemBackgroundKey, useSystemBackground);
+        WeakReferenceMessenger.Default.Send(new SystemBackgroundChangedMessage(useSystemBackground));
+        Debug.WriteLine($"SettingsViewModel: System background preference changed to {useSystemBackground}, message sent.");
     }
 
     private void OnCalendarSelectionChanged(bool isGregorianNowSelected)
@@ -149,9 +129,8 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     private void OnThemeSelectionChanged(ThemeType selectedTheme)
     {
-        if (AppSettings.SelectedTheme == selectedTheme) return; // Avoid unnecessary updates
+        if (AppSettings.SelectedTheme == selectedTheme) return;
 
-        // Update all theme flags - only the selected one will be true
         SetProperty(ref _isPitchBlackSelected, selectedTheme == ThemeType.PitchBlack, nameof(IsPitchBlackSelected));
         SetProperty(ref _isDarkGraySelected, selectedTheme == ThemeType.DarkGray, nameof(IsDarkGraySelected));
         SetProperty(ref _isNordSelected, selectedTheme == ThemeType.Nord, nameof(IsNordSelected));
@@ -171,7 +150,6 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     private void UpdateThemeSetting(ThemeType newTheme)
     {
-        // This check is now redundant due to the check in OnThemeSelectionChanged, but harmless
         if (AppSettings.SelectedTheme == newTheme) return;
 
         AppSettings.SelectedTheme = newTheme;
@@ -189,7 +167,6 @@ public sealed partial class SettingsViewModel : ObservableObject
         OnPropertyChanged(nameof(IsPersianSelected));
         if (!_isGregorianSelected && !_isPersianSelected)
         {
-            // Default preference logic if needed
             _isGregorianSelected = true; OnPropertyChanged(nameof(IsGregorianSelected));
             AppSettings.SelectedCalendarSystem = CalendarSystemType.Gregorian;
             Preferences.Set(AppSettings.CalendarSystemKey, (int)CalendarSystemType.Gregorian);
@@ -209,8 +186,6 @@ public sealed partial class SettingsViewModel : ObservableObject
         _isSepiaSelected = currentTheme == ThemeType.Sepia;
         _isHighContrastDarkSelected = currentTheme == ThemeType.HighContrastDark;
         _isHighContrastLightSelected = currentTheme == ThemeType.HighContrastLight;
-
-        // Notify changes for all theme properties
         OnPropertyChanged(nameof(IsPitchBlackSelected));
         OnPropertyChanged(nameof(IsDarkGraySelected));
         OnPropertyChanged(nameof(IsNordSelected));
@@ -223,22 +198,18 @@ public sealed partial class SettingsViewModel : ObservableObject
         OnPropertyChanged(nameof(IsSepiaSelected));
         OnPropertyChanged(nameof(IsHighContrastDarkSelected));
         OnPropertyChanged(nameof(IsHighContrastLightSelected));
-
-        // Check if *any* theme property is true after loading
-        bool anyThemeSelected = _isPitchBlackSelected || _isDarkGraySelected || _isNordSelected ||
-                                _isCatppuccinMochaSelected || _isSolarizedDarkSelected || _isGruvboxDarkSelected ||
-                                _isMonokaiSelected || _isLightSelected || _isSolarizedLightSelected ||
-                                _isSepiaSelected || _isHighContrastDarkSelected || _isHighContrastLightSelected;
-
-
+        bool anyThemeSelected = _isPitchBlackSelected || _isDarkGraySelected || _isNordSelected || _isCatppuccinMochaSelected || _isSolarizedDarkSelected || _isGruvboxDarkSelected || _isMonokaiSelected || _isLightSelected || _isSolarizedLightSelected || _isSepiaSelected || _isHighContrastDarkSelected || _isHighContrastLightSelected;
         if (!anyThemeSelected)
         {
-            // If no theme is selected (e.g., preference was invalid or first run)
             AppTheme systemTheme = Application.Current?.RequestedTheme ?? AppTheme.Dark;
             ThemeType defaultTheme = systemTheme == AppTheme.Light ? ThemeType.Light : ThemeType.PitchBlack;
-            OnThemeSelectionChanged(defaultTheme); // This will update the correct bool property and settings
+            OnThemeSelectionChanged(defaultTheme);
             Debug.WriteLine($"LoadSettings: No valid theme selected. Defaulting based on system theme to: {defaultTheme}");
         }
+
+        // Load Windows System Background Setting
+        _useSystemBackground = AppSettings.UseWindowsSystemBackground;
+        OnPropertyChanged(nameof(UseSystemBackground));
     }
 
 
@@ -250,13 +221,8 @@ public sealed partial class SettingsViewModel : ObservableObject
         {
             CleanUpOldExportFiles(OldTaskExportFilePrefix, ".json");
             CleanUpOldExportFiles(NewDataExportFilePrefix, ".json");
-
             bool success = await _dataExportService.ExportDataAsync();
-
-            if (!success)
-            {
-                await ShowAlertAsync("Export Failed", "Could not export Tickly data. The operation may have been cancelled or an error occurred.", "OK");
-            }
+            if (!success) await ShowAlertAsync("Export Failed", "Could not export Tickly data.", "OK");
         }
         catch (Exception ex)
         {
@@ -271,25 +237,17 @@ public sealed partial class SettingsViewModel : ObservableObject
         {
             string cacheDir = FileSystem.CacheDirectory;
             if (!Directory.Exists(cacheDir)) return;
-
             string searchPattern = $"{prefix}*{extension}";
             IEnumerable<string> oldFiles = Directory.EnumerateFiles(cacheDir, searchPattern);
             int count = 0;
             foreach (string file in oldFiles)
             {
-                try
-                {
-                    File.Delete(file);
-                    count++;
-                }
+                try { File.Delete(file); count++; }
                 catch (Exception ex) { Debug.WriteLine($"CleanUpOldExportFiles: Error deleting old file '{file}': {ex.Message}"); }
             }
             Debug.WriteLine($"CleanUpOldExportFiles: Deleted {count} old export files matching pattern '{searchPattern}'.");
         }
-        catch (Exception ex)
-        {
-            Debug.WriteLine($"CleanUpOldExportFiles: Error during cleanup for pattern '{prefix}*{extension}': {ex.Message}");
-        }
+        catch (Exception ex) { Debug.WriteLine($"CleanUpOldExportFiles: Error during cleanup for pattern '{prefix}*{extension}': {ex.Message}"); }
     }
 
     [RelayCommand]
@@ -298,24 +256,17 @@ public sealed partial class SettingsViewModel : ObservableObject
         Debug.WriteLine("SettingsViewModel.ImportDataAsync: Starting data import process.");
         try
         {
-            bool confirmed = await ShowConfirmationAsync(
-                "Confirm Import",
-                "This will REPLACE your current tasks, settings, and progress with the content of the selected file. This cannot be undone. Proceed?",
-                "Replace All Data",
-                "Cancel");
-
+            bool confirmed = await ShowConfirmationAsync("Confirm Import", "This will REPLACE your current tasks, settings, and progress with the content of the selected file. This cannot be undone. Proceed?", "Replace All Data", "Cancel");
             if (!confirmed) return;
-
             bool success = await _dataImportService.ImportDataAsync();
-
             if (success)
             {
-                await ShowAlertAsync("Import Successful", "Tickly data imported successfully. The application will reflect the changes.", "OK");
-                LoadSettings(); // Reload VM settings to match imported data
+                await ShowAlertAsync("Import Successful", "Tickly data imported successfully.", "OK");
+                LoadSettings(); // Reload VM settings
             }
             else
             {
-                await ShowAlertAsync("Import Failed", "Could not import Tickly data. The file might be invalid, the operation cancelled, or an error occurred.", "OK");
+                await ShowAlertAsync("Import Failed", "Could not import Tickly data.", "OK");
             }
         }
         catch (Exception ex)
@@ -327,11 +278,7 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     private static async Task ShowAlertAsync(string title, string message, string cancelAction)
     {
-        if (!MainThread.IsMainThread)
-        {
-            await MainThread.InvokeOnMainThreadAsync(() => ShowAlertAsync(title, message, cancelAction));
-            return;
-        }
+        if (!MainThread.IsMainThread) { await MainThread.InvokeOnMainThreadAsync(() => ShowAlertAsync(title, message, cancelAction)); return; }
         Page? currentPage = GetCurrentPage();
         if (currentPage is not null) await currentPage.DisplayAlert(title, message, cancelAction);
         else Debug.WriteLine($"ShowAlert: Could not find current page to display alert: {title}");
@@ -339,13 +286,10 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     private static async Task<bool> ShowConfirmationAsync(string title, string message, string acceptAction, string cancelAction)
     {
-        if (!MainThread.IsMainThread)
-        {
-            return await MainThread.InvokeOnMainThreadAsync(() => ShowConfirmationAsync(title, message, acceptAction, cancelAction));
-        }
+        if (!MainThread.IsMainThread) { return await MainThread.InvokeOnMainThreadAsync(() => ShowConfirmationAsync(title, message, acceptAction, cancelAction)); }
         Page? currentPage = GetCurrentPage();
         if (currentPage is not null) return await currentPage.DisplayAlert(title, message, acceptAction, cancelAction);
-        else { Debug.WriteLine($"ShowConfirmation: Could not find current page to display confirmation: {title}"); return false; }
+        else { Debug.WriteLine($"ShowConfirmation: Could not find current page: {title}"); return false; }
     }
 
     private static Page? GetCurrentPage()
@@ -354,13 +298,12 @@ public sealed partial class SettingsViewModel : ObservableObject
         if (currentPage is Shell shell) currentPage = shell.CurrentPage;
         else if (currentPage is NavigationPage navPage) currentPage = navPage.CurrentPage;
         else if (currentPage is TabbedPage tabbedPage) currentPage = tabbedPage.CurrentPage;
-
         if (currentPage == null && Application.Current?.Windows is { Count: > 0 } windows && windows[0].Page is not null)
         {
             currentPage = windows[0].Page;
             if (currentPage is NavigationPage navPageModal && navPageModal.CurrentPage != null) currentPage = navPageModal.CurrentPage;
         }
-        if (currentPage == null) Debug.WriteLine("GetCurrentPage: Could not determine the current page reliably.");
+        if (currentPage == null) Debug.WriteLine("GetCurrentPage: Could not determine current page.");
         return currentPage;
     }
 }

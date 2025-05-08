@@ -16,22 +16,14 @@ public sealed class StatsPage : ContentPage
     {
         BindingContext = viewModel;
         Title = "Stats";
-        // BackgroundColor set by Page style using DynamicResource
+        // REMOVED: Explicit background binding - rely on Style targeting Page
+        // this.SetBinding(BackgroundColorProperty, new Binding("AppBackgroundColor", source: Application.Current!.Resources));
 
-        // Determine initial text color for the chart based on the current theme
-        Color initialChartTextColor = Application.Current?.RequestedTheme == AppTheme.Dark
-                                      ? Colors.WhiteSmoke // Example: Use WhiteSmoke for dark theme
-                                      : Colors.Black;    // Example: Use Black for light theme
+        Color initialChartTextColor = Application.Current?.RequestedTheme == AppTheme.Dark ? Colors.WhiteSmoke : Colors.Black;
+        viewModel.ChartDrawable.TextColor = initialChartTextColor;
 
-        viewModel.ChartDrawable.TextColor = initialChartTextColor; // Set initial color
-
-        _barChartView = new GraphicsView
-        {
-            HeightRequest = 200,
-            Margin = new Thickness(0, 10, 0, 10)
-            // Drawable is bound below
-        }
-        .Bind(GraphicsView.DrawableProperty, nameof(StatsViewModel.ChartDrawable));
+        _barChartView = new GraphicsView { HeightRequest = 200, Margin = new Thickness(0, 10, 0, 10) }
+            .Bind(GraphicsView.DrawableProperty, nameof(StatsViewModel.ChartDrawable));
 
         Content = new ScrollView
         {
@@ -41,91 +33,38 @@ public sealed class StatsPage : ContentPage
                 Spacing = 15,
                 Children =
                 {
-                    new Label
-                    {
-                        Text = "Daily Progress Activity",
-                        // Style = GetStyle("Headline"), // Use implicit or base label style
-                        FontSize = LargeFontSize,
-                        FontAttributes = FontAttributes.Bold,
-                        Margin = new(0, 0, 0, 5)
-                    },
-                    new Label
-                    {
-                        Text = "Time Range:",
-                        Style = GetStyle("BaseLabelStyle"), // Use base label style
-                        FontSize = SmallFontSize,
-                        Margin = new(0,0,0,0)
-                    },
+                    new Label { Text = "Daily Progress Activity", FontSize = LargeFontSize, FontAttributes = FontAttributes.Bold, Margin = new(0, 0, 0, 5) },
+                    new Label { Text = "Time Range:", Style = GetStyle("BaseLabelStyle"), FontSize = SmallFontSize, Margin = new(0,0,0,0) },
                     new Picker
                     {
                         Title = "Select Time Range",
-                        // TextColor, BackgroundColor set by implicit Picker style
-                        TitleColor = (Color)(Application.Current?.Resources["AppSecondaryTextColor"] ?? Colors.Gray) // Explicitly set TitleColor
+                        TitleColor = (Color)(Application.Current?.Resources["AppSecondaryTextColor"] ?? Colors.Gray)
                     }
                     .Bind(Picker.ItemsSourceProperty, nameof(StatsViewModel.PlotTimeRanges))
                     .Bind(Picker.SelectedItemProperty, nameof(StatsViewModel.SelectedPlotTimeRange)),
-
                     _barChartView,
-
-                    new BoxView
-                    {
-                        HeightRequest = 1,
-                        BackgroundColor = Color.FromArgb("#333333"), // Use a subtle separator color
-                        Margin = new(0, 15, 0, 15)
-                    },
-
-                    new Label
-                    {
-                        Text = "Export Daily Progress",
-                        // Style = GetStyle("Headline"), // Use implicit or base label style
-                        FontSize = LargeFontSize,
-                        FontAttributes = FontAttributes.Bold,
-                        Margin = new(0, 0, 0, 10)
-                    },
-                    new Label
-                    {
-                        Text = "Export your daily task completion percentages to a .txt file.",
-                        Style = GetStyle("LightGrayLabel"), // Use specific keyed style
-                        FontSize = SmallFontSize,
-                        LineBreakMode = LineBreakMode.WordWrap,
-                        Margin = new(0,0,0,10)
-                    },
-                    new Label
-                    {
-                        Text = "Sort Order:",
-                        Style = GetStyle("BaseLabelStyle"), // Use base label style
-                        FontSize = SmallFontSize,
-                        Margin = new(0,5,0,0)
-                    },
+                    new BoxView { HeightRequest = 1, BackgroundColor = Color.FromArgb("#333333"), Margin = new(0, 15, 0, 15) },
+                    new Label { Text = "Export Daily Progress", FontSize = LargeFontSize, FontAttributes = FontAttributes.Bold, Margin = new(0, 0, 0, 10) },
+                    new Label { Text = "Export your daily task completion percentages to a .txt file.", Style = GetStyle("LightGrayLabel"), FontSize = SmallFontSize, LineBreakMode = LineBreakMode.WordWrap, Margin = new(0,0,0,10) },
+                    new Label { Text = "Sort Order:", Style = GetStyle("BaseLabelStyle"), FontSize = SmallFontSize, Margin = new(0,5,0,0) },
                     new Picker
                     {
                         Title = "Select Sort Order",
-                        // TextColor, BackgroundColor set by implicit Picker style
-                        TitleColor = (Color)(Application.Current?.Resources["AppSecondaryTextColor"] ?? Colors.Gray) // Explicitly set TitleColor
+                        TitleColor = (Color)(Application.Current?.Resources["AppSecondaryTextColor"] ?? Colors.Gray)
                     }
                     .Bind(Picker.ItemsSourceProperty, nameof(StatsViewModel.ExportSortOrders))
                     .Bind(Picker.SelectedItemProperty, nameof(StatsViewModel.SelectedExportSortOrder)),
-                    new Label
-                    {
-                        Text = "Calendar For Dates:",
-                        Style = GetStyle("BaseLabelStyle"), // Use base label style
-                        FontSize = SmallFontSize,
-                        Margin = new(0,10,0,0)
-                    },
+                    new Label { Text = "Calendar For Dates:", Style = GetStyle("BaseLabelStyle"), FontSize = SmallFontSize, Margin = new(0,10,0,0) },
                     new Picker
                     {
                         Title = "Select Calendar Type",
-                        // TextColor, BackgroundColor set by implicit Picker style
-                        TitleColor = (Color)(Application.Current?.Resources["AppSecondaryTextColor"] ?? Colors.Gray) // Explicitly set TitleColor
+                        TitleColor = (Color)(Application.Current?.Resources["AppSecondaryTextColor"] ?? Colors.Gray)
                     }
                     .Bind(Picker.ItemsSourceProperty, nameof(StatsViewModel.ExportCalendarTypes))
                     .Bind(Picker.SelectedItemProperty, nameof(StatsViewModel.SelectedExportCalendarType)),
                     new Button
                     {
-                        Text = "Export Daily Progress",
-                        BackgroundColor = Color.FromArgb("#3B71CA"), // Example button color
-                        TextColor = Colors.WhiteSmoke,
-                        Margin = new(0, 15, 0, 0)
+                        Text = "Export Daily Progress", BackgroundColor = Color.FromArgb("#3B71CA"), TextColor = Colors.WhiteSmoke, Margin = new(0, 15, 0, 0)
                     }
                     .BindCommand(nameof(StatsViewModel.ExportProgressCommand))
                 }
@@ -140,17 +79,12 @@ public sealed class StatsPage : ContentPage
         {
             await vm.LoadProgressCommand.ExecuteAsync(null);
         }
-        // Ensure the chart redraws with potentially updated theme colors
         _barChartView?.Invalidate();
     }
 
     private static Style GetStyle(string key)
     {
-        if (Application.Current != null && Application.Current.Resources.TryGetValue(key, out var resource) && resource is Style style)
-        {
-            return style;
-        }
-        // Fallback to default Label style if the specific keyed style isn't found
-        return new Style(typeof(Label)); // Return a basic Label style if specific one not found
+        if (Application.Current?.Resources.TryGetValue(key, out var resource) == true && resource is Style style) return style;
+        return new Style(typeof(Label));
     }
 }
