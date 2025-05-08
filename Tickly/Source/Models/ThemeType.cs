@@ -5,6 +5,13 @@ public enum ThemeType
     PitchBlack,
     DarkGray,
     Nord,
-    CatppuccinMocha, // Added
-    Light
+    CatppuccinMocha,
+    SolarizedDark,   // Added
+    GruvboxDark,     // Added
+    Monokai,         // Added
+    Light,
+    SolarizedLight,  // Added
+    Sepia,           // Added
+    HighContrastDark,// Added
+    HighContrastLight// Added
 }

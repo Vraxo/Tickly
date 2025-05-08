@@ -20,100 +20,103 @@ public sealed partial class SettingsViewModel : ObservableObject
 {
     private readonly DataExportService _dataExportService;
     private readonly DataImportService _dataImportService;
+
+    // Calendar Properties
     private bool _isGregorianSelected;
     private bool _isPersianSelected;
+
+    // Theme Properties
     private bool _isPitchBlackSelected;
     private bool _isDarkGraySelected;
     private bool _isNordSelected;
-    private bool _isCatppuccinMochaSelected; // Added
+    private bool _isCatppuccinMochaSelected;
+    private bool _isSolarizedDarkSelected;
+    private bool _isGruvboxDarkSelected;
+    private bool _isMonokaiSelected;
     private bool _isLightSelected;
+    private bool _isSolarizedLightSelected;
+    private bool _isSepiaSelected;
+    private bool _isHighContrastDarkSelected;
+    private bool _isHighContrastLightSelected;
+
     private const string OldTaskExportFilePrefix = "Tickly-Tasks-Export-";
     private const string NewDataExportFilePrefix = "Tickly_";
 
+    #region Calendar Properties Getters/Setters
     public bool IsGregorianSelected
     {
         get => _isGregorianSelected;
-        set
-        {
-            if (SetProperty(ref _isGregorianSelected, value) && value)
-            {
-                OnCalendarSelectionChanged(true);
-            }
-        }
+        set { if (SetProperty(ref _isGregorianSelected, value) && value) OnCalendarSelectionChanged(true); }
     }
-
     public bool IsPersianSelected
     {
         get => _isPersianSelected;
-        set
-        {
-            if (SetProperty(ref _isPersianSelected, value) && value)
-            {
-                OnCalendarSelectionChanged(false);
-            }
-        }
+        set { if (SetProperty(ref _isPersianSelected, value) && value) OnCalendarSelectionChanged(false); }
     }
+    #endregion
 
+    #region Theme Properties Getters/Setters
     public bool IsPitchBlackSelected
     {
         get => _isPitchBlackSelected;
-        set
-        {
-            if (SetProperty(ref _isPitchBlackSelected, value) && value)
-            {
-                OnThemeSelectionChanged(ThemeType.PitchBlack);
-            }
-        }
+        set { if (SetProperty(ref _isPitchBlackSelected, value) && value) OnThemeSelectionChanged(ThemeType.PitchBlack); }
     }
-
     public bool IsDarkGraySelected
     {
         get => _isDarkGraySelected;
-        set
-        {
-            if (SetProperty(ref _isDarkGraySelected, value) && value)
-            {
-                OnThemeSelectionChanged(ThemeType.DarkGray);
-            }
-        }
+        set { if (SetProperty(ref _isDarkGraySelected, value) && value) OnThemeSelectionChanged(ThemeType.DarkGray); }
     }
-
     public bool IsNordSelected
     {
         get => _isNordSelected;
-        set
-        {
-            if (SetProperty(ref _isNordSelected, value) && value)
-            {
-                OnThemeSelectionChanged(ThemeType.Nord);
-            }
-        }
+        set { if (SetProperty(ref _isNordSelected, value) && value) OnThemeSelectionChanged(ThemeType.Nord); }
     }
-
-    // Added Catppuccin Property
     public bool IsCatppuccinMochaSelected
     {
         get => _isCatppuccinMochaSelected;
-        set
-        {
-            if (SetProperty(ref _isCatppuccinMochaSelected, value) && value)
-            {
-                OnThemeSelectionChanged(ThemeType.CatppuccinMocha);
-            }
-        }
+        set { if (SetProperty(ref _isCatppuccinMochaSelected, value) && value) OnThemeSelectionChanged(ThemeType.CatppuccinMocha); }
     }
-
+    public bool IsSolarizedDarkSelected
+    {
+        get => _isSolarizedDarkSelected;
+        set { if (SetProperty(ref _isSolarizedDarkSelected, value) && value) OnThemeSelectionChanged(ThemeType.SolarizedDark); }
+    }
+    public bool IsGruvboxDarkSelected
+    {
+        get => _isGruvboxDarkSelected;
+        set { if (SetProperty(ref _isGruvboxDarkSelected, value) && value) OnThemeSelectionChanged(ThemeType.GruvboxDark); }
+    }
+    public bool IsMonokaiSelected
+    {
+        get => _isMonokaiSelected;
+        set { if (SetProperty(ref _isMonokaiSelected, value) && value) OnThemeSelectionChanged(ThemeType.Monokai); }
+    }
     public bool IsLightSelected
     {
         get => _isLightSelected;
-        set
-        {
-            if (SetProperty(ref _isLightSelected, value) && value)
-            {
-                OnThemeSelectionChanged(ThemeType.Light);
-            }
-        }
+        set { if (SetProperty(ref _isLightSelected, value) && value) OnThemeSelectionChanged(ThemeType.Light); }
     }
+    public bool IsSolarizedLightSelected
+    {
+        get => _isSolarizedLightSelected;
+        set { if (SetProperty(ref _isSolarizedLightSelected, value) && value) OnThemeSelectionChanged(ThemeType.SolarizedLight); }
+    }
+    public bool IsSepiaSelected
+    {
+        get => _isSepiaSelected;
+        set { if (SetProperty(ref _isSepiaSelected, value) && value) OnThemeSelectionChanged(ThemeType.Sepia); }
+    }
+    public bool IsHighContrastDarkSelected
+    {
+        get => _isHighContrastDarkSelected;
+        set { if (SetProperty(ref _isHighContrastDarkSelected, value) && value) OnThemeSelectionChanged(ThemeType.HighContrastDark); }
+    }
+    public bool IsHighContrastLightSelected
+    {
+        get => _isHighContrastLightSelected;
+        set { if (SetProperty(ref _isHighContrastLightSelected, value) && value) OnThemeSelectionChanged(ThemeType.HighContrastLight); }
+    }
+    #endregion
 
     public SettingsViewModel(DataExportService dataExportService, DataImportService dataImportService)
     {
@@ -138,11 +141,7 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     private void UpdateCalendarSetting(CalendarSystemType newSystem)
     {
-        if (AppSettings.SelectedCalendarSystem == newSystem)
-        {
-            return;
-        }
-
+        if (AppSettings.SelectedCalendarSystem == newSystem) return;
         AppSettings.SelectedCalendarSystem = newSystem;
         Preferences.Set(AppSettings.CalendarSystemKey, (int)newSystem);
         WeakReferenceMessenger.Default.Send(new CalendarSettingsChangedMessage(newSystem));
@@ -150,24 +149,30 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     private void OnThemeSelectionChanged(ThemeType selectedTheme)
     {
-        if (AppSettings.SelectedTheme != selectedTheme)
-        {
-            // Update all theme flags based on the selected one
-            SetProperty(ref _isPitchBlackSelected, selectedTheme == ThemeType.PitchBlack, nameof(IsPitchBlackSelected));
-            SetProperty(ref _isDarkGraySelected, selectedTheme == ThemeType.DarkGray, nameof(IsDarkGraySelected));
-            SetProperty(ref _isNordSelected, selectedTheme == ThemeType.Nord, nameof(IsNordSelected));
-            SetProperty(ref _isCatppuccinMochaSelected, selectedTheme == ThemeType.CatppuccinMocha, nameof(IsCatppuccinMochaSelected)); // Updated
-            SetProperty(ref _isLightSelected, selectedTheme == ThemeType.Light, nameof(IsLightSelected));
-            UpdateThemeSetting(selectedTheme);
-        }
+        if (AppSettings.SelectedTheme == selectedTheme) return; // Avoid unnecessary updates
+
+        // Update all theme flags - only the selected one will be true
+        SetProperty(ref _isPitchBlackSelected, selectedTheme == ThemeType.PitchBlack, nameof(IsPitchBlackSelected));
+        SetProperty(ref _isDarkGraySelected, selectedTheme == ThemeType.DarkGray, nameof(IsDarkGraySelected));
+        SetProperty(ref _isNordSelected, selectedTheme == ThemeType.Nord, nameof(IsNordSelected));
+        SetProperty(ref _isCatppuccinMochaSelected, selectedTheme == ThemeType.CatppuccinMocha, nameof(IsCatppuccinMochaSelected));
+        SetProperty(ref _isSolarizedDarkSelected, selectedTheme == ThemeType.SolarizedDark, nameof(IsSolarizedDarkSelected));
+        SetProperty(ref _isGruvboxDarkSelected, selectedTheme == ThemeType.GruvboxDark, nameof(IsGruvboxDarkSelected));
+        SetProperty(ref _isMonokaiSelected, selectedTheme == ThemeType.Monokai, nameof(IsMonokaiSelected));
+        SetProperty(ref _isLightSelected, selectedTheme == ThemeType.Light, nameof(IsLightSelected));
+        SetProperty(ref _isSolarizedLightSelected, selectedTheme == ThemeType.SolarizedLight, nameof(IsSolarizedLightSelected));
+        SetProperty(ref _isSepiaSelected, selectedTheme == ThemeType.Sepia, nameof(IsSepiaSelected));
+        SetProperty(ref _isHighContrastDarkSelected, selectedTheme == ThemeType.HighContrastDark, nameof(IsHighContrastDarkSelected));
+        SetProperty(ref _isHighContrastLightSelected, selectedTheme == ThemeType.HighContrastLight, nameof(IsHighContrastLightSelected));
+
+        UpdateThemeSetting(selectedTheme);
     }
+
 
     private void UpdateThemeSetting(ThemeType newTheme)
     {
-        if (AppSettings.SelectedTheme == newTheme)
-        {
-            return;
-        }
+        // This check is now redundant due to the check in OnThemeSelectionChanged, but harmless
+        if (AppSettings.SelectedTheme == newTheme) return;
 
         AppSettings.SelectedTheme = newTheme;
         Preferences.Set(AppSettings.ThemePreferenceKey, (int)newTheme);
@@ -176,41 +181,66 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     private void LoadSettings()
     {
+        // Load Calendar Setting
         CalendarSystemType currentSystem = AppSettings.SelectedCalendarSystem;
-        bool shouldBeGregorian = currentSystem == CalendarSystemType.Gregorian;
-        bool shouldBePersian = currentSystem == CalendarSystemType.Persian;
-        SetProperty(ref _isGregorianSelected, shouldBeGregorian, nameof(IsGregorianSelected));
-        SetProperty(ref _isPersianSelected, shouldBePersian, nameof(IsPersianSelected));
+        _isGregorianSelected = currentSystem == CalendarSystemType.Gregorian;
+        _isPersianSelected = currentSystem == CalendarSystemType.Persian;
+        OnPropertyChanged(nameof(IsGregorianSelected));
+        OnPropertyChanged(nameof(IsPersianSelected));
         if (!_isGregorianSelected && !_isPersianSelected)
         {
-            SetProperty(ref _isGregorianSelected, true, nameof(IsGregorianSelected));
+            // Default preference logic if needed
+            _isGregorianSelected = true; OnPropertyChanged(nameof(IsGregorianSelected));
             AppSettings.SelectedCalendarSystem = CalendarSystemType.Gregorian;
             Preferences.Set(AppSettings.CalendarSystemKey, (int)CalendarSystemType.Gregorian);
         }
 
+        // Load Theme Setting
         ThemeType currentTheme = AppSettings.SelectedTheme;
-        bool shouldBePitchBlack = currentTheme == ThemeType.PitchBlack;
-        bool shouldBeDarkGray = currentTheme == ThemeType.DarkGray;
-        bool shouldBeNord = currentTheme == ThemeType.Nord;
-        bool shouldBeCatppuccin = currentTheme == ThemeType.CatppuccinMocha; // Added check
-        bool shouldBeLight = currentTheme == ThemeType.Light;
-        SetProperty(ref _isPitchBlackSelected, shouldBePitchBlack, nameof(IsPitchBlackSelected));
-        SetProperty(ref _isDarkGraySelected, shouldBeDarkGray, nameof(IsDarkGraySelected));
-        SetProperty(ref _isNordSelected, shouldBeNord, nameof(IsNordSelected));
-        SetProperty(ref _isCatppuccinMochaSelected, shouldBeCatppuccin, nameof(IsCatppuccinMochaSelected)); // Set property
-        SetProperty(ref _isLightSelected, shouldBeLight, nameof(IsLightSelected));
+        _isPitchBlackSelected = currentTheme == ThemeType.PitchBlack;
+        _isDarkGraySelected = currentTheme == ThemeType.DarkGray;
+        _isNordSelected = currentTheme == ThemeType.Nord;
+        _isCatppuccinMochaSelected = currentTheme == ThemeType.CatppuccinMocha;
+        _isSolarizedDarkSelected = currentTheme == ThemeType.SolarizedDark;
+        _isGruvboxDarkSelected = currentTheme == ThemeType.GruvboxDark;
+        _isMonokaiSelected = currentTheme == ThemeType.Monokai;
+        _isLightSelected = currentTheme == ThemeType.Light;
+        _isSolarizedLightSelected = currentTheme == ThemeType.SolarizedLight;
+        _isSepiaSelected = currentTheme == ThemeType.Sepia;
+        _isHighContrastDarkSelected = currentTheme == ThemeType.HighContrastDark;
+        _isHighContrastLightSelected = currentTheme == ThemeType.HighContrastLight;
 
-        // Check if any theme is selected after loading preferences
-        bool anyThemeSelected = _isPitchBlackSelected || _isDarkGraySelected || _isNordSelected || _isCatppuccinMochaSelected || _isLightSelected;
+        // Notify changes for all theme properties
+        OnPropertyChanged(nameof(IsPitchBlackSelected));
+        OnPropertyChanged(nameof(IsDarkGraySelected));
+        OnPropertyChanged(nameof(IsNordSelected));
+        OnPropertyChanged(nameof(IsCatppuccinMochaSelected));
+        OnPropertyChanged(nameof(IsSolarizedDarkSelected));
+        OnPropertyChanged(nameof(IsGruvboxDarkSelected));
+        OnPropertyChanged(nameof(IsMonokaiSelected));
+        OnPropertyChanged(nameof(IsLightSelected));
+        OnPropertyChanged(nameof(IsSolarizedLightSelected));
+        OnPropertyChanged(nameof(IsSepiaSelected));
+        OnPropertyChanged(nameof(IsHighContrastDarkSelected));
+        OnPropertyChanged(nameof(IsHighContrastLightSelected));
 
-        if (!anyThemeSelected) // Apply default only if nothing is selected (covers initial run and potential invalid pref value)
+        // Check if *any* theme property is true after loading
+        bool anyThemeSelected = _isPitchBlackSelected || _isDarkGraySelected || _isNordSelected ||
+                                _isCatppuccinMochaSelected || _isSolarizedDarkSelected || _isGruvboxDarkSelected ||
+                                _isMonokaiSelected || _isLightSelected || _isSolarizedLightSelected ||
+                                _isSepiaSelected || _isHighContrastDarkSelected || _isHighContrastLightSelected;
+
+
+        if (!anyThemeSelected)
         {
+            // If no theme is selected (e.g., preference was invalid or first run)
             AppTheme systemTheme = Application.Current?.RequestedTheme ?? AppTheme.Dark;
-            ThemeType defaultTheme = systemTheme == AppTheme.Light ? ThemeType.Light : ThemeType.PitchBlack; // Or Catppuccin? Let's stick to PitchBlack default dark.
-            OnThemeSelectionChanged(defaultTheme);
+            ThemeType defaultTheme = systemTheme == AppTheme.Light ? ThemeType.Light : ThemeType.PitchBlack;
+            OnThemeSelectionChanged(defaultTheme); // This will update the correct bool property and settings
             Debug.WriteLine($"LoadSettings: No valid theme selected. Defaulting based on system theme to: {defaultTheme}");
         }
     }
+
 
     [RelayCommand]
     private async Task ExportDataAsync()
@@ -223,13 +253,8 @@ public sealed partial class SettingsViewModel : ObservableObject
 
             bool success = await _dataExportService.ExportDataAsync();
 
-            if (success)
+            if (!success)
             {
-                Debug.WriteLine("SettingsViewModel.ExportDataAsync: ExportDataAsync from service reported success.");
-            }
-            else
-            {
-                Debug.WriteLine("SettingsViewModel.ExportDataAsync: ExportDataAsync from service reported failure or cancellation.");
                 await ShowAlertAsync("Export Failed", "Could not export Tickly data. The operation may have been cancelled or an error occurred.", "OK");
             }
         }
@@ -245,15 +270,9 @@ public sealed partial class SettingsViewModel : ObservableObject
         try
         {
             string cacheDir = FileSystem.CacheDirectory;
+            if (!Directory.Exists(cacheDir)) return;
+
             string searchPattern = $"{prefix}*{extension}";
-            Debug.WriteLine($"CleanUpOldExportFiles: Searching for old files in '{cacheDir}' with pattern '{searchPattern}'");
-
-            if (!Directory.Exists(cacheDir))
-            {
-                Debug.WriteLine($"CleanUpOldExportFiles: Cache directory not found: {cacheDir}");
-                return;
-            }
-
             IEnumerable<string> oldFiles = Directory.EnumerateFiles(cacheDir, searchPattern);
             int count = 0;
             foreach (string file in oldFiles)
@@ -261,13 +280,9 @@ public sealed partial class SettingsViewModel : ObservableObject
                 try
                 {
                     File.Delete(file);
-                    Debug.WriteLine($"CleanUpOldExportFiles: Deleted old file: {file}");
                     count++;
                 }
-                catch (Exception ex)
-                {
-                    Debug.WriteLine($"CleanUpOldExportFiles: Error deleting old file '{file}': {ex.Message}");
-                }
+                catch (Exception ex) { Debug.WriteLine($"CleanUpOldExportFiles: Error deleting old file '{file}': {ex.Message}"); }
             }
             Debug.WriteLine($"CleanUpOldExportFiles: Deleted {count} old export files matching pattern '{searchPattern}'.");
         }
@@ -289,23 +304,17 @@ public sealed partial class SettingsViewModel : ObservableObject
                 "Replace All Data",
                 "Cancel");
 
-            if (!confirmed)
-            {
-                Debug.WriteLine("SettingsViewModel.ImportDataAsync: User cancelled confirmation before file picking.");
-                return;
-            }
+            if (!confirmed) return;
 
             bool success = await _dataImportService.ImportDataAsync();
 
             if (success)
             {
-                Debug.WriteLine("SettingsViewModel.ImportDataAsync: ImportDataAsync from service reported success.");
-                await ShowAlertAsync("Import Successful", "Tickly data (tasks, settings, progress) imported successfully. The application will reflect the changes.", "OK");
-                LoadSettings();
+                await ShowAlertAsync("Import Successful", "Tickly data imported successfully. The application will reflect the changes.", "OK");
+                LoadSettings(); // Reload VM settings to match imported data
             }
             else
             {
-                Debug.WriteLine("SettingsViewModel.ImportDataAsync: ImportDataAsync from service reported failure or cancellation.");
                 await ShowAlertAsync("Import Failed", "Could not import Tickly data. The file might be invalid, the operation cancelled, or an error occurred.", "OK");
             }
         }
@@ -323,17 +332,9 @@ public sealed partial class SettingsViewModel : ObservableObject
             await MainThread.InvokeOnMainThreadAsync(() => ShowAlertAsync(title, message, cancelAction));
             return;
         }
-
         Page? currentPage = GetCurrentPage();
-
-        if (currentPage is not null)
-        {
-            await currentPage.DisplayAlert(title, message, cancelAction);
-        }
-        else
-        {
-            Debug.WriteLine($"ShowAlert: Could not find current page to display alert: {title}");
-        }
+        if (currentPage is not null) await currentPage.DisplayAlert(title, message, cancelAction);
+        else Debug.WriteLine($"ShowAlert: Could not find current page to display alert: {title}");
     }
 
     private static async Task<bool> ShowConfirmationAsync(string title, string message, string acceptAction, string cancelAction)
@@ -342,49 +343,24 @@ public sealed partial class SettingsViewModel : ObservableObject
         {
             return await MainThread.InvokeOnMainThreadAsync(() => ShowConfirmationAsync(title, message, acceptAction, cancelAction));
         }
-
         Page? currentPage = GetCurrentPage();
-        if (currentPage is not null)
-        {
-            return await currentPage.DisplayAlert(title, message, acceptAction, cancelAction);
-        }
-        else
-        {
-            Debug.WriteLine($"ShowConfirmation: Could not find current page to display confirmation: {title}");
-            return false;
-        }
+        if (currentPage is not null) return await currentPage.DisplayAlert(title, message, acceptAction, cancelAction);
+        else { Debug.WriteLine($"ShowConfirmation: Could not find current page to display confirmation: {title}"); return false; }
     }
 
     private static Page? GetCurrentPage()
     {
         Page? currentPage = Application.Current?.MainPage;
-
-        if (currentPage is Shell shell)
-        {
-            currentPage = shell.CurrentPage;
-        }
-        else if (currentPage is NavigationPage navPage)
-        {
-            currentPage = navPage.CurrentPage;
-        }
-        else if (currentPage is TabbedPage tabbedPage)
-        {
-            currentPage = tabbedPage.CurrentPage;
-        }
+        if (currentPage is Shell shell) currentPage = shell.CurrentPage;
+        else if (currentPage is NavigationPage navPage) currentPage = navPage.CurrentPage;
+        else if (currentPage is TabbedPage tabbedPage) currentPage = tabbedPage.CurrentPage;
 
         if (currentPage == null && Application.Current?.Windows is { Count: > 0 } windows && windows[0].Page is not null)
         {
             currentPage = windows[0].Page;
-            if (currentPage is NavigationPage navPageModal && navPageModal.CurrentPage != null)
-            {
-                currentPage = navPageModal.CurrentPage;
-            }
+            if (currentPage is NavigationPage navPageModal && navPageModal.CurrentPage != null) currentPage = navPageModal.CurrentPage;
         }
-
-        if (currentPage == null)
-        {
-            Debug.WriteLine("GetCurrentPage: Could not determine the current page reliably.");
-        }
+        if (currentPage == null) Debug.WriteLine("GetCurrentPage: Could not determine the current page reliably.");
         return currentPage;
     }
 }

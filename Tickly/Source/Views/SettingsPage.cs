@@ -13,7 +13,6 @@ public sealed class SettingsPage : ContentPage
     public SettingsPage(SettingsViewModel viewModel)
     {
         BindingContext = viewModel;
-
         Title = "Settings";
 
         Content = new ScrollView
@@ -24,124 +23,52 @@ public sealed class SettingsPage : ContentPage
                 Spacing = 15,
                 Children =
                 {
-                    new Label
-                    {
-                        Text = "Theme Settings",
-                        FontSize = LargeFontSize,
-                        FontAttributes = FontAttributes.Bold,
-                        Margin = new(0, 0, 0, 10)
-                    },
-                    new Label
-                    {
-                        Text = "Choose the application theme:",
-                        Style = GetStyle("LightGrayLabel")
-                    },
-                    new RadioButton
-                    {
-                        GroupName = "ThemeGroup",
-                        Content = "Light"
-                    }
-                    .Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsLightSelected)),
-                    new RadioButton
-                    {
-                        GroupName = "ThemeGroup",
-                        Content = "Pitch Black"
-                    }
-                    .Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsPitchBlackSelected)),
-                    new RadioButton
-                    {
-                        GroupName = "ThemeGroup",
-                        Content = "Dark Gray"
-                    }
-                    .Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsDarkGraySelected)),
-                    new RadioButton
-                    {
-                        GroupName = "ThemeGroup",
-                        Content = "Nord"
-                    }
-                    .Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsNordSelected)),
-                    // Added Catppuccin RadioButton
-                    new RadioButton
-                    {
-                        GroupName = "ThemeGroup",
-                        Content = "Catppuccin Mocha"
-                    }
-                    .Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsCatppuccinMochaSelected)),
+                    new Label { Text = "Theme Settings", FontSize = LargeFontSize, FontAttributes = FontAttributes.Bold, Margin = new(0, 0, 0, 10) },
+                    new Label { Text = "Choose the application theme:", Style = GetStyle("LightGrayLabel"), Margin = new(0,0,0,5) },
 
-                    new BoxView
-                    {
-                        HeightRequest = 1,
-                        BackgroundColor = Color.FromArgb("#333333"),
-                        Margin = new(0, 15, 0, 15)
-                    },
+                    // Dark Themes Section
+                    new Label { Text = "Dark Themes", FontAttributes = FontAttributes.Bold, Margin = new(0, 10, 0, 5) },
+                    new RadioButton { GroupName = "ThemeGroup", Content = "Pitch Black" }.Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsPitchBlackSelected)),
+                    new RadioButton { GroupName = "ThemeGroup", Content = "Dark Gray" }.Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsDarkGraySelected)),
+                    new RadioButton { GroupName = "ThemeGroup", Content = "Nord" }.Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsNordSelected)),
+                    new RadioButton { GroupName = "ThemeGroup", Content = "Catppuccin Mocha" }.Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsCatppuccinMochaSelected)),
+                    new RadioButton { GroupName = "ThemeGroup", Content = "Solarized Dark" }.Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsSolarizedDarkSelected)),
+                    new RadioButton { GroupName = "ThemeGroup", Content = "Gruvbox Dark" }.Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsGruvboxDarkSelected)),
+                    new RadioButton { GroupName = "ThemeGroup", Content = "Monokai" }.Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsMonokaiSelected)),
 
-                    new Label
-                    {
-                        Text = "Calendar Settings",
-                        FontSize = LargeFontSize,
-                        FontAttributes = FontAttributes.Bold,
-                        Margin = new(0, 0, 0, 10)
-                    },
-                    new Label
-                    {
-                        Text = "Choose the calendar system for displaying dates:",
-                        Style = GetStyle("LightGrayLabel")
-                    },
-                    new RadioButton
-                    {
-                        GroupName = "CalendarGroup",
-                        Content = "Gregorian Calendar"
-                    }
-                    .Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsGregorianSelected)),
+                    // Light Themes Section
+                    new Label { Text = "Light Themes", FontAttributes = FontAttributes.Bold, Margin = new(0, 15, 0, 5) },
+                    new RadioButton { GroupName = "ThemeGroup", Content = "Default Light" }.Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsLightSelected)),
+                    new RadioButton { GroupName = "ThemeGroup", Content = "Solarized Light" }.Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsSolarizedLightSelected)),
+                    new RadioButton { GroupName = "ThemeGroup", Content = "Sepia" }.Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsSepiaSelected)),
 
-                    new RadioButton
-                    {
-                        GroupName = "CalendarGroup",
-                        Content = "Persian (Shamsi) Calendar"
-                    }
-                    .Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsPersianSelected)),
+                    // Accessibility Themes Section
+                    new Label { Text = "Accessibility Themes", FontAttributes = FontAttributes.Bold, Margin = new(0, 15, 0, 5) },
+                    new RadioButton { GroupName = "ThemeGroup", Content = "High Contrast Dark" }.Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsHighContrastDarkSelected)),
+                    new RadioButton { GroupName = "ThemeGroup", Content = "High Contrast Light" }.Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsHighContrastLightSelected)),
 
-                    new BoxView
-                    {
-                        HeightRequest = 1,
-                        BackgroundColor = Color.FromArgb("#333333"),
-                        Margin = new(0, 15, 0, 15)
-                    },
 
-                    new Label
-                    {
-                        Text = "Data Management",
-                        FontSize = LargeFontSize,
-                        FontAttributes = FontAttributes.Bold,
-                        Margin = new(0, 0, 0, 10)
-                    },
-                    new Label
-                    {
-                        Text = "Export your current data (tasks, settings, progress) to a JSON file, or import data from a previously exported file. Importing will replace all current tasks, settings, and progress.",
-                        Style = GetStyle("LightGrayLabel"),
-                        LineBreakMode = LineBreakMode.WordWrap
-                    },
+                    new BoxView { HeightRequest = 1, BackgroundColor = Color.FromArgb("#333333"), Margin = new(0, 15, 0, 15) },
+
+                    // Calendar Settings Section
+                    new Label { Text = "Calendar Settings", FontSize = LargeFontSize, FontAttributes = FontAttributes.Bold, Margin = new(0, 0, 0, 10) },
+                    new Label { Text = "Choose the calendar system for displaying dates:", Style = GetStyle("LightGrayLabel"), Margin = new(0,0,0,5) },
+                    new RadioButton { GroupName = "CalendarGroup", Content = "Gregorian Calendar" }.Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsGregorianSelected)),
+                    new RadioButton { GroupName = "CalendarGroup", Content = "Persian (Shamsi) Calendar" }.Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsPersianSelected)),
+
+                    new BoxView { HeightRequest = 1, BackgroundColor = Color.FromArgb("#333333"), Margin = new(0, 15, 0, 15) },
+
+                    // Data Management Section
+                    new Label { Text = "Data Management", FontSize = LargeFontSize, FontAttributes = FontAttributes.Bold, Margin = new(0, 0, 0, 10) },
+                    new Label { Text = "Export your current data (tasks, settings, progress) to a JSON file, or import data from a previously exported file. Importing will replace all current tasks, settings, and progress.", Style = GetStyle("LightGrayLabel"), LineBreakMode = LineBreakMode.WordWrap, Margin = new(0,0,0,10)},
                     new HorizontalStackLayout
                     {
                         Spacing = 10,
                         Margin = new(0, 10, 0, 0),
                         Children =
                         {
-                            new Button
-                            {
-                                Text = "Export Data",
-                                BackgroundColor = Color.FromArgb("#4A6FA5"),
-                                TextColor = Colors.WhiteSmoke
-                            }
-                            .BindCommand(nameof(SettingsViewModel.ExportDataCommand)),
-
-                            new Button
-                            {
-                                Text = "Import Data",
-                                BackgroundColor = Color.FromArgb("#5A9A78"),
-                                TextColor = Colors.WhiteSmoke
-                            }
-                            .BindCommand(nameof(SettingsViewModel.ImportDataCommand))
+                            new Button { Text = "Export Data", BackgroundColor = Color.FromArgb("#4A6FA5"), TextColor = Colors.WhiteSmoke }.BindCommand(nameof(SettingsViewModel.ExportDataCommand)),
+                            new Button { Text = "Import Data", BackgroundColor = Color.FromArgb("#5A9A78"), TextColor = Colors.WhiteSmoke }.BindCommand(nameof(SettingsViewModel.ImportDataCommand))
                         }
                     }
                 }
@@ -155,12 +82,10 @@ public sealed class SettingsPage : ContentPage
         {
             return style;
         }
-
         if (Application.Current != null && Application.Current.Resources.TryGetValue("BaseLabelStyle", out var baseResource) && baseResource is Style baseStyle)
         {
             return baseStyle;
         }
-
         return new Style(typeof(Label));
     }
 }
