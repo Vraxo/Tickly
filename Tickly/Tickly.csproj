@@ -43,6 +43,10 @@
 		<PackageIcon>appicon.svg</PackageIcon>
 	</PropertyGroup>
 
+	<PropertyGroup>
+    		<EnablePreviewFeatures>true</EnablePreviewFeatures>
+ 	</PropertyGroup>
+
 	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Debug|net9.0-android|AnyCPU'">
 	  <AndroidKeyStore>True</AndroidKeyStore>
 	  <AndroidSigningKeyPass>123456789</AndroidSigningKeyPass>

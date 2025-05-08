@@ -115,7 +115,7 @@ public sealed class SettingsPage : ContentPage
                     },
                     new Label
                     {
-                        Text = "Export your current tasks to a JSON file or import tasks from a previously exported file (this will replace current tasks).",
+                        Text = "Export your current data (tasks, settings, progress) to a JSON file, or import data from a previously exported file. Importing will replace all current tasks, settings, and progress.",
                         Style = GetStyle("LightGrayLabel"),
                         LineBreakMode = LineBreakMode.WordWrap
                     },
@@ -127,19 +127,19 @@ public sealed class SettingsPage : ContentPage
                         {
                             new Button
                             {
-                                Text = "Export Tasks",
-                                BackgroundColor = Color.FromArgb("#4A6FA5"), // Consider theming these?
+                                Text = "Export Data", // Changed text
+                                BackgroundColor = Color.FromArgb("#4A6FA5"), 
                                 TextColor = Colors.WhiteSmoke
                             }
-                            .BindCommand(nameof(SettingsViewModel.ExportTasksCommand)),
+                            .BindCommand(nameof(SettingsViewModel.ExportDataCommand)), // Changed command
 
                             new Button
                             {
-                                Text = "Import Tasks",
-                                BackgroundColor = Color.FromArgb("#5A9A78"), // Consider theming these?
+                                Text = "Import Data", // Changed text
+                                BackgroundColor = Color.FromArgb("#5A9A78"), 
                                 TextColor = Colors.WhiteSmoke
                             }
-                            .BindCommand(nameof(SettingsViewModel.ImportTasksCommand))
+                            .BindCommand(nameof(SettingsViewModel.ImportDataCommand)) // Changed command
                         }
                     }
                 }

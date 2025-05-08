@@ -4,8 +4,6 @@ using System.Globalization;
 using System.Text;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Microsoft.Maui.ApplicationModel.DataTransfer;
-using Microsoft.Maui.Controls;
 using Tickly.Models;
 using Tickly.Services;
 using Tickly.Utils;
@@ -15,7 +13,7 @@ namespace Tickly.ViewModels;
 
 public sealed partial class StatsViewModel : ObservableObject
 {
-    private readonly TaskPersistenceService _taskPersistenceService;
+    private readonly ProgressStorageService _progressStorageService; // Changed
     private const string ProgressExportFilePrefix = "Tickly-Progress-Export-";
 
     [ObservableProperty]
@@ -43,9 +41,9 @@ public sealed partial class StatsViewModel : ObservableObject
     [ObservableProperty]
     private BarChartDrawable _chartDrawable;
 
-    public StatsViewModel(TaskPersistenceService taskPersistenceService)
+    public StatsViewModel(ProgressStorageService progressStorageService) // Changed
     {
-        _taskPersistenceService = taskPersistenceService;
+        _progressStorageService = progressStorageService; // Changed
         _allProgressData = [];
         _plotData = [];
 
@@ -90,7 +88,7 @@ public sealed partial class StatsViewModel : ObservableObject
     private async Task LoadProgressAsync()
     {
         Debug.WriteLine("StatsViewModel: LoadProgressAsync started.");
-        var progress = await _taskPersistenceService.LoadDailyProgressAsync();
+        var progress = await _progressStorageService.LoadDailyProgressAsync(); // Use ProgressStorageService
         Debug.WriteLine($"StatsViewModel: Loaded {progress.Count} progress entries.");
         AllProgressData = new ObservableCollection<DailyProgress>(progress.OrderBy(p => p.Date));
         Debug.WriteLine("StatsViewModel: AllProgressData populated and sorted.");
@@ -113,28 +111,15 @@ public sealed partial class StatsViewModel : ObservableObject
         DateTime startDate = DateTime.MinValue;
         DateTime today = DateTime.Today;
 
-        switch (SelectedPlotTimeRange)
+        startDate = SelectedPlotTimeRange switch
         {
-            case "Last 7 Days":
-                startDate = today.AddDays(-6);
-                break;
-            case "Last 30 Days":
-                startDate = today.AddDays(-29);
-                break;
-            case "Last 3 Months":
-                startDate = today.AddMonths(-3).AddDays(1);
-                break;
-            case "Last 6 Months":
-                startDate = today.AddMonths(-6).AddDays(1);
-                break;
-            case "Last Year":
-                startDate = today.AddYears(-1).AddDays(1);
-                break;
-            case "All Time":
-            default:
-                startDate = AllProgressData.Min(p => p.Date);
-                break;
-        }
+            "Last 7 Days" => today.AddDays(-6),
+            "Last 30 Days" => today.AddDays(-29),
+            "Last 3 Months" => today.AddMonths(-3).AddDays(1),
+            "Last 6 Months" => today.AddMonths(-6).AddDays(1),
+            "Last Year" => today.AddYears(-1).AddDays(1),
+            _ => AllProgressData.Any() ? AllProgressData.Min(p => p.Date) : DateTime.Today,// Handle empty case
+        };
         Debug.WriteLine($"StatsViewModel: Date range calculated: {startDate:yyyy-MM-dd} to {today:yyyy-MM-dd}");
 
         var filteredProgress = AllProgressData
@@ -147,6 +132,7 @@ public sealed partial class StatsViewModel : ObservableObject
         if (SelectedPlotTimeRange == "All Time" && filteredProgress.Count > 90)
         {
             Debug.WriteLine($"StatsViewModel: Plot has {filteredProgress.Count} points for All Time. Consider aggregation for performance/readability.");
+            // Future: Implement aggregation logic here if needed
         }
 
         CalendarSystemType calendarSystem = AppSettings.SelectedCalendarSystem;
@@ -156,7 +142,6 @@ public sealed partial class StatsViewModel : ObservableObject
         {
             dateFormat = "MMM yy";
         }
-
 
         List<PlotDataPoint> newPlotData = [];
         foreach (var progress in filteredProgress)
@@ -183,7 +168,7 @@ public sealed partial class StatsViewModel : ObservableObject
         var newDrawable = new BarChartDrawable
         {
             DataPoints = PlotData,
-            TextColor = currentTextColor // Use the determined theme text color
+            TextColor = currentTextColor
         };
         ChartDrawable = newDrawable;
         Debug.WriteLine("StatsViewModel: Assigned new BarChartDrawable instance to ChartDrawable property. UI should update.");
@@ -209,7 +194,7 @@ public sealed partial class StatsViewModel : ObservableObject
         string temporaryExportPath = string.Empty;
         try
         {
-            List<DailyProgress> dailyProgressList = await _taskPersistenceService.LoadDailyProgressAsync();
+            List<DailyProgress> dailyProgressList = await _progressStorageService.LoadDailyProgressAsync(); // Use ProgressStorageService
 
             if (dailyProgressList == null || !dailyProgressList.Any())
             {
@@ -222,6 +207,7 @@ public sealed partial class StatsViewModel : ObservableObject
                 : dailyProgressList.OrderByDescending(p => p.Date);
 
             StringBuilder sb = new();
+            sb.AppendLine("Date - Progress"); // Add header
             foreach (var progress in sortedProgress)
             {
                 string dateString = SelectedExportCalendarType == "Persian"
@@ -287,17 +273,9 @@ public sealed partial class StatsViewModel : ObservableObject
                     Debug.WriteLine($"CleanUpOldExportFiles: Deleted old file: {file}");
                     count++;
                 }
-                catch (IOException ioEx)
-                {
-                    Debug.WriteLine($"CleanUpOldExportFiles: IO Error deleting old file '{file}': {ioEx.Message}");
-                }
-                catch (UnauthorizedAccessException uaEx)
-                {
-                    Debug.WriteLine($"CleanUpOldExportFiles: Access Error deleting old file '{file}': {uaEx.Message}");
-                }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"CleanUpOldExportFiles: General Error deleting old file '{file}': {ex.Message}");
+                    Debug.WriteLine($"CleanUpOldExportFiles: Error deleting old file '{file}': {ex.Message}");
                 }
             }
             Debug.WriteLine($"CleanUpOldExportFiles: Deleted {count} old export files matching pattern '{searchPattern}'.");
@@ -311,10 +289,9 @@ public sealed partial class StatsViewModel : ObservableObject
     private void EnsureDirectoryExists(string filePath)
     {
         string? directory = Path.GetDirectoryName(filePath);
-        if (directory is not null && !Directory.Exists(directory))
+        if (directory != null && !Directory.Exists(directory))
         {
             Directory.CreateDirectory(directory);
-            Debug.WriteLine($"EnsureDirectoryExists: Created directory: {directory}");
         }
     }
 
@@ -357,32 +334,35 @@ public sealed partial class StatsViewModel : ObservableObject
 
     private static Page? GetCurrentPage()
     {
-        if (Application.Current?.MainPage is Shell shell && shell.CurrentPage is not null)
+        Page? currentPage = Application.Current?.MainPage;
+
+        if (currentPage is Shell shell)
         {
-            return shell.CurrentPage;
+            currentPage = shell.CurrentPage;
         }
-        if (Application.Current?.MainPage is Page mainPage)
+        else if (currentPage is NavigationPage navPage)
         {
-            if (mainPage is NavigationPage navPage && navPage.CurrentPage != null)
-            {
-                return navPage.CurrentPage;
-            }
-            if (mainPage is TabbedPage tabbedPage && tabbedPage.CurrentPage != null)
-            {
-                return tabbedPage.CurrentPage;
-            }
-            return mainPage;
+            currentPage = navPage.CurrentPage;
         }
-        if (Application.Current?.Windows is { Count: > 0 } windows && windows[0].Page is not null)
+        else if (currentPage is TabbedPage tabbedPage)
         {
-            if (windows[0].Page is NavigationPage navPage && navPage.CurrentPage != null)
-            {
-                return navPage.CurrentPage;
-            }
-            return windows[0].Page;
+            currentPage = tabbedPage.CurrentPage;
         }
-        Debug.WriteLine("GetCurrentPage: Could not determine the current page reliably.");
-        return null;
+
+        if (currentPage == null && Application.Current?.Windows is { Count: > 0 } windows && windows[0].Page is not null)
+        {
+            currentPage = windows[0].Page;
+            if (currentPage is NavigationPage navPageModal && navPageModal.CurrentPage != null)
+            {
+                currentPage = navPageModal.CurrentPage;
+            }
+        }
+
+        if (currentPage == null)
+        {
+            Debug.WriteLine("GetCurrentPage: Could not determine the current page reliably.");
+        }
+        return currentPage;
     }
 
     private static Color GetCurrentThemeTextColor()
@@ -391,7 +371,6 @@ public sealed partial class StatsViewModel : ObservableObject
         {
             return color;
         }
-        // Fallback based on system theme if dynamic resource isn't available yet
         return Application.Current?.RequestedTheme == AppTheme.Dark ? Colors.WhiteSmoke : Colors.Black;
     }
 }

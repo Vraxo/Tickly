@@ -1,12 +1,9 @@
-﻿// Messages/CalendarSettingChangedMessage.cs
-using CommunityToolkit.Mvvm.Messaging.Messages;
+﻿using CommunityToolkit.Mvvm.Messaging.Messages;
+using Tickly.Models;
 
 namespace Tickly.Messages;
 
-public class CalendarSettingChangedMessage : ValueChangedMessage<bool>
+public class CalendarSettingsChangedMessage(CalendarSystemType value) : ValueChangedMessage<CalendarSystemType>(value)
 {
-    public CalendarSettingChangedMessage() : base(true)
-    {
 
-    }
 }

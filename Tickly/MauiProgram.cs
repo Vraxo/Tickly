@@ -24,13 +24,19 @@ public static class MauiProgram
         builder.Logging.AddDebug();
 #endif
 
-        builder.Services.AddSingleton<TaskPersistenceService>();
+        // Register split persistence and import/export services
+        builder.Services.AddSingleton<TaskStorageService>();
+        builder.Services.AddSingleton<ProgressStorageService>();
+        builder.Services.AddSingleton<DataExportService>(); // Added
+        builder.Services.AddSingleton<DataImportService>(); // Added
+        // REMOVED: builder.Services.AddSingleton<DataImportExportService>();
+
         builder.Services.AddSingleton<RepeatingTaskService>();
         builder.Services.AddSingleton<TaskVisualStateService>();
 
         builder.Services.AddSingleton<MainViewModel>();
         builder.Services.AddSingleton<SettingsViewModel>();
-        builder.Services.AddSingleton<StatsViewModel>(); // Corrected registration
+        builder.Services.AddSingleton<StatsViewModel>();
 
         builder.Services.AddSingleton<MainPage>();
         builder.Services.AddTransient<AddTaskPopupPage>();

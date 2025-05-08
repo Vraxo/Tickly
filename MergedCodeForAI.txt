@@ -34,7 +34,7 @@ public partial class App : Application
     public App()
     {
         InitializeComponent();
-        ApplyTheme(AppSettings.SelectedTheme); // Apply theme on startup
+        ApplyTheme(AppSettings.SelectedTheme);
         MainPage = new AppShell();
         WeakReferenceMessenger.Default.Register<ThemeChangedMessage>(this, (r, m) => ApplyTheme(m.Value));
     }
@@ -45,25 +45,67 @@ public partial class App : Application
 
         MainThread.BeginInvokeOnMainThread(() =>
         {
-            string backgroundKey = theme == ThemeType.DarkGray ? "DarkGrayBackgroundColor" : "PitchBlackBackgroundColor";
-            string surfaceKey = theme == ThemeType.DarkGray ? "DarkGraySurfaceColor" : "PitchBlackSurfaceColor";
-            string foregroundKey = theme == ThemeType.DarkGray ? "DarkGrayForegroundColor" : "PitchBlackForegroundColor";
-            string secondaryTextKey = theme == ThemeType.DarkGray ? "LightGrayText" : "Gray500"; // Adjust secondary text based on theme
+            string backgroundKey;
+            string surfaceKey;
+            string foregroundKey;
+            string secondaryTextKey;
+            string primaryActionBgKey;
+            string primaryActionFgKey;
+
+            switch (theme)
+            {
+                case ThemeType.Light:
+                    backgroundKey = "LightBackgroundColor";
+                    surfaceKey = "LightSurfaceColor";
+                    foregroundKey = "LightForegroundColor";
+                    secondaryTextKey = "LightSecondaryTextColor";
+                    primaryActionBgKey = "LightPrimaryActionBackgroundColor";
+                    primaryActionFgKey = "LightPrimaryActionForegroundColor";
+                    Application.Current.UserAppTheme = AppTheme.Light;
+                    break;
+                case ThemeType.DarkGray:
+                    backgroundKey = "DarkGrayBackgroundColor";
+                    surfaceKey = "DarkGraySurfaceColor";
+                    foregroundKey = "DarkGrayForegroundColor";
+                    secondaryTextKey = "DarkGraySecondaryTextColor";
+                    primaryActionBgKey = "DarkGrayPrimaryActionBackgroundColor"; // Use specific Dark Gray key
+                    primaryActionFgKey = "DarkGrayPrimaryActionForegroundColor"; // Use specific Dark Gray key
+                    Application.Current.UserAppTheme = AppTheme.Dark;
+                    break;
+                case ThemeType.Nord:
+                    backgroundKey = "NordBackgroundColor";
+                    surfaceKey = "NordSurfaceColor";
+                    foregroundKey = "NordForegroundColor";
+                    secondaryTextKey = "NordSecondaryTextColor";
+                    primaryActionBgKey = "NordPrimaryActionBackgroundColor"; // Use specific Nord key
+                    primaryActionFgKey = "NordPrimaryActionForegroundColor"; // Use specific Nord key
+                    Application.Current.UserAppTheme = AppTheme.Dark;
+                    break;
+                case ThemeType.PitchBlack:
+                default:
+                    backgroundKey = "PitchBlackBackgroundColor";
+                    surfaceKey = "PitchBlackSurfaceColor";
+                    foregroundKey = "PitchBlackForegroundColor";
+                    secondaryTextKey = "PitchBlackSecondaryTextColor";
+                    primaryActionBgKey = "PitchBlackPrimaryActionBackgroundColor"; // Use specific Pitch Black key
+                    primaryActionFgKey = "PitchBlackPrimaryActionForegroundColor"; // Use specific Pitch Black key
+                    Application.Current.UserAppTheme = AppTheme.Dark;
+                    break;
+            }
 
             Application.Current.Resources["AppBackgroundColor"] = Application.Current.Resources[backgroundKey];
             Application.Current.Resources["AppSurfaceColor"] = Application.Current.Resources[surfaceKey];
             Application.Current.Resources["AppForegroundColor"] = Application.Current.Resources[foregroundKey];
-            Application.Current.Resources["AppSecondaryTextColor"] = Application.Current.Resources[secondaryTextKey]; // Apply secondary text color too
+            Application.Current.Resources["AppSecondaryTextColor"] = Application.Current.Resources[secondaryTextKey];
+            Application.Current.Resources["AppPrimaryActionBackgroundColor"] = Application.Current.Resources[primaryActionBgKey];
+            Application.Current.Resources["AppPrimaryActionForegroundColor"] = Application.Current.Resources[primaryActionFgKey];
 
-            Debug.WriteLine($"Theme applied: {theme}. Background: {Application.Current.Resources["AppBackgroundColor"]}, Surface: {Application.Current.Resources["AppSurfaceColor"]}, Foreground: {Application.Current.Resources["AppForegroundColor"]}");
+            Debug.WriteLine($"Theme applied: {theme}. MAUI Theme: {Application.Current.UserAppTheme}. Background: {Application.Current.Resources["AppBackgroundColor"]}, Surface: {Application.Current.Resources["AppSurfaceColor"]}, Foreground: {Application.Current.Resources["AppForegroundColor"]}, Secondary: {Application.Current.Resources["AppSecondaryTextColor"]}, ActionBG: {Application.Current.Resources["AppPrimaryActionBackgroundColor"]}, ActionFG: {Application.Current.Resources["AppPrimaryActionForegroundColor"]}");
 
-            // Force Shell to re-evaluate styles if needed (might not be necessary with DynamicResource)
             if (MainPage is Shell shell)
             {
-                // Attempt to force redraw if DynamicResource doesn't update shell immediately
-                var currentBg = shell.BackgroundColor;
-                shell.BackgroundColor = Colors.Transparent; // Temporary change
-                shell.BackgroundColor = currentBg; // Restore (or re-bind if using DynamicResource)
+                shell.BackgroundColor = Colors.Transparent;
+                shell.BackgroundColor = (Color)Application.Current.Resources["AppBackgroundColor"];
             }
         });
     }
@@ -81,15 +123,8 @@ public partial class App : Application
         try
         {
             var mainViewModel = IPlatformApplication.Current?.Services?.GetService<MainViewModel>();
-            if (mainViewModel != null)
-            {
-                await mainViewModel.FinalizeAndSaveProgressAsync();
-                Debug.WriteLine("App.OnSleep: FinalizeAndSaveProgressAsync completed.");
-            }
-            else
-            {
-                Debug.WriteLine("App.OnSleep: MainViewModel not resolved. Cannot save progress.");
-            }
+            mainViewModel?.FinalizeAndSaveProgressAsync().FireAndForgetSafeAsync();
+            Debug.WriteLine("App.OnSleep: FinalizeAndSaveProgressAsync completed or task running.");
         }
         catch (Exception ex)
         {
@@ -151,6 +186,23 @@ public partial class App : Application
 #endif
 
         return window;
+    }
+}
+
+// Simple Fire and Forget helper
+internal static class TaskExtensions
+{
+    internal static async void FireAndForgetSafeAsync(this Task task,
+        Action<Exception>? errorHandler = null)
+    {
+        try
+        {
+            await task;
+        }
+        catch (Exception ex)
+        {
+            errorHandler?.Invoke(ex);
+        }
     }
 }
 </file>
@@ -337,14 +389,16 @@ public static class MauiProgram
                 <Setter Property="Text" Value="+"/>
                 <Setter Property="FontSize" Value="24"/>
                 <Setter Property="FontAttributes" Value="Bold"/>
-                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}"/>
-                <Setter Property="BackgroundColor" Value="{StaticResource Primary}"/>
+                <Setter Property="TextColor" Value="{DynamicResource AppPrimaryActionForegroundColor}"/>
+                <Setter Property="BackgroundColor" Value="{DynamicResource AppPrimaryActionBackgroundColor}"/>
                 <Setter Property="CornerRadius" Value="28"/>
                 <Setter Property="HeightRequest" Value="56"/>
                 <Setter Property="WidthRequest" Value="56"/>
                 <Setter Property="HorizontalOptions" Value="End"/>
                 <Setter Property="VerticalOptions" Value="End"/>
                 <Setter Property="Margin" Value="20"/>
+                <Setter Property="Padding" Value="0"/>
+                <!-- Removed default padding -->
                 <Setter Property="SemanticProperties.Hint" Value="Add a new task"/>
             </Style>
 
@@ -8622,28 +8676,18 @@ namespace Fonts
 
     <!-- Core Palette -->
     <Color x:Key="Primary">#512BD4</Color>
-    <!-- Vibrant Purple -->
     <Color x:Key="PrimaryDarkText">#242424</Color>
-    <!-- Dark text for light primary bg -->
     <Color x:Key="Secondary">#DFD8F7</Color>
-    <!-- Light Purple -->
     <Color x:Key="SecondaryDarkText">#AC99EA</Color>
-    <!-- Lighter Purple Text for Dark BG -->
     <Color x:Key="Tertiary">#2B0B98</Color>
-    <!-- Deep Purple -->
 
     <Color x:Key="White">#FFFFFF</Color>
     <Color x:Key="Black">#000000</Color>
     <Color x:Key="OffBlack">#121212</Color>
-    <!-- Slightly off-black -->
     <Color x:Key="DarkGrayBackground">#1E1E1E</Color>
-    <!-- Dark Gray for BG -->
     <Color x:Key="DarkGraySurface">#2C2C2C</Color>
-    <!-- Slightly lighter Dark Gray for surfaces -->
     <Color x:Key="WhiteSmoke">#F5F5F5</Color>
-    <!-- Common light text color -->
     <Color x:Key="LightGrayText">#D3D3D3</Color>
-    <!-- Lighter text for dark themes -->
 
     <!-- Grays -->
     <Color x:Key="Gray100">#E1E1E1</Color>
@@ -8655,23 +8699,71 @@ namespace Fonts
     <Color x:Key="Gray900">#212121</Color>
     <Color x:Key="Gray950">#141414</Color>
 
+    <!-- Nord Palette -->
+    <Color x:Key="NordPolarNight0">#2E3440</Color>
+    <Color x:Key="NordPolarNight1">#3B4252</Color>
+    <Color x:Key="NordPolarNight2">#434C5E</Color>
+    <Color x:Key="NordPolarNight3">#4C566A</Color>
+    <Color x:Key="NordSnowStorm0">#D8DEE9</Color>
+    <Color x:Key="NordSnowStorm1">#E5E9F0</Color>
+    <Color x:Key="NordSnowStorm2">#ECEFF4</Color>
+    <Color x:Key="NordFrost0">#8FBCBB</Color>
+    <Color x:Key="NordFrost1">#88C0D0</Color>
+    <Color x:Key="NordFrost2">#81A1C1</Color>
+    <Color x:Key="NordFrost3">#5E81AC</Color>
+    <Color x:Key="NordAurora0">#BF616A</Color>
+    <Color x:Key="NordAurora1">#D08770</Color>
+    <Color x:Key="NordAurora2">#EBCB8B</Color>
+    <Color x:Key="NordAurora3">#A3BE8C</Color>
+    <Color x:Key="NordAurora4">#B48EAD</Color>
+
     <!-- Specific Theme Colors -->
     <Color x:Key="PitchBlackBackgroundColor">#000000</Color>
     <Color x:Key="PitchBlackSurfaceColor">#121212</Color>
     <Color x:Key="PitchBlackForegroundColor">#F5F5F5</Color>
+    <Color x:Key="PitchBlackSecondaryTextColor">#A0A0A0</Color>
+    <Color x:Key="PitchBlackPrimaryActionBackgroundColor">#212121</Color>
+    <!-- Gray900 -->
+    <Color x:Key="PitchBlackPrimaryActionForegroundColor">#F5F5F5</Color>
+    <!-- WhiteSmoke -->
 
     <Color x:Key="DarkGrayBackgroundColor">#1E1E1E</Color>
     <Color x:Key="DarkGraySurfaceColor">#2C2C2C</Color>
     <Color x:Key="DarkGrayForegroundColor">#E0E0E0</Color>
-    <!-- Slightly adjusted for dark gray -->
+    <Color x:Key="DarkGraySecondaryTextColor">#B0B0B0</Color>
+    <Color x:Key="DarkGrayPrimaryActionBackgroundColor">#404040</Color>
+    <!-- Gray600 -->
+    <Color x:Key="DarkGrayPrimaryActionForegroundColor">#F5F5F5</Color>
+    <!-- WhiteSmoke -->
 
-    <!-- DYNAMIC THEME RESOURCES (Initialized to PitchBlack) -->
+    <Color x:Key="NordBackgroundColor">#2E3440</Color>
+    <Color x:Key="NordSurfaceColor">#3B4252</Color>
+    <Color x:Key="NordForegroundColor">#D8DEE9</Color>
+    <Color x:Key="NordSecondaryTextColor">#E5E9F0</Color>
+    <Color x:Key="NordPrimaryActionBackgroundColor">#5E81AC</Color>
+    <!-- NordFrost3 -->
+    <Color x:Key="NordPrimaryActionForegroundColor">#2E3440</Color>
+    <!-- NordPolarNight0 -->
+
+    <Color x:Key="LightBackgroundColor">#F0F0F0</Color>
+    <Color x:Key="LightSurfaceColor">#FFFFFF</Color>
+    <Color x:Key="LightForegroundColor">#1F1F1F</Color>
+    <Color x:Key="LightSecondaryTextColor">#555555</Color>
+    <Color x:Key="LightPrimaryActionBackgroundColor">#512BD4</Color>
+    <!-- Primary -->
+    <Color x:Key="LightPrimaryActionForegroundColor">#FFFFFF</Color>
+    <!-- White -->
+
+    <!-- DYNAMIC THEME RESOURCES (Initialized to system preference or PitchBlack, App.xaml.cs will update) -->
     <Color x:Key="AppBackgroundColor">#000000</Color>
     <Color x:Key="AppSurfaceColor">#121212</Color>
     <Color x:Key="AppForegroundColor">#F5F5F5</Color>
-    <!-- Default/PitchBlack Text -->
     <Color x:Key="AppSecondaryTextColor">#A0A0A0</Color>
-    <!-- Grayer text -->
+    <Color x:Key="AppPrimaryActionBackgroundColor">#512BD4</Color>
+    <!-- Default to Primary (will be overridden) -->
+    <Color x:Key="AppPrimaryActionForegroundColor">#000000</Color>
+    <!-- Default to Black (will be overridden) -->
+
 
     <!-- Brushes (Mostly static, except maybe foreground/background if needed) -->
     <SolidColorBrush x:Key="PrimaryBrush" Color="{StaticResource Primary}"/>
@@ -9572,17 +9664,14 @@ public class AddTaskMessage : ValueChangedMessage<TaskItem>
 </file>
 
 <file path="Source\Messages\CalendarSettingsChangedMessage.cs">
-// Messages/CalendarSettingChangedMessage.cs
 using CommunityToolkit.Mvvm.Messaging.Messages;
+using Tickly.Models;
 
 namespace Tickly.Messages;
 
-public class CalendarSettingChangedMessage : ValueChangedMessage<bool>
+public class CalendarSettingsChangedMessage(CalendarSystemType value) : ValueChangedMessage<CalendarSystemType>(value)
 {
-    public CalendarSettingChangedMessage() : base(true)
-    {
 
-    }
 }
 </file>
 
@@ -9757,7 +9846,25 @@ namespace Tickly.Models;
 public enum ThemeType
 {
     PitchBlack,
-    DarkGray
+    DarkGray,
+    Nord,
+    Light
+}
+</file>
+
+<file path="Source\Models\TicklyDataBundle.cs">
+using System.Collections.Generic;
+// Removed: using Tickly.Services; as AppSettings class is static and its properties will be directly included.
+
+namespace Tickly.Models
+{
+    public class TicklyDataBundle
+    {
+        public List<TaskItem>? Tasks { get; set; }
+        public CalendarSystemType SelectedCalendarSystem { get; set; }
+        public ThemeType SelectedTheme { get; set; }
+        public List<DailyProgress>? Progress { get; set; }
+    }
 }
 </file>
 
@@ -9922,6 +10029,8 @@ public sealed class RepeatingTaskService
 <file path="Source\Services\TaskPersistenceService.cs">
 using System.Diagnostics;
 using System.Text.Json;
+using CommunityToolkit.Mvvm.Messaging;
+using Tickly.Messages;
 using Tickly.Models;
 
 namespace Tickly.Services;
@@ -9930,8 +10039,8 @@ public sealed class TaskPersistenceService
 {
     private readonly string _tasksFilePath;
     private readonly string _progressFilePath;
-    private readonly object _tasksSaveLock = new();
-    private readonly object _progressSaveLock = new();
+    private readonly Lock _tasksSaveLock = new();
+    private readonly Lock _progressSaveLock = new();
     private bool _isSavingTasks = false; // Internal flag to prevent concurrent saves for tasks
     private bool _isSavingProgress = false; // Internal flag to prevent concurrent saves for progress
 
@@ -9946,6 +10055,7 @@ public sealed class TaskPersistenceService
     public async Task<List<TaskItem>> LoadTasksAsync()
     {
         Debug.WriteLine($"TaskPersistenceService.LoadTasksAsync: Attempting to load from: {_tasksFilePath}");
+        
         if (!File.Exists(_tasksFilePath))
         {
             Debug.WriteLine("TaskPersistenceService.LoadTasksAsync: File not found, returning empty list.");
@@ -9955,6 +10065,7 @@ public sealed class TaskPersistenceService
         try
         {
             string json = await File.ReadAllTextAsync(_tasksFilePath);
+            
             if (string.IsNullOrWhiteSpace(json))
             {
                 Debug.WriteLine("TaskPersistenceService.LoadTasksAsync: File exists but is empty, returning empty list.");
@@ -9985,6 +10096,7 @@ public sealed class TaskPersistenceService
     public async Task SaveTasksAsync(IEnumerable<TaskItem> tasks)
     {
         bool acquiredLock = false;
+
         lock (_tasksSaveLock)
         {
             if (_isSavingTasks)
@@ -9996,7 +10108,10 @@ public sealed class TaskPersistenceService
             acquiredLock = true;
         }
 
-        if (!acquiredLock) return;
+        if (!acquiredLock)
+        {
+            return;
+        }
 
         Debug.WriteLine("TaskPersistenceService.SaveTasksAsync: Starting save operation.");
         try
@@ -10088,6 +10203,7 @@ public sealed class TaskPersistenceService
     private async Task SaveDailyProgressListAsync(List<DailyProgress> progressList)
     {
         bool acquiredLock = false;
+
         lock (_progressSaveLock)
         {
             if (_isSavingProgress)
@@ -10095,11 +10211,15 @@ public sealed class TaskPersistenceService
                 Debug.WriteLine("TaskPersistenceService.SaveDailyProgressListAsync: Save already in progress, skipping.");
                 return;
             }
+
             _isSavingProgress = true;
             acquiredLock = true;
         }
 
-        if (!acquiredLock) return;
+        if (!acquiredLock)
+        {
+            return;
+        }
 
         Debug.WriteLine("TaskPersistenceService.SaveDailyProgressListAsync: Starting save operation.");
         try
@@ -10129,16 +10249,17 @@ public sealed class TaskPersistenceService
             }
         }
     }
-    
+
     public async Task AddDailyProgressEntryAsync(DailyProgress newEntry)
     {
         Debug.WriteLine($"TaskPersistenceService.AddDailyProgressEntryAsync: Adding new entry for date: {newEntry.Date}");
         List<DailyProgress> currentProgress = await LoadDailyProgressAsync();
-        
+
         // Optional: Check if an entry for this date already exists and update it, or add new.
         // For simplicity, this example just adds. If multiple entries per day are not desired,
         // you might want to remove existing entries for the same date before adding the new one.
-        var existingEntry = currentProgress.FirstOrDefault(p => p.Date.Date == newEntry.Date.Date);
+        DailyProgress? existingEntry = currentProgress.FirstOrDefault(p => p.Date.Date == newEntry.Date.Date);
+        
         if (existingEntry != null)
         {
             Debug.WriteLine($"TaskPersistenceService.AddDailyProgressEntryAsync: Updating existing entry for date: {newEntry.Date}");
@@ -10152,6 +10273,167 @@ public sealed class TaskPersistenceService
 
         await SaveDailyProgressListAsync(currentProgress);
         Debug.WriteLine($"TaskPersistenceService.AddDailyProgressEntryAsync: Successfully added/updated and saved entry for date: {newEntry.Date}");
+    }
+
+    public async Task<bool> ExportDataAsync()
+    {
+        try
+        {
+            Debug.WriteLine("TaskPersistenceService.ExportDataAsync: Initiating export.");
+            List<TaskItem> tasks = await LoadTasksAsync();
+            List<DailyProgress> progress = await LoadDailyProgressAsync();
+
+            TicklyDataBundle dataBundle = new()
+            {
+                Tasks = tasks,
+                SelectedCalendarSystem = AppSettings.SelectedCalendarSystem,
+                SelectedTheme = AppSettings.SelectedTheme,
+                Progress = progress
+            };
+
+            JsonSerializerOptions options = new() { WriteIndented = true };
+            string json = JsonSerializer.Serialize(dataBundle, options);
+
+            string fileName = $"Tickly_{DateTime.Now:yyyyMMddHHmmss}.json";
+
+            // Using FileSaver MAUI Community Toolkit (if available and configured)
+            // Or implement native file saving logic if FilePicker is preferred for saving.
+            // For simplicity, let's assume we want to let the user pick the location.
+            FileResult? fileSaverResult = await FilePicker.Default.PickAsync(new()
+            {
+                PickerTitle = "Save Tickly Data",
+                // Suggested file name - Note: FilePicker doesn't directly support setting a default file name on all platforms.
+                // This is more of a hint. The user will ultimately choose the name and location.
+            });
+
+            if (fileSaverResult != null)
+            {
+                // This path is where the user chose to save the file.
+                // However, FilePicker.PickAsync is for *picking* an existing file.
+                // We need to *save* a new file.
+                // Let's use a temporary path and then inform the user, or use a more direct save mechanism if available.
+
+                // Correction: FilePicker is for picking. For saving, we might need to write to a temp location
+                // and then share, or use a platform-specific save dialog.
+                // A common approach for MAUI is to write to a cache directory and then use Share.Default.RequestAsync
+                // Or, if a library like CommunityToolkit.Maui.Storage.FileSaver is used:
+                // using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(json));
+                // var path = await FileSaver.Default.SaveAsync(fileName, stream, CancellationToken.None);
+                // if (path.IsSuccessful) { Debug.WriteLine($"Export successful: {path.FilePath}"); return true; }
+                // else { Debug.WriteLine($"Export failed: {path.Exception?.Message}"); return false; }
+
+                // For now, let's write to a known location and log it. User would need to manually retrieve it.
+                // This part needs refinement based on desired UX for saving files.
+                // A better approach would be to use a dependency service or a MAUI Community Toolkit feature for "Save File Dialog".
+                // Given the constraints, let's try to save it to a public folder if possible or app's cache.
+
+                string tempPath = Path.Combine(FileSystem.CacheDirectory, fileName);
+                await File.WriteAllTextAsync(tempPath, json);
+                Debug.WriteLine($"TaskPersistenceService.ExportDataAsync: Data saved to cache: {tempPath}. User should be prompted to share/move this file.");
+
+                // To make it user-accessible, let's try to use Share to offer the file
+                await Share.Default.RequestAsync(new ShareFileRequest
+                {
+                    Title = "Share Tickly Data",
+                    File = new(tempPath)
+                });
+
+                Debug.WriteLine("TaskPersistenceService.ExportDataAsync: Share request initiated.");
+                return true;
+            }
+            else
+            {
+                Debug.WriteLine("TaskPersistenceService.ExportDataAsync: File save cancelled by user.");
+                return false;
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"TaskPersistenceService.ExportDataAsync: Error during export: {ex.Message}");
+            return false;
+        }
+    }
+
+    public async Task<bool> ImportDataAsync()
+    {
+        try
+        {
+            Debug.WriteLine("TaskPersistenceService.ImportDataAsync: Initiating import.");
+            FileResult? fileResult = await FilePicker.Default.PickAsync(new()
+            {
+                PickerTitle = "Pick Tickly Data File",
+                FileTypes = new(new Dictionary<DevicePlatform, IEnumerable<string>>
+                {
+                    { DevicePlatform.iOS, ["public.json" ] }, // UTType for JSON
+                    { DevicePlatform.Android, [ "application/json" ] },
+                    { DevicePlatform.WinUI, [ ".json" ] },
+                    { DevicePlatform.macOS, [ "json" ] }, // Or "public.json"
+                })
+            });
+
+            if (fileResult == null)
+            {
+                Debug.WriteLine("TaskPersistenceService.ImportDataAsync: No file selected.");
+                return false;
+            }
+
+            Debug.WriteLine($"TaskPersistenceService.ImportDataAsync: File picked: {fileResult.FullPath}");
+            string json = await File.ReadAllTextAsync(fileResult.FullPath);
+            
+            if (string.IsNullOrWhiteSpace(json))
+            {
+                Debug.WriteLine("TaskPersistenceService.ImportDataAsync: Selected file is empty.");
+                return false; // Or handle as an error
+            }
+
+            var dataBundle = JsonSerializer.Deserialize<TicklyDataBundle>(json);
+
+            if (dataBundle == null)
+            {
+                Debug.WriteLine("TaskPersistenceService.ImportDataAsync: Failed to deserialize data bundle.");
+                return false; // Or handle as an error
+            }
+
+            // Save imported data
+            if (dataBundle.Tasks != null)
+            {
+                await SaveTasksAsync(dataBundle.Tasks);
+                Debug.WriteLine("TaskPersistenceService.ImportDataAsync: Tasks imported and saved.");
+            }
+
+            if (dataBundle.Progress != null)
+            {
+                await SaveDailyProgressListAsync(dataBundle.Progress);
+                Debug.WriteLine("TaskPersistenceService.ImportDataAsync: Progress imported and saved.");
+            }
+
+            // Apply settings
+            // Note: AppSettings are static. We need to update them and ensure Preferences are saved.
+            // The SettingsViewModel is responsible for saving preferences.
+            // We should update AppSettings and then send messages so ViewModels can react.
+
+            AppSettings.SelectedCalendarSystem = dataBundle.SelectedCalendarSystem;
+            Preferences.Set(AppSettings.CalendarSystemKey, (int)dataBundle.SelectedCalendarSystem);
+            WeakReferenceMessenger.Default.Send(new CalendarSettingsChangedMessage(dataBundle.SelectedCalendarSystem));
+            Debug.WriteLine($"TaskPersistenceService.ImportDataAsync: Calendar system imported and set to {dataBundle.SelectedCalendarSystem}.");
+
+            AppSettings.SelectedTheme = dataBundle.SelectedTheme;
+            Preferences.Set(AppSettings.ThemePreferenceKey, (int)dataBundle.SelectedTheme);
+            WeakReferenceMessenger.Default.Send(new ThemeChangedMessage(dataBundle.SelectedTheme));
+            Debug.WriteLine($"TaskPersistenceService.ImportDataAsync: Theme imported and set to {dataBundle.SelectedTheme}.");
+
+            // Notify UI to reload tasks and potentially other data
+            WeakReferenceMessenger.Default.Send(new TasksReloadRequestedMessage());
+            Debug.WriteLine("TaskPersistenceService.ImportDataAsync: TasksReloadRequestedMessage sent.");
+
+            Debug.WriteLine("TaskPersistenceService.ImportDataAsync: Import successful.");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"TaskPersistenceService.ImportDataAsync: Error during import: {ex.Message}");
+            return false;
+        }
     }
 }
 </file>
@@ -10354,37 +10636,27 @@ public static class DateUtils
 </file>
 
 <file path="Source\ViewModels\MainViewModel.cs">
-// File: Source/ViewModels/MainViewModel.cs
-using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
-using CommunityToolkit.Mvvm.Messaging;
-using Microsoft.Maui.ApplicationModel;
-using Microsoft.Maui.Controls;
-using Microsoft.Maui.Graphics;
-using System;
-using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.Diagnostics;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using CommunityToolkit.Mvvm.Messaging;
 using Tickly.Messages;
 using Tickly.Models;
 using Tickly.Services;
-using Tickly.Utils; // Keep for non-repeating date utils if any, or general utils
 using Tickly.Views;
 
 namespace Tickly.ViewModels;
 
 public sealed partial class MainViewModel : ObservableObject
 {
-    private ObservableCollection<TaskItem> _tasks;
     public ObservableCollection<TaskItem> Tasks
     {
-        get => _tasks;
-        set => SetProperty(ref _tasks, value);
-    }
+        get;
+
+        set => SetProperty(ref field, value);
+    } = [];
 
     private Timer? _debounceTaskSaveTimer; // Renamed for clarity
     private Timer? _debounceProgressSaveTimer;
@@ -10393,14 +10665,14 @@ public sealed partial class MainViewModel : ObservableObject
     private readonly RepeatingTaskService _repeatingTaskService;
 
     [ObservableProperty]
-    private double taskProgress;
+    private double taskProgress = 0;
 
     [ObservableProperty]
-    private Color taskProgressColor;
+    private Color taskProgressColor = Color.FromRgba(0, 255, 0, 1);
 
     public MainViewModel(TaskPersistenceService taskPersistenceService, RepeatingTaskService repeatingTaskService, TaskVisualStateService taskVisualStateService)
     {
-        _tasks = new();
+        Tasks = [];
         _taskPersistenceService = taskPersistenceService; // Injected
         _repeatingTaskService = repeatingTaskService;     // Injected
         _taskVisualStateService = taskVisualStateService; // Injected
@@ -10410,7 +10682,7 @@ public sealed partial class MainViewModel : ObservableObject
         WeakReferenceMessenger.Default.Register<AddTaskMessage>(this, (recipient, message) => HandleAddTask(message.Value));
         WeakReferenceMessenger.Default.Register<UpdateTaskMessage>(this, (recipient, message) => HandleUpdateTask(message.Value));
         WeakReferenceMessenger.Default.Register<DeleteTaskMessage>(this, (recipient, message) => HandleDeleteTask(message.Value));
-        WeakReferenceMessenger.Default.Register<CalendarSettingChangedMessage>(this, async (recipient, message) => await HandleCalendarSettingChanged());
+        WeakReferenceMessenger.Default.Register<CalendarSettingsChangedMessage>(this, async (recipient, message) => await HandleCalendarSettingChanged());
         WeakReferenceMessenger.Default.Register<TasksReloadRequestedMessage>(this, async (recipient, message) => await HandleTasksReloadRequested());
 
         UpdateUiVisualState();
@@ -10424,7 +10696,10 @@ public sealed partial class MainViewModel : ObservableObject
             Dictionary<string, object> navigationParameter = new() { { "TaskToEdit", null! } };
             await Shell.Current.GoToAsync(nameof(AddTaskPopupPage), true, navigationParameter);
         }
-        catch (Exception exception) { Debug.WriteLine($"Error navigating to add page: {exception.Message}"); }
+        catch (Exception exception) 
+        { 
+            Debug.WriteLine($"Error navigating to add page: {exception.Message}"); 
+        }
     }
 
     [RelayCommand]
@@ -10437,37 +10712,45 @@ public sealed partial class MainViewModel : ObservableObject
             Dictionary<string, object> navigationParameter = new() { { "TaskToEdit", taskToEdit } };
             await Shell.Current.GoToAsync(nameof(AddTaskPopupPage), true, navigationParameter);
         }
-        catch (Exception exception) { Debug.WriteLine($"Error navigating to edit page for task {taskToEdit.Id}: {exception.Message}"); }
+        catch (Exception exception)
+        {
+            Debug.WriteLine($"Error navigating to edit page for task {taskToEdit.Id}: {exception.Message}");
+        }
     }
 
     [RelayCommand]
     private async Task LoadTasksAsync()
     {
         Debug.WriteLine($"MainViewModel.LoadTasksAsync: Requesting tasks from persistence service.");
+        
         bool wasSubscribed = false;
         bool changesMade = false;
         List<TaskItem> loadedTasks = [];
 
         try
         {
-            if (Tasks != null) { Tasks.CollectionChanged -= Tasks_CollectionChanged; wasSubscribed = true; }
+            if (Tasks is not null) 
+            { 
+                Tasks.CollectionChanged -= Tasks_CollectionChanged; wasSubscribed = true;
+            }
 
             loadedTasks = await _taskPersistenceService.LoadTasksAsync();
             Debug.WriteLine($"MainViewModel.LoadTasksAsync: Received {loadedTasks.Count} tasks from service.");
 
-            DateTime today = DateTime.Today;
+            var today = DateTime.Today;
+
             foreach (TaskItem task in loadedTasks)
             {
-                // Delegate repeating task date check to the service
                 if (_repeatingTaskService.EnsureCorrectDueDateOnLoad(task, today))
                 {
                     changesMade = true;
                 }
+
                 task.IsFadingOut = false;
                 task.PositionColor = Colors.Transparent;
             }
 
-            List<TaskItem> tasksToAdd = loadedTasks.OrderBy(task => task.Order).ToList();
+            List<TaskItem> tasksToAdd = [.. loadedTasks.OrderBy(task => task.Order)];
 
             await MainThread.InvokeOnMainThreadAsync(() =>
             {
@@ -10486,6 +10769,7 @@ public sealed partial class MainViewModel : ObservableObject
         catch (Exception exception)
         {
             Debug.WriteLine($"MainViewModel.LoadTasksAsync: Error during loading/processing: {exception.GetType().Name} - {exception.Message}");
+            
             await MainThread.InvokeOnMainThreadAsync(() =>
             {
                 Tasks.Clear();
@@ -10494,8 +10778,19 @@ public sealed partial class MainViewModel : ObservableObject
         }
         finally
         {
-            if (Tasks != null && (wasSubscribed || Tasks.Any())) { Tasks.CollectionChanged -= Tasks_CollectionChanged; Tasks.CollectionChanged += Tasks_CollectionChanged; }
-            else if (Tasks != null) { Tasks.CollectionChanged += Tasks_CollectionChanged; }
+            if (Tasks == null || !wasSubscribed && !Tasks.Any())
+            {
+                if (Tasks != null)
+                { 
+                    Tasks.CollectionChanged += Tasks_CollectionChanged;
+                }
+            }
+            else
+            { 
+                Tasks.CollectionChanged -= Tasks_CollectionChanged;
+                Tasks.CollectionChanged += Tasks_CollectionChanged;
+            }
+
             Debug.WriteLine("MainViewModel.LoadTasksAsync: Finished.");
         }
     }
@@ -10505,7 +10800,10 @@ public sealed partial class MainViewModel : ObservableObject
     [RelayCommand]
     private async Task MarkTaskDone(TaskItem? task)
     {
-        if (task is null || task.IsFadingOut) return;
+        if (task is null || task.IsFadingOut)
+        {
+            return;
+        }
 
         if (task.TimeType == TaskTimeType.None || task.TimeType == TaskTimeType.SpecificDate)
         {
@@ -10513,6 +10811,7 @@ public sealed partial class MainViewModel : ObservableObject
             task.IsFadingOut = true;
             await Task.Delay(350);
             bool removedSuccessfully = false;
+
             await MainThread.InvokeOnMainThreadAsync(() =>
             {
                 removedSuccessfully = Tasks.Remove(task);
@@ -10536,10 +10835,10 @@ public sealed partial class MainViewModel : ObservableObject
             }
             else
             {
-                // If the service indicates the date couldn't be updated (e.g., error or no next date), remove the task
                 task.IsFadingOut = true;
                 await Task.Delay(350);
                 bool removedSuccessfully = false;
+
                 await MainThread.InvokeOnMainThreadAsync(() =>
                 {
                     removedSuccessfully = Tasks.Remove(task);
@@ -10553,7 +10852,6 @@ public sealed partial class MainViewModel : ObservableObject
     [RelayCommand]
     private async Task ResetDailyTask(TaskItem? task)
     {
-        // Delegate reset logic to the service
         bool resetSuccessful = _repeatingTaskService.ResetDailyTaskDueDate(task);
 
         if (resetSuccessful)
@@ -10570,15 +10868,22 @@ public sealed partial class MainViewModel : ObservableObject
         }
     }
 
-    private async Task HandleCalendarSettingChanged() { await LoadTasksAsync(); }
+    private async Task HandleCalendarSettingChanged()
+    {
+        await LoadTasksAsync();
+    }
 
     private async void HandleAddTask(TaskItem? newTask)
     {
-        if (newTask is null) return;
+        if (newTask is null)
+        {
+            return;
+        }
 
         await MainThread.InvokeOnMainThreadAsync(() =>
         {
             newTask.Order = Tasks.Count; // Assign order before adding
+
             Tasks.Add(newTask);
             UpdateUiVisualState(); // Update UI after adding
             TriggerSave();
@@ -10587,35 +10892,47 @@ public sealed partial class MainViewModel : ObservableObject
 
     private async void HandleUpdateTask(TaskItem? updatedTask)
     {
-        if (updatedTask is null) return;
+        if (updatedTask is null)
+        {
+            return;
+        }
 
         await MainThread.InvokeOnMainThreadAsync(() =>
         {
             int index = Tasks.ToList().FindIndex(task => task.Id == updatedTask.Id);
+            
             if (index != -1)
             {
                 // Preserve original order and index during update
                 updatedTask.Order = Tasks[index].Order;
                 updatedTask.Index = index;
                 Tasks[index] = updatedTask; // Replace item in the collection
+
                 UpdateUiVisualState(); // Update UI after replace
                 TriggerSave();
             }
-            else Debug.WriteLine($"HandleUpdateTask: Task with ID {updatedTask.Id} not found.");
+            else
+            {
+                Debug.WriteLine($"HandleUpdateTask: Task with ID {updatedTask.Id} not found.");
+            }
         });
     }
 
     private async void HandleDeleteTask(Guid taskId)
     {
         bool removedSuccessfully = false;
+
         await MainThread.InvokeOnMainThreadAsync(() =>
         {
             TaskItem? taskToRemove = Tasks.FirstOrDefault(task => task.Id == taskId);
-            if (taskToRemove is not null)
+            
+            if (taskToRemove is null)
             {
-                removedSuccessfully = Tasks.Remove(taskToRemove);
-                if (removedSuccessfully) { UpdateUiVisualState(); TriggerSave(); }
+                return;
             }
+
+            removedSuccessfully = Tasks.Remove(taskToRemove);
+            if (removedSuccessfully) { UpdateUiVisualState(); TriggerSave(); }
         });
     }
 
@@ -10624,10 +10941,12 @@ public sealed partial class MainViewModel : ObservableObject
         // Always update UI state on any change
         UpdateUiVisualState();
         // Only trigger save specifically on Move, as Add/Remove/Replace are handled by their respective message handlers/commands
-        if (eventArgs.Action == NotifyCollectionChangedAction.Move)
+        if (eventArgs.Action != NotifyCollectionChangedAction.Move)
         {
-            TriggerSave();
+            return;
         }
+
+        TriggerSave();
     }
 
     private void UpdateUiVisualState()
@@ -10639,7 +10958,7 @@ public sealed partial class MainViewModel : ObservableObject
         }
 
         _taskVisualStateService.UpdateTaskIndicesAndColors(Tasks);
-        var progressResult = _taskVisualStateService.CalculateProgress(Tasks);
+        TaskProgressResult progressResult = _taskVisualStateService.CalculateProgress(Tasks);
         TaskProgress = progressResult.Progress;
         TaskProgressColor = progressResult.ProgressColor;
 
@@ -10651,10 +10970,12 @@ public sealed partial class MainViewModel : ObservableObject
     {
         Debug.WriteLine("MainViewModel.SaveTasks: Delegating save to TaskPersistenceService.");
         List<TaskItem> currentTasks = [];
+
         await MainThread.InvokeOnMainThreadAsync(() =>
         {
             currentTasks = new List<TaskItem>(Tasks);
         });
+
         await _taskPersistenceService.SaveTasksAsync(currentTasks);
         Debug.WriteLine("MainViewModel.SaveTasks: Save delegation completed.");
     }
@@ -10662,37 +10983,48 @@ public sealed partial class MainViewModel : ObservableObject
     private void TriggerSave()
     {
         _debounceTaskSaveTimer?.Dispose();
-        _debounceTaskSaveTimer = new Timer(async (state) => { await SaveTasks(); _debounceTaskSaveTimer?.Dispose(); _debounceTaskSaveTimer = null; }, null, TimeSpan.FromMilliseconds(500), Timeout.InfiniteTimeSpan);
+        _debounceTaskSaveTimer = new(async (state) => 
+        { 
+            await SaveTasks(); 
+            _debounceTaskSaveTimer?.Dispose(); 
+            _debounceTaskSaveTimer = null; 
+        }, 
+        null,
+        TimeSpan.FromMilliseconds(500),
+        Timeout.InfiniteTimeSpan);
     }
 
     private async Task SaveCurrentDayProgressAsync()
     {
-        if (_taskPersistenceService != null)
-        {
-            // Ensure we are using the Date part only for consistency.
-            DateTime todayDate = DateTime.Today;
-            double currentProgress = TaskProgress; // Capture current progress
-
-            Debug.WriteLine($"MainViewModel.SaveCurrentDayProgressAsync: Saving progress for {todayDate:yyyy-MM-dd} - {currentProgress:P2}");
-            var progressEntry = new DailyProgress(todayDate, currentProgress);
-            await _taskPersistenceService.AddDailyProgressEntryAsync(progressEntry);
-            Debug.WriteLine($"MainViewModel.SaveCurrentDayProgressAsync: Progress for {todayDate:yyyy-MM-dd} saved/updated.");
-        }
-        else
+        if (_taskPersistenceService is null)
         {
             Debug.WriteLine("MainViewModel.SaveCurrentDayProgressAsync: TaskPersistenceService is null. Cannot save progress.");
+            return;
         }
+
+        DateTime todayDate = DateTime.Today;
+        double currentProgress = TaskProgress; // Capture current progress
+
+        Debug.WriteLine($"MainViewModel.SaveCurrentDayProgressAsync: Saving progress for {todayDate:yyyy-MM-dd} - {currentProgress:P2}");
+
+        DailyProgress progressEntry = new(todayDate, currentProgress);
+        await _taskPersistenceService.AddDailyProgressEntryAsync(progressEntry);
+
+        Debug.WriteLine($"MainViewModel.SaveCurrentDayProgressAsync: Progress for {todayDate:yyyy-MM-dd} saved/updated.");
     }
 
     private void TriggerSaveDailyProgress()
     {
         _debounceProgressSaveTimer?.Dispose();
-        _debounceProgressSaveTimer = new Timer(async (state) =>
+        _debounceProgressSaveTimer = new(async (state) =>
         {
             await SaveCurrentDayProgressAsync();
             _debounceProgressSaveTimer?.Dispose();
             _debounceProgressSaveTimer = null;
-        }, null, TimeSpan.FromMilliseconds(1000), Timeout.InfiniteTimeSpan); // Slightly longer debounce for progress
+        },
+        null,
+        TimeSpan.FromMilliseconds(1000),
+        Timeout.InfiniteTimeSpan); // Slightly longer debounce for progress
     }
 
     public async Task FinalizeAndSaveProgressAsync()
@@ -10720,7 +11052,7 @@ using System.Text.Json;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
-using Microsoft.Maui.ApplicationModel.DataTransfer;
+using Microsoft.Maui.ApplicationModel.DataTransfer; // Keep for Share
 using Microsoft.Maui.Controls;
 using Tickly.Messages;
 using Tickly.Models;
@@ -10737,8 +11069,12 @@ public sealed partial class SettingsViewModel : ObservableObject
     private bool _isPersianSelected;
     private bool _isPitchBlackSelected;
     private bool _isDarkGraySelected;
-    private readonly string _applicationTasksFilePath;
-    private const string TaskExportFilePrefix = "Tickly-Tasks-Export-";
+    private bool _isNordSelected;
+    private bool _isLightSelected; // Added Light property
+    // _applicationTasksFilePath is not directly used by the new import/export commands as path handling is in TaskPersistenceService
+    // private readonly string _applicationTasksFilePath; 
+    private const string OldTaskExportFilePrefix = "Tickly-Tasks-Export-"; // For cleaning up old specific task exports
+    private const string NewDataExportFilePrefix = "Tickly_"; // For cleaning up new data bundle exports from cache
 
     public bool IsGregorianSelected
     {
@@ -10771,7 +11107,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         {
             if (SetProperty(ref _isPitchBlackSelected, value) && value)
             {
-                OnThemeSelectionChanged(true);
+                OnThemeSelectionChanged(ThemeType.PitchBlack);
             }
         }
     }
@@ -10783,16 +11119,41 @@ public sealed partial class SettingsViewModel : ObservableObject
         {
             if (SetProperty(ref _isDarkGraySelected, value) && value)
             {
-                OnThemeSelectionChanged(false);
+                OnThemeSelectionChanged(ThemeType.DarkGray);
             }
         }
     }
 
+    public bool IsNordSelected
+    {
+        get => _isNordSelected;
+        set
+        {
+            if (SetProperty(ref _isNordSelected, value) && value)
+            {
+                OnThemeSelectionChanged(ThemeType.Nord);
+            }
+        }
+    }
+
+    public bool IsLightSelected // Added Light property
+    {
+        get => _isLightSelected;
+        set
+        {
+            if (SetProperty(ref _isLightSelected, value) && value)
+            {
+                OnThemeSelectionChanged(ThemeType.Light);
+            }
+        }
+    }
+
+
     public SettingsViewModel(TaskPersistenceService taskPersistenceService)
     {
         _taskPersistenceService = taskPersistenceService;
-        _applicationTasksFilePath = Path.Combine(FileSystem.AppDataDirectory, "tasks.json");
-        Debug.WriteLine($"SettingsViewModel: Tasks file path is set to: {_applicationTasksFilePath}");
+        // _applicationTasksFilePath = Path.Combine(FileSystem.AppDataDirectory, "tasks.json"); // No longer directly needed here
+        // Debug.WriteLine($"SettingsViewModel: Tasks file path is set to: {_applicationTasksFilePath}");
 
         LoadSettings();
     }
@@ -10820,20 +11181,18 @@ public sealed partial class SettingsViewModel : ObservableObject
 
         AppSettings.SelectedCalendarSystem = newSystem;
         Preferences.Set(AppSettings.CalendarSystemKey, (int)newSystem);
-        WeakReferenceMessenger.Default.Send(new CalendarSettingChangedMessage());
+        WeakReferenceMessenger.Default.Send(new CalendarSettingsChangedMessage(newSystem)); // Corrected message name and passed value
     }
 
-    private void OnThemeSelectionChanged(bool isPitchBlackNowSelected)
+    private void OnThemeSelectionChanged(ThemeType selectedTheme)
     {
-        if (isPitchBlackNowSelected)
+        if (AppSettings.SelectedTheme != selectedTheme)
         {
-            SetProperty(ref _isDarkGraySelected, false, nameof(IsDarkGraySelected));
-            UpdateThemeSetting(ThemeType.PitchBlack);
-        }
-        else
-        {
-            SetProperty(ref _isPitchBlackSelected, false, nameof(IsPitchBlackSelected));
-            UpdateThemeSetting(ThemeType.DarkGray);
+            SetProperty(ref _isPitchBlackSelected, selectedTheme == ThemeType.PitchBlack, nameof(IsPitchBlackSelected));
+            SetProperty(ref _isDarkGraySelected, selectedTheme == ThemeType.DarkGray, nameof(IsDarkGraySelected));
+            SetProperty(ref _isNordSelected, selectedTheme == ThemeType.Nord, nameof(IsNordSelected));
+            SetProperty(ref _isLightSelected, selectedTheme == ThemeType.Light, nameof(IsLightSelected)); // Update Light flag
+            UpdateThemeSetting(selectedTheme);
         }
     }
 
@@ -10851,6 +11210,7 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     private void LoadSettings()
     {
+        // Load Calendar Setting
         CalendarSystemType currentSystem = AppSettings.SelectedCalendarSystem;
         bool shouldBeGregorian = currentSystem == CalendarSystemType.Gregorian;
         bool shouldBePersian = currentSystem == CalendarSystemType.Persian;
@@ -10858,79 +11218,70 @@ public sealed partial class SettingsViewModel : ObservableObject
         SetProperty(ref _isPersianSelected, shouldBePersian, nameof(IsPersianSelected));
         if (!_isGregorianSelected && !_isPersianSelected)
         {
-            SetProperty(ref _isGregorianSelected, true, nameof(IsGregorianSelected));
+            SetProperty(ref _isGregorianSelected, true, nameof(IsGregorianSelected)); // Default if unset
             AppSettings.SelectedCalendarSystem = CalendarSystemType.Gregorian;
             Preferences.Set(AppSettings.CalendarSystemKey, (int)CalendarSystemType.Gregorian);
         }
 
+        // Load Theme Setting
         ThemeType currentTheme = AppSettings.SelectedTheme;
         bool shouldBePitchBlack = currentTheme == ThemeType.PitchBlack;
         bool shouldBeDarkGray = currentTheme == ThemeType.DarkGray;
+        bool shouldBeNord = currentTheme == ThemeType.Nord;
+        bool shouldBeLight = currentTheme == ThemeType.Light;
         SetProperty(ref _isPitchBlackSelected, shouldBePitchBlack, nameof(IsPitchBlackSelected));
         SetProperty(ref _isDarkGraySelected, shouldBeDarkGray, nameof(IsDarkGraySelected));
-        if (!_isPitchBlackSelected && !_isDarkGraySelected)
+        SetProperty(ref _isNordSelected, shouldBeNord, nameof(IsNordSelected));
+        SetProperty(ref _isLightSelected, shouldBeLight, nameof(IsLightSelected));
+
+        // Default theme if no preference is found (respect system theme first)
+        if (!Preferences.ContainsKey(AppSettings.ThemePreferenceKey))
         {
-            SetProperty(ref _isPitchBlackSelected, true, nameof(IsPitchBlackSelected));
-            AppSettings.SelectedTheme = ThemeType.PitchBlack;
-            Preferences.Set(AppSettings.ThemePreferenceKey, (int)ThemeType.PitchBlack);
+            AppTheme systemTheme = Application.Current?.RequestedTheme ?? AppTheme.Dark;
+            ThemeType defaultTheme = systemTheme == AppTheme.Light ? ThemeType.Light : ThemeType.PitchBlack;
+            OnThemeSelectionChanged(defaultTheme); // Set the default based on system
+                                                   // Don't save preference here, let the user explicitly choose first
+            Debug.WriteLine($"LoadSettings: No theme preference found. Defaulting based on system theme to: {defaultTheme}");
+        }
+        else if (!_isPitchBlackSelected && !_isDarkGraySelected && !_isNordSelected && !_isLightSelected)
+        {
+            // Fallback if preference exists but somehow doesn't match any known enum value
+            AppTheme systemTheme = Application.Current?.RequestedTheme ?? AppTheme.Dark;
+            ThemeType fallbackTheme = systemTheme == AppTheme.Light ? ThemeType.Light : ThemeType.PitchBlack;
+            OnThemeSelectionChanged(fallbackTheme);
+            Debug.WriteLine($"LoadSettings: Invalid theme preference found. Falling back based on system theme to: {fallbackTheme}");
         }
     }
 
     [RelayCommand]
-    private async Task ExportTasksAsync()
+    private async Task ExportDataAsync() // Renamed from ExportTasksAsync
     {
-        string temporaryExportPath = string.Empty;
-        Debug.WriteLine("ExportTasksAsync: Starting task export process.");
-
+        Debug.WriteLine("SettingsViewModel.ExportDataAsync: Starting data export process.");
         try
         {
-            Debug.WriteLine($"ExportTasksAsync: Checking existence of source file: {_applicationTasksFilePath}");
-            if (!File.Exists(_applicationTasksFilePath))
+            // Clean up old export files from cache (both old task-only and new data bundle types)
+            CleanUpOldExportFiles(OldTaskExportFilePrefix, ".json"); 
+            CleanUpOldExportFiles(NewDataExportFilePrefix, ".json");
+
+            bool success = await _taskPersistenceService.ExportDataAsync();
+
+            if (success)
             {
-                Debug.WriteLine("ExportTasksAsync: Source tasks file does not exist.");
-                await SettingsViewModel.ShowAlertAsync("Export Failed", "No tasks file exists to export.", "OK");
-                return;
+                Debug.WriteLine("SettingsViewModel.ExportDataAsync: ExportDataAsync from service reported success.");
+                // The service now handles the Share dialog. We might show a confirmation here if needed,
+                // but the service's debug logs should indicate the share request was initiated.
+                // await ShowAlertAsync("Export Initiated", "Your Tickly data (tasks, settings, progress) is being prepared for sharing.", "OK");
             }
-            Debug.WriteLine("ExportTasksAsync: Source tasks file found.");
-
-            CleanUpOldExportFiles(TaskExportFilePrefix, ".json");
-
-            LogFileInfo(_applicationTasksFilePath, "Source Task");
-
-            string exportFilename = $"{TaskExportFilePrefix}{DateTime.Now:yyyy-MM-dd_HH-mm-ss}.json";
-            temporaryExportPath = Path.Combine(FileSystem.CacheDirectory, exportFilename);
-            Debug.WriteLine($"ExportTasksAsync: Temporary task export path set to: {temporaryExportPath}");
-
-            EnsureDirectoryExists(temporaryExportPath);
-
-            Debug.WriteLine($"ExportTasksAsync: Attempting to copy task file from '{_applicationTasksFilePath}' to '{temporaryExportPath}'");
-            File.Copy(_applicationTasksFilePath, temporaryExportPath, true);
-            Debug.WriteLine("ExportTasksAsync: Task file copy successful.");
-
-            if (!File.Exists(temporaryExportPath))
+            else
             {
-                Debug.WriteLine($"ExportTasksAsync: ERROR - Temporary task file does not exist after copy attempt: {temporaryExportPath}");
-                await SettingsViewModel.ShowAlertAsync("Export Error", "Failed to create temporary export file.", "OK");
-                return;
+                Debug.WriteLine("SettingsViewModel.ExportDataAsync: ExportDataAsync from service reported failure or cancellation.");
+                await ShowAlertAsync("Export Failed", "Could not export Tickly data. The operation may have been cancelled or an error occurred.", "OK");
             }
-            LogFileInfo(temporaryExportPath, "Temporary Task");
-
-            ShareFileRequest request = new()
-            {
-                Title = "Export Tickly Tasks",
-                File = new ShareFile(temporaryExportPath, "application/json")
-            };
-            Debug.WriteLine("ExportTasksAsync: ShareFileRequest created for tasks. Title: " + request.Title + ", File Path: " + request.File.FullPath);
-
-            Debug.WriteLine("ExportTasksAsync: Calling Share.RequestAsync for tasks...");
-            await Share.RequestAsync(request);
-            Debug.WriteLine("ExportTasksAsync: Share.RequestAsync for tasks completed.");
-
         }
-        catch (Exception exception)
+        catch (Exception ex)
         {
-            Debug.WriteLine($"ExportTasksAsync: Exception caught: {exception.GetType().Name} - {exception.Message}\nStackTrace: {exception.StackTrace}");
-            await SettingsViewModel.ShowAlertAsync("Export Error", $"An error occurred during task export: {exception.Message}", "OK");
+            Debug.WriteLine($"SettingsViewModel.ExportDataAsync: Exception caught: {ex.GetType().Name} - {ex.Message}\nStackTrace: {ex.StackTrace}");
+            await ShowAlertAsync("Export Error", $"An error occurred during data export: {ex.Message}", "OK");
         }
     }
 
@@ -11007,100 +11358,43 @@ public sealed partial class SettingsViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private async Task ImportTasksAsync()
+    private async Task ImportDataAsync() // Renamed from ImportTasksAsync
     {
+        Debug.WriteLine("SettingsViewModel.ImportDataAsync: Starting data import process.");
         try
         {
-            FilePickerFileType customFileType = new(
-                new Dictionary<DevicePlatform, IEnumerable<string>>
-                {
-                    [DevicePlatform.iOS] = ["public.json", "public.text"],
-                    [DevicePlatform.Android] = ["application/json", "text/plain"],
-                    [DevicePlatform.WinUI] = [".json", ".txt"],
-                    [DevicePlatform.MacCatalyst] = ["json", "txt"]
-                });
-
-            PickOptions options = new()
-            {
-                PickerTitle = "Select Tickly tasks JSON file",
-                FileTypes = customFileType,
-            };
-
-            Debug.WriteLine("ImportTasksAsync: Calling FilePicker.PickAsync...");
-            FileResult? result = await FilePicker.PickAsync(options);
-
-            if (result is null)
-            {
-                Debug.WriteLine("ImportTasksAsync: FilePicker returned null (user cancelled?).");
-                return;
-            }
-
-            Debug.WriteLine($"ImportTasksAsync: File picked: {result.FileName} ({result.FullPath})");
-            string fileContent;
-
-            try
-            {
-                Debug.WriteLine($"ImportTasksAsync: Reading file content from: {result.FullPath}");
-                using var stream = await result.OpenReadAsync();
-                using var reader = new StreamReader(stream);
-                fileContent = await reader.ReadToEndAsync();
-
-                Debug.WriteLine($"ImportTasksAsync: File content read successfully ({fileContent.Length} chars). Validating JSON...");
-                if (string.IsNullOrWhiteSpace(fileContent))
-                {
-                    throw new JsonException("Imported file content is empty or whitespace.");
-                }
-
-                var validationList = JsonSerializer.Deserialize<List<TaskItem>>(fileContent);
-                if (validationList == null)
-                {
-                    throw new JsonException("Deserialization resulted in null list.");
-                }
-                Debug.WriteLine($"ImportTasksAsync: JSON validation successful ({validationList.Count} tasks potentially found).");
-            }
-            catch (JsonException jsonException)
-            {
-                Debug.WriteLine($"ImportTasksAsync: Invalid JSON format during import validation: {jsonException.Message}");
-                await SettingsViewModel.ShowAlertAsync("Import Failed", "The selected file does not contain valid Tickly task data.", "OK");
-                return;
-            }
-            catch (Exception readException)
-            {
-                Debug.WriteLine($"ImportTasksAsync: Error reading selected file: {readException.GetType().Name} - {readException.Message}");
-                await SettingsViewModel.ShowAlertAsync("Import Failed", $"Could not read the selected file: {readException.Message}", "OK");
-                return;
-            }
-
+            // Confirmation before even picking the file, as it's a destructive operation.
             bool confirmed = await ShowConfirmationAsync(
                 "Confirm Import",
-                "This will REPLACE your current tasks with the content of the selected file. This cannot be undone. Proceed?",
-                "Replace",
+                "This will REPLACE your current tasks, settings, and progress with the content of the selected file. This cannot be undone. Proceed?",
+                "Replace All Data",
                 "Cancel");
 
             if (!confirmed)
             {
-                Debug.WriteLine("ImportTasksAsync: User cancelled confirmation.");
+                Debug.WriteLine("SettingsViewModel.ImportDataAsync: User cancelled confirmation before file picking.");
                 return;
             }
 
-            try
+            bool success = await _taskPersistenceService.ImportDataAsync();
+
+            if (success)
             {
-                Debug.WriteLine($"ImportTasksAsync: Writing imported content to '{_applicationTasksFilePath}'");
-                await File.WriteAllTextAsync(_applicationTasksFilePath, fileContent);
-                Debug.WriteLine("ImportTasksAsync: File write successful. Sending reload message.");
-                WeakReferenceMessenger.Default.Send(new TasksReloadRequestedMessage());
-                await ShowAlertAsync("Import Successful", "Tasks imported successfully. The task list has been updated.", "OK");
+                Debug.WriteLine("SettingsViewModel.ImportDataAsync: ImportDataAsync from service reported success.");
+                await ShowAlertAsync("Import Successful", "Tickly data (tasks, settings, progress) imported successfully. The application will reflect the changes.", "OK");
+                // Need to reload settings in this ViewModel to reflect imported changes
+                LoadSettings(); 
             }
-            catch (Exception writeException)
+            else
             {
-                Debug.WriteLine($"ImportTasksAsync: Error writing imported file: {writeException.GetType().Name} - {writeException.Message}");
-                await ShowAlertAsync("Import Failed", $"Could not replace the tasks file: {writeException.Message}", "OK");
+                Debug.WriteLine("SettingsViewModel.ImportDataAsync: ImportDataAsync from service reported failure or cancellation.");
+                await ShowAlertAsync("Import Failed", "Could not import Tickly data. The file might be invalid, the operation cancelled, or an error occurred.", "OK");
             }
         }
-        catch (Exception exception)
+        catch (Exception ex)
         {
-            Debug.WriteLine($"ImportTasksAsync: General error during import: {exception.GetType().Name} - {exception.Message}\nStackTrace: {exception.StackTrace}");
-            await ShowAlertAsync("Import Error", $"An unexpected error occurred during import: {exception.Message}", "OK");
+            Debug.WriteLine($"SettingsViewModel.ImportDataAsync: Exception caught: {ex.GetType().Name} - {ex.Message}\nStackTrace: {ex.StackTrace}");
+            await ShowAlertAsync("Import Error", $"An unexpected error occurred during data import: {ex.Message}", "OK");
         }
     }
 
@@ -11598,17 +11892,51 @@ public class TasksReloadRequestedMessage : ValueChangedMessage<bool>
              xmlns:vm="clr-namespace:Tickly.Views"
              x:Class="Tickly.Views.AddTaskPopupPage"
              x:DataType="vm:AddTaskPopupPageViewModel"
-             BackgroundColor="Black"
+             BackgroundColor="{DynamicResource AppBackgroundColor}"
              Title="{Binding PageTitle}">
 
     <ContentPage.Resources>
         <ResourceDictionary>
             <converters:InverseBooleanConverter x:Key="InverseBooleanConverter" />
             <Style TargetType="Entry" x:Key="MinimalEntry">
-                <Setter Property="TextColor" Value="White" />
-                <Setter Property="PlaceholderColor" Value="Gray" />
+                <Setter Property="TextColor" Value="{DynamicResource AppForegroundColor}" />
+                <Setter Property="PlaceholderColor" Value="{DynamicResource AppSecondaryTextColor}" />
                 <Setter Property="BackgroundColor" Value="Transparent" />
                 <Setter Property="Margin" Value="0,0,0,5" />
+            </Style>
+            <Style TargetType="Label" x:Key="SettingsLabelStyle" BasedOn="{StaticResource BaseLabelStyle}">
+                <Setter Property="TextColor" Value="{DynamicResource AppForegroundColor}"/>
+                <Setter Property="Margin" Value="0,0,0,2"/>
+            </Style>
+            <Style TargetType="RadioButton" BasedOn="{StaticResource BaseStyle}">
+                <Setter Property="TextColor" Value="{DynamicResource AppForegroundColor}" />
+                <Setter Property="BackgroundColor" Value="Transparent"/>
+            </Style>
+            <Style TargetType="DatePicker" BasedOn="{StaticResource BaseStyle}">
+                <Setter Property="TextColor" Value="{DynamicResource AppForegroundColor}" />
+                <Setter Property="BackgroundColor" Value="{DynamicResource AppSurfaceColor}" />
+                <Setter Property="Margin" Value="20,0,0,0"/>
+            </Style>
+            <Style TargetType="Picker" BasedOn="{StaticResource BaseStyle}">
+                <Setter Property="TextColor" Value="{DynamicResource AppForegroundColor}" />
+                <Setter Property="TitleColor" Value="{DynamicResource AppSecondaryTextColor}"/>
+                <Setter Property="BackgroundColor" Value="{DynamicResource AppSurfaceColor}" />
+                <Setter Property="WidthRequest" Value="150"/>
+            </Style>
+            <Style x:Key="DeleteButton" TargetType="Button" BasedOn="{StaticResource BaseStyle}">
+                <Setter Property="BackgroundColor" Value="{StaticResource NordAurora0}" />
+                <Setter Property="TextColor" Value="{DynamicResource NordPolarNight0}" />
+                <Setter Property="HorizontalOptions" Value="Start"/>
+            </Style>
+            <Style x:Key="CancelButton" TargetType="Button" BasedOn="{StaticResource BaseStyle}">
+                <Setter Property="BackgroundColor" Value="{DynamicResource AppSurfaceColor}" />
+                <Setter Property="TextColor" Value="{DynamicResource AppForegroundColor}" />
+                <Setter Property="HorizontalOptions" Value="End"/>
+            </Style>
+            <Style x:Key="ConfirmButton" TargetType="Button" BasedOn="{StaticResource BaseStyle}">
+                <Setter Property="BackgroundColor" Value="{DynamicResource AppPrimaryActionBackgroundColor}" />
+                <Setter Property="TextColor" Value="{DynamicResource AppPrimaryActionForegroundColor}" />
+                <Setter Property="HorizontalOptions" Value="End"/>
             </Style>
         </ResourceDictionary>
     </ContentPage.Resources>
@@ -11617,56 +11945,39 @@ public class TasksReloadRequestedMessage : ValueChangedMessage<bool>
         <VerticalStackLayout Padding="20" Spacing="15">
 
             <!-- Task Title Input -->
-            <Label Text="Task Title" TextColor="WhiteSmoke"/>
+            <Label Text="Task Title" Style="{StaticResource SettingsLabelStyle}"/>
             <Entry x:Name="TitleEntry"
                    Placeholder="Enter task title"
                    Text="{Binding Title}"
                    Style="{StaticResource MinimalEntry}" />
 
-            <!-- REMOVED: Priority Selection -->
-            <!-- <Label Text="Priority" TextColor="WhiteSmoke"/> -->
-            <!-- <HorizontalStackLayout Spacing="10" BindableLayout.ItemsSource="{Binding PriorityOptions}"> -->
-            <!--     <BindableLayout.ItemTemplate> -->
-            <!--         <DataTemplate x:DataType="vm:SelectableOption(models:TaskPriority)"> -->
-            <!--             <RadioButton GroupName="PriorityGroup" -->
-            <!--                          IsChecked="{Binding IsSelected}" -->
-            <!--                          Content="{Binding Name}" -->
-            <!--                          TextColor="WhiteSmoke" /> -->
-            <!--         </DataTemplate> -->
-            <!--     </BindableLayout.ItemTemplate> -->
-            <!-- </HorizontalStackLayout> -->
-
             <!-- Time / Repetition Type Selection -->
-            <Label Text="Time / Repetition" TextColor="WhiteSmoke"/>
+            <Label Text="Time / Repetition" Style="{StaticResource SettingsLabelStyle}"/>
             <VerticalStackLayout Spacing="5">
-                <RadioButton GroupName="TimeTypeGroup" Content="None (Any time)" TextColor="WhiteSmoke"
+                <RadioButton GroupName="TimeTypeGroup" Content="None (Any time)"
                              IsChecked="{Binding IsTimeTypeNone}" />
-                <RadioButton GroupName="TimeTypeGroup" Content="Specific Date" TextColor="WhiteSmoke"
+                <RadioButton GroupName="TimeTypeGroup" Content="Specific Date"
                              IsChecked="{Binding IsTimeTypeSpecificDate}" />
-                <RadioButton GroupName="TimeTypeGroup" Content="Repeating" TextColor="WhiteSmoke"
+                <RadioButton GroupName="TimeTypeGroup" Content="Repeating"
                               IsChecked="{Binding IsTimeTypeRepeating}" />
             </VerticalStackLayout>
 
             <!-- Specific Date Picker (Visible only when SpecificDate is selected) -->
             <DatePicker x:Name="DueDatePicker"
                         Date="{Binding DueDate}"
-                        TextColor="WhiteSmoke"
-                        BackgroundColor="#1E1E1E"
-                        IsVisible="{Binding IsTimeTypeSpecificDate}"
-                        Margin="20,0,0,0" />
+                        IsVisible="{Binding IsTimeTypeSpecificDate}" />
 
             <!-- Repetition Options Section (Visible only when Repeating is selected) -->
             <VerticalStackLayout Spacing="10" Margin="20,5,0,0"
                                  IsVisible="{Binding IsTimeTypeRepeating}">
 
-                <Label Text="Repeat:" TextColor="LightGray"/>
+                <Label Text="Repeat:" Style="{StaticResource SettingsLabelStyle}" TextColor="{DynamicResource AppSecondaryTextColor}"/>
                 <HorizontalStackLayout Spacing="10" BindableLayout.ItemsSource="{Binding RepetitionTypeOptions}">
                     <BindableLayout.ItemTemplate>
                         <DataTemplate x:DataType="vm:SelectableOption(models:TaskRepetitionType)">
                             <RadioButton GroupName="RepetitionTypeGroup"
                                          IsChecked="{Binding IsSelected}"
-                                         Content="{Binding Name}"
-                                         TextColor="WhiteSmoke" />
+                                         Content="{Binding Name}" />
                         </DataTemplate>
                     </BindableLayout.ItemTemplate>
                 </HorizontalStackLayout>
@@ -11674,22 +11985,19 @@ public class TasksReloadRequestedMessage : ValueChangedMessage<bool>
                 <!-- Day of Week Picker (Visible only for Weekly repetition) -->
                 <StackLayout Orientation="Horizontal" Spacing="5" Margin="0,5,0,0"
                              IsVisible="{Binding IsWeeklySelected}">
-                    <Label Text="On:" VerticalOptions="Center" TextColor="LightGray"/>
+                    <Label Text="On:" VerticalOptions="Center" Style="{StaticResource SettingsLabelStyle}" TextColor="{DynamicResource AppSecondaryTextColor}"/>
                     <Picker x:Name="DayOfWeekPicker"
                             Title="Select Day"
-                            TextColor="WhiteSmoke"
-                            BackgroundColor="#1E1E1E"
                             ItemsSource="{Binding DisplayDaysOfWeek}"
-                            SelectedItem="{Binding SelectedDisplayDayOfWeek}"
-                            WidthRequest="150" />
+                            SelectedItem="{Binding SelectedDisplayDayOfWeek}" />
                 </StackLayout>
             </VerticalStackLayout>
 
             <!-- Action Buttons -->
             <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="10" Margin="0,20,0,0">
-                <Button Grid.Column="0" Text="Delete" Clicked="OnDeleteClicked" BackgroundColor="DarkRed" TextColor="White" IsVisible="{Binding IsEditMode}" HorizontalOptions="Start" />
-                <Button Grid.Column="2" Text="Cancel" Clicked="OnCancelClicked" BackgroundColor="#444444" TextColor="WhiteSmoke" HorizontalOptions="End" />
-                <Button Grid.Column="3" Text="{Binding ConfirmButtonText}" Clicked="OnConfirmClicked" BackgroundColor="{StaticResource Primary}" TextColor="Black" HorizontalOptions="End" />
+                <Button Grid.Column="0" Text="Delete" Clicked="OnDeleteClicked" IsVisible="{Binding IsEditMode}" Style="{StaticResource DeleteButton}" />
+                <Button Grid.Column="2" Text="Cancel" Clicked="OnCancelClicked" Style="{StaticResource CancelButton}" />
+                <Button Grid.Column="3" Text="{Binding ConfirmButtonText}" Clicked="OnConfirmClicked" Style="{StaticResource ConfirmButton}" />
             </Grid>
 
         </VerticalStackLayout>
@@ -12076,7 +12384,7 @@ public sealed class SettingsPage : ContentPage
                     new Label
                     {
                         Text = "Theme Settings",
-                        TextColor = Colors.WhiteSmoke,
+                        // Style = GetStyle("Headline"), // Use implicit style
                         FontSize = LargeFontSize,
                         FontAttributes = FontAttributes.Bold,
                         Margin = new(0, 0, 0, 10)
@@ -12084,8 +12392,14 @@ public sealed class SettingsPage : ContentPage
                     new Label
                     {
                         Text = "Choose the application theme:",
-                        Style = GetStyle("LightGrayLabel")
+                        Style = GetStyle("LightGrayLabel") // Keep explanatory text style consistent
                     },
+                    new RadioButton
+                    {
+                        GroupName = "ThemeGroup",
+                        Content = "Light" // Add Light option
+                    }
+                    .Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsLightSelected)),
                      new RadioButton
                     {
                         GroupName = "ThemeGroup",
@@ -12100,17 +12414,24 @@ public sealed class SettingsPage : ContentPage
                     }
                     .Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsDarkGraySelected)),
 
+                    new RadioButton
+                    {
+                        GroupName = "ThemeGroup",
+                        Content = "Nord"
+                    }
+                    .Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsNordSelected)),
+
                     new BoxView
                     {
                         HeightRequest = 1,
-                        BackgroundColor = Color.FromArgb("#333333"),
+                        BackgroundColor = Color.FromArgb("#333333"), // Use a dynamic separator?
                         Margin = new(0, 15, 0, 15)
                     },
 
                     new Label
                     {
                         Text = "Calendar Settings",
-                        TextColor = Colors.WhiteSmoke,
+                        // Style = GetStyle("Headline"), // Use implicit style
                         FontSize = LargeFontSize,
                         FontAttributes = FontAttributes.Bold,
                         Margin = new(0, 0, 0, 10)
@@ -12137,21 +12458,21 @@ public sealed class SettingsPage : ContentPage
                     new BoxView
                     {
                         HeightRequest = 1,
-                        BackgroundColor = Color.FromArgb("#333333"),
+                        BackgroundColor = Color.FromArgb("#333333"), // Use a dynamic separator?
                         Margin = new(0, 15, 0, 15)
                     },
 
                     new Label
                     {
                         Text = "Data Management",
-                        TextColor = Colors.WhiteSmoke,
+                        // Style = GetStyle("Headline"), // Use implicit style
                         FontSize = LargeFontSize,
                         FontAttributes = FontAttributes.Bold,
                         Margin = new(0, 0, 0, 10)
                     },
                     new Label
                     {
-                        Text = "Export your current tasks to a JSON file or import tasks from a previously exported file (this will replace current tasks).",
+                        Text = "Export your current data (tasks, settings, progress) to a JSON file, or import data from a previously exported file. Importing will replace all current tasks, settings, and progress.",
                         Style = GetStyle("LightGrayLabel"),
                         LineBreakMode = LineBreakMode.WordWrap
                     },
@@ -12163,19 +12484,19 @@ public sealed class SettingsPage : ContentPage
                         {
                             new Button
                             {
-                                Text = "Export Tasks",
-                                BackgroundColor = Color.FromArgb("#4A6FA5"),
+                                Text = "Export Data", // Changed text
+                                BackgroundColor = Color.FromArgb("#4A6FA5"), 
                                 TextColor = Colors.WhiteSmoke
                             }
-                            .BindCommand(nameof(SettingsViewModel.ExportTasksCommand)),
+                            .BindCommand(nameof(SettingsViewModel.ExportDataCommand)), // Changed command
 
                             new Button
                             {
-                                Text = "Import Tasks",
-                                BackgroundColor = Color.FromArgb("#5A9A78"),
+                                Text = "Import Data", // Changed text
+                                BackgroundColor = Color.FromArgb("#5A9A78"), 
                                 TextColor = Colors.WhiteSmoke
                             }
-                            .BindCommand(nameof(SettingsViewModel.ImportTasksCommand))
+                            .BindCommand(nameof(SettingsViewModel.ImportDataCommand)) // Changed command
                         }
                     }
                 }
@@ -12183,13 +12504,22 @@ public sealed class SettingsPage : ContentPage
         };
     }
 
+    // Helper to get styles safely
     private static Style GetStyle(string key)
     {
+        // Attempt to find the specific style
         if (Application.Current != null && Application.Current.Resources.TryGetValue(key, out var resource) && resource is Style style)
         {
             return style;
         }
 
+        // Fallback to the base Label style if the specific key isn't found
+        if (Application.Current != null && Application.Current.Resources.TryGetValue("BaseLabelStyle", out var baseResource) && baseResource is Style baseStyle)
+        {
+            return baseStyle;
+        }
+
+        // Absolute fallback if even BaseLabelStyle is missing
         return new Style(typeof(Label));
     }
 }

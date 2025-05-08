@@ -1,60 +1,56 @@
-﻿// File: Source/ViewModels/MainViewModel.cs
+﻿using System.Collections.ObjectModel;
+using System.Collections.Specialized;
+using System.Diagnostics;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
-using Microsoft.Maui.ApplicationModel;
-using Microsoft.Maui.Controls;
-using Microsoft.Maui.Graphics;
-using System;
-using System.Collections.Generic;
-using System.Collections.ObjectModel;
-using System.Collections.Specialized;
-using System.Diagnostics;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using Tickly.Messages;
 using Tickly.Models;
 using Tickly.Services;
-using Tickly.Utils; // Keep for non-repeating date utils if any, or general utils
 using Tickly.Views;
 
 namespace Tickly.ViewModels;
 
 public sealed partial class MainViewModel : ObservableObject
 {
-    private ObservableCollection<TaskItem> _tasks;
+    private ObservableCollection<TaskItem> _tasks = []; // Initialize directly
+
     public ObservableCollection<TaskItem> Tasks
     {
         get => _tasks;
         set => SetProperty(ref _tasks, value);
     }
 
-    private Timer? _debounceTaskSaveTimer; // Renamed for clarity
+    private Timer? _debounceTaskSaveTimer;
     private Timer? _debounceProgressSaveTimer;
     private readonly TaskVisualStateService _taskVisualStateService;
-    private readonly TaskPersistenceService _taskPersistenceService; // Will be injected
+    private readonly TaskStorageService _taskStorageService; // Changed
+    private readonly ProgressStorageService _progressStorageService; // Added
     private readonly RepeatingTaskService _repeatingTaskService;
 
     [ObservableProperty]
-    private double taskProgress;
+    private double taskProgress = 0;
 
     [ObservableProperty]
-    private Color taskProgressColor;
+    private Color taskProgressColor = Color.FromRgba(0, 255, 0, 1);
 
-    public MainViewModel(TaskPersistenceService taskPersistenceService, RepeatingTaskService repeatingTaskService, TaskVisualStateService taskVisualStateService)
+    public MainViewModel(
+        TaskStorageService taskStorageService,         // Changed
+        ProgressStorageService progressStorageService,   // Added
+        RepeatingTaskService repeatingTaskService,
+        TaskVisualStateService taskVisualStateService)
     {
-        _tasks = new();
-        _taskPersistenceService = taskPersistenceService; // Injected
-        _repeatingTaskService = repeatingTaskService;     // Injected
-        _taskVisualStateService = taskVisualStateService; // Injected
+        _taskStorageService = taskStorageService;       // Changed
+        _progressStorageService = progressStorageService; // Added
+        _repeatingTaskService = repeatingTaskService;
+        _taskVisualStateService = taskVisualStateService;
 
         _ = LoadTasksAsync();
 
         WeakReferenceMessenger.Default.Register<AddTaskMessage>(this, (recipient, message) => HandleAddTask(message.Value));
         WeakReferenceMessenger.Default.Register<UpdateTaskMessage>(this, (recipient, message) => HandleUpdateTask(message.Value));
         WeakReferenceMessenger.Default.Register<DeleteTaskMessage>(this, (recipient, message) => HandleDeleteTask(message.Value));
-        WeakReferenceMessenger.Default.Register<CalendarSettingChangedMessage>(this, async (recipient, message) => await HandleCalendarSettingChanged());
+        WeakReferenceMessenger.Default.Register<CalendarSettingsChangedMessage>(this, async (recipient, message) => await HandleCalendarSettingChanged());
         WeakReferenceMessenger.Default.Register<TasksReloadRequestedMessage>(this, async (recipient, message) => await HandleTasksReloadRequested());
 
         UpdateUiVisualState();
@@ -68,7 +64,10 @@ public sealed partial class MainViewModel : ObservableObject
             Dictionary<string, object> navigationParameter = new() { { "TaskToEdit", null! } };
             await Shell.Current.GoToAsync(nameof(AddTaskPopupPage), true, navigationParameter);
         }
-        catch (Exception exception) { Debug.WriteLine($"Error navigating to add page: {exception.Message}"); }
+        catch (Exception exception)
+        {
+            Debug.WriteLine($"Error navigating to add page: {exception.Message}");
+        }
     }
 
     [RelayCommand]
@@ -81,37 +80,43 @@ public sealed partial class MainViewModel : ObservableObject
             Dictionary<string, object> navigationParameter = new() { { "TaskToEdit", taskToEdit } };
             await Shell.Current.GoToAsync(nameof(AddTaskPopupPage), true, navigationParameter);
         }
-        catch (Exception exception) { Debug.WriteLine($"Error navigating to edit page for task {taskToEdit.Id}: {exception.Message}"); }
+        catch (Exception exception)
+        {
+            Debug.WriteLine($"Error navigating to edit page for task {taskToEdit.Id}: {exception.Message}");
+        }
     }
 
     [RelayCommand]
     private async Task LoadTasksAsync()
     {
-        Debug.WriteLine($"MainViewModel.LoadTasksAsync: Requesting tasks from persistence service.");
-        bool wasSubscribed = false;
+        Debug.WriteLine($"MainViewModel.LoadTasksAsync: Requesting tasks from storage service.");
+
+        bool wasSubscribed = Tasks.Count > 0; // Simple check if collection might have been subscribed
         bool changesMade = false;
         List<TaskItem> loadedTasks = [];
 
         try
         {
-            if (Tasks != null) { Tasks.CollectionChanged -= Tasks_CollectionChanged; wasSubscribed = true; }
+            // Unsubscribe temporarily to prevent triggering saves during batch load
+            Tasks.CollectionChanged -= Tasks_CollectionChanged;
 
-            loadedTasks = await _taskPersistenceService.LoadTasksAsync();
+            loadedTasks = await _taskStorageService.LoadTasksAsync(); // Use TaskStorageService
             Debug.WriteLine($"MainViewModel.LoadTasksAsync: Received {loadedTasks.Count} tasks from service.");
 
-            DateTime today = DateTime.Today;
+            var today = DateTime.Today;
+
             foreach (TaskItem task in loadedTasks)
             {
-                // Delegate repeating task date check to the service
                 if (_repeatingTaskService.EnsureCorrectDueDateOnLoad(task, today))
                 {
                     changesMade = true;
                 }
+
                 task.IsFadingOut = false;
                 task.PositionColor = Colors.Transparent;
             }
 
-            List<TaskItem> tasksToAdd = loadedTasks.OrderBy(task => task.Order).ToList();
+            List<TaskItem> tasksToAdd = [.. loadedTasks.OrderBy(task => task.Order)];
 
             await MainThread.InvokeOnMainThreadAsync(() =>
             {
@@ -130,60 +135,67 @@ public sealed partial class MainViewModel : ObservableObject
         catch (Exception exception)
         {
             Debug.WriteLine($"MainViewModel.LoadTasksAsync: Error during loading/processing: {exception.GetType().Name} - {exception.Message}");
+
             await MainThread.InvokeOnMainThreadAsync(() =>
             {
-                Tasks.Clear();
+                Tasks.Clear(); // Clear tasks on error
                 UpdateUiVisualState();
             });
         }
         finally
         {
-            if (Tasks != null && (wasSubscribed || Tasks.Any())) { Tasks.CollectionChanged -= Tasks_CollectionChanged; Tasks.CollectionChanged += Tasks_CollectionChanged; }
-            else if (Tasks != null) { Tasks.CollectionChanged += Tasks_CollectionChanged; }
-            Debug.WriteLine("MainViewModel.LoadTasksAsync: Finished.");
+            // Re-subscribe after loading is complete
+            Tasks.CollectionChanged += Tasks_CollectionChanged;
+            Debug.WriteLine("MainViewModel.LoadTasksAsync: Finished and re-subscribed to CollectionChanged.");
         }
     }
-
-    // REMOVED: CalculateNextValidDueDateForRepeatingTask (moved to service)
 
     [RelayCommand]
     private async Task MarkTaskDone(TaskItem? task)
     {
-        if (task is null || task.IsFadingOut) return;
+        if (task is null || task.IsFadingOut)
+        {
+            return;
+        }
 
         if (task.TimeType == TaskTimeType.None || task.TimeType == TaskTimeType.SpecificDate)
         {
-            // Standard removal logic
             task.IsFadingOut = true;
             await Task.Delay(350);
             bool removedSuccessfully = false;
+
             await MainThread.InvokeOnMainThreadAsync(() =>
             {
                 removedSuccessfully = Tasks.Remove(task);
                 if (removedSuccessfully) { UpdateUiVisualState(); TriggerSave(); }
-                else task.IsFadingOut = false; // Reset if removal failed unexpectedly
+                else task.IsFadingOut = false;
             });
         }
         else if (task.TimeType == TaskTimeType.Repeating)
         {
-            // Delegate repeating task update to the service
             bool dateUpdated = _repeatingTaskService.UpdateRepeatingTaskDueDate(task);
 
             if (dateUpdated)
             {
-                // If the date was successfully updated, refresh UI and save
                 await MainThread.InvokeOnMainThreadAsync(() =>
                 {
+                    // Re-sort potentially? Or just update visuals
+                    Tasks.CollectionChanged -= Tasks_CollectionChanged; // Temporarily unsubscribe
+                    var sortedTasks = Tasks.OrderBy(t => t.Order).ToList();
+                    Tasks.Clear();
+                    foreach (var t in sortedTasks) Tasks.Add(t);
+                    Tasks.CollectionChanged += Tasks_CollectionChanged; // Re-subscribe
+
                     UpdateUiVisualState();
                     TriggerSave();
                 });
             }
             else
             {
-                // If the service indicates the date couldn't be updated (e.g., error or no next date), remove the task
                 task.IsFadingOut = true;
                 await Task.Delay(350);
                 bool removedSuccessfully = false;
+
                 await MainThread.InvokeOnMainThreadAsync(() =>
                 {
                     removedSuccessfully = Tasks.Remove(task);
@@ -197,13 +209,19 @@ public sealed partial class MainViewModel : ObservableObject
     [RelayCommand]
     private async Task ResetDailyTask(TaskItem? task)
     {
-        // Delegate reset logic to the service
         bool resetSuccessful = _repeatingTaskService.ResetDailyTaskDueDate(task);
 
         if (resetSuccessful)
         {
             await MainThread.InvokeOnMainThreadAsync(() =>
             {
+                // Re-sort potentially? Or just update visuals
+                Tasks.CollectionChanged -= Tasks_CollectionChanged; // Temporarily unsubscribe
+                var sortedTasks = Tasks.OrderBy(t => t.Order).ToList();
+                Tasks.Clear();
+                foreach (var t in sortedTasks) Tasks.Add(t);
+                Tasks.CollectionChanged += Tasks_CollectionChanged; // Re-subscribe
+
                 UpdateUiVisualState();
                 TriggerSave();
             });
@@ -214,64 +232,91 @@ public sealed partial class MainViewModel : ObservableObject
         }
     }
 
-    private async Task HandleCalendarSettingChanged() { await LoadTasksAsync(); }
+    private async Task HandleCalendarSettingChanged()
+    {
+        // Force UI update which uses the new calendar setting via converter
+        await MainThread.InvokeOnMainThreadAsync(() =>
+        {
+            UpdateUiVisualState(); // Refresh visuals that depend on converters
+        });
+    }
 
     private async void HandleAddTask(TaskItem? newTask)
     {
-        if (newTask is null) return;
+        if (newTask is null)
+        {
+            return;
+        }
 
         await MainThread.InvokeOnMainThreadAsync(() =>
         {
-            newTask.Order = Tasks.Count; // Assign order before adding
+            newTask.Order = Tasks.Count;
+
             Tasks.Add(newTask);
-            UpdateUiVisualState(); // Update UI after adding
+            UpdateUiVisualState();
             TriggerSave();
         });
     }
 
     private async void HandleUpdateTask(TaskItem? updatedTask)
     {
-        if (updatedTask is null) return;
+        if (updatedTask is null)
+        {
+            return;
+        }
 
         await MainThread.InvokeOnMainThreadAsync(() =>
         {
             int index = Tasks.ToList().FindIndex(task => task.Id == updatedTask.Id);
+
             if (index != -1)
             {
-                // Preserve original order and index during update
                 updatedTask.Order = Tasks[index].Order;
-                updatedTask.Index = index;
-                Tasks[index] = updatedTask; // Replace item in the collection
-                UpdateUiVisualState(); // Update UI after replace
+                updatedTask.Index = index; // Ensure Index is preserved/updated correctly
+                Tasks[index] = updatedTask;
+
+                // Update visuals which might depend on DueDate etc.
+                UpdateUiVisualState();
                 TriggerSave();
             }
-            else Debug.WriteLine($"HandleUpdateTask: Task with ID {updatedTask.Id} not found.");
+            else
+            {
+                Debug.WriteLine($"HandleUpdateTask: Task with ID {updatedTask.Id} not found.");
+            }
         });
     }
 
     private async void HandleDeleteTask(Guid taskId)
     {
         bool removedSuccessfully = false;
+
         await MainThread.InvokeOnMainThreadAsync(() =>
         {
             TaskItem? taskToRemove = Tasks.FirstOrDefault(task => task.Id == taskId);
-            if (taskToRemove is not null)
+
+            if (taskToRemove is null)
             {
-                removedSuccessfully = Tasks.Remove(taskToRemove);
-                if (removedSuccessfully) { UpdateUiVisualState(); TriggerSave(); }
+                return;
             }
+
+            removedSuccessfully = Tasks.Remove(taskToRemove);
+            if (removedSuccessfully) { UpdateUiVisualState(); TriggerSave(); }
         });
     }
 
     private void Tasks_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs eventArgs)
     {
-        // Always update UI state on any change
         UpdateUiVisualState();
-        // Only trigger save specifically on Move, as Add/Remove/Replace are handled by their respective message handlers/commands
         if (eventArgs.Action == NotifyCollectionChangedAction.Move)
         {
+            // Ensure order property matches new physical index after move
+            for (int i = 0; i < Tasks.Count; i++)
+            {
+                if (Tasks[i].Order != i) Tasks[i].Order = i;
+            }
             TriggerSave();
         }
+        // Saves for Add/Remove/Replace are triggered by their respective handlers now
     }
 
     private void UpdateUiVisualState()
@@ -283,67 +328,77 @@ public sealed partial class MainViewModel : ObservableObject
         }
 
         _taskVisualStateService.UpdateTaskIndicesAndColors(Tasks);
-        var progressResult = _taskVisualStateService.CalculateProgress(Tasks);
+        TaskProgressResult progressResult = _taskVisualStateService.CalculateProgress(Tasks);
         TaskProgress = progressResult.Progress;
         TaskProgressColor = progressResult.ProgressColor;
 
-        // After updating progress, trigger save for daily progress
         TriggerSaveDailyProgress();
     }
 
     private async Task SaveTasks()
     {
-        Debug.WriteLine("MainViewModel.SaveTasks: Delegating save to TaskPersistenceService.");
+        Debug.WriteLine("MainViewModel.SaveTasks: Delegating save to TaskStorageService.");
         List<TaskItem> currentTasks = [];
-        await MainThread.InvokeOnMainThreadAsync(() =>
-        {
-            currentTasks = new List<TaskItem>(Tasks);
-        });
-        await _taskPersistenceService.SaveTasksAsync(currentTasks);
+
+        // No need for MainThread here as ToList creates a copy
+        currentTasks = [.. Tasks];
+
+        await _taskStorageService.SaveTasksAsync(currentTasks); // Use TaskStorageService
         Debug.WriteLine("MainViewModel.SaveTasks: Save delegation completed.");
     }
 
     private void TriggerSave()
     {
         _debounceTaskSaveTimer?.Dispose();
-        _debounceTaskSaveTimer = new Timer(async (state) => { await SaveTasks(); _debounceTaskSaveTimer?.Dispose(); _debounceTaskSaveTimer = null; }, null, TimeSpan.FromMilliseconds(500), Timeout.InfiniteTimeSpan);
+        _debounceTaskSaveTimer = new(async (state) =>
+        {
+            await SaveTasks();
+            _debounceTaskSaveTimer?.Dispose();
+            _debounceTaskSaveTimer = null;
+        },
+        null,
+        TimeSpan.FromMilliseconds(500),
+        Timeout.InfiniteTimeSpan);
     }
 
     private async Task SaveCurrentDayProgressAsync()
     {
-        if (_taskPersistenceService != null)
+        if (_progressStorageService is null) // Use ProgressStorageService
         {
-            // Ensure we are using the Date part only for consistency.
-            DateTime todayDate = DateTime.Today;
-            double currentProgress = TaskProgress; // Capture current progress
+            Debug.WriteLine("MainViewModel.SaveCurrentDayProgressAsync: ProgressStorageService is null. Cannot save progress.");
+            return;
+        }
 
-            Debug.WriteLine($"MainViewModel.SaveCurrentDayProgressAsync: Saving progress for {todayDate:yyyy-MM-dd} - {currentProgress:P2}");
-            var progressEntry = new DailyProgress(todayDate, currentProgress);
-            await _taskPersistenceService.AddDailyProgressEntryAsync(progressEntry);
-            Debug.WriteLine($"MainViewModel.SaveCurrentDayProgressAsync: Progress for {todayDate:yyyy-MM-dd} saved/updated.");
-        }
-        else
-        {
-            Debug.WriteLine("MainViewModel.SaveCurrentDayProgressAsync: TaskPersistenceService is null. Cannot save progress.");
-        }
+        DateTime todayDate = DateTime.Today;
+        double currentProgress = TaskProgress;
+
+        Debug.WriteLine($"MainViewModel.SaveCurrentDayProgressAsync: Saving progress for {todayDate:yyyy-MM-dd} - {currentProgress:P2}");
+
+        DailyProgress progressEntry = new(todayDate, currentProgress);
+        await _progressStorageService.AddOrUpdateDailyProgressEntryAsync(progressEntry); // Use ProgressStorageService
+
+        Debug.WriteLine($"MainViewModel.SaveCurrentDayProgressAsync: Progress for {todayDate:yyyy-MM-dd} saved/updated.");
     }
 
     private void TriggerSaveDailyProgress()
     {
         _debounceProgressSaveTimer?.Dispose();
-        _debounceProgressSaveTimer = new Timer(async (state) =>
+        _debounceProgressSaveTimer = new(async (state) =>
         {
             await SaveCurrentDayProgressAsync();
             _debounceProgressSaveTimer?.Dispose();
             _debounceProgressSaveTimer = null;
-        }, null, TimeSpan.FromMilliseconds(1000), Timeout.InfiniteTimeSpan); // Slightly longer debounce for progress
+        },
+        null,
+        TimeSpan.FromMilliseconds(1000),
+        Timeout.InfiniteTimeSpan);
     }
 
     public async Task FinalizeAndSaveProgressAsync()
     {
-        _debounceProgressSaveTimer?.Dispose(); // Cancel any pending debounced save
+        _debounceProgressSaveTimer?.Dispose();
         _debounceProgressSaveTimer = null;
-        await SaveCurrentDayProgressAsync(); // Save immediately
+        await SaveCurrentDayProgressAsync();
         Debug.WriteLine("MainViewModel.FinalizeAndSaveProgressAsync: Final progress save executed for today.");
     }
 

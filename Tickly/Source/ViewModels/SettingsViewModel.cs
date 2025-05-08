@@ -1,32 +1,25 @@
-﻿using System.Collections.ObjectModel;
-using System.Diagnostics;
-using System.Globalization;
-using System.Text;
-using System.Text.Json;
+﻿using System.Diagnostics;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
-using Microsoft.Maui.ApplicationModel.DataTransfer;
-using Microsoft.Maui.Controls;
 using Tickly.Messages;
 using Tickly.Models;
 using Tickly.Services;
-using Tickly.Utils;
-using Tickly.Views;
 
 namespace Tickly.ViewModels;
 
 public sealed partial class SettingsViewModel : ObservableObject
 {
-    private readonly TaskPersistenceService _taskPersistenceService;
+    private readonly DataExportService _dataExportService; // Added
+    private readonly DataImportService _dataImportService; // Added
     private bool _isGregorianSelected;
     private bool _isPersianSelected;
     private bool _isPitchBlackSelected;
     private bool _isDarkGraySelected;
     private bool _isNordSelected;
-    private bool _isLightSelected; // Added Light property
-    private readonly string _applicationTasksFilePath;
-    private const string TaskExportFilePrefix = "Tickly-Tasks-Export-";
+    private bool _isLightSelected;
+    private const string OldTaskExportFilePrefix = "Tickly-Tasks-Export-";
+    private const string NewDataExportFilePrefix = "Tickly_";
 
     public bool IsGregorianSelected
     {
@@ -88,7 +81,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         }
     }
 
-    public bool IsLightSelected // Added Light property
+    public bool IsLightSelected
     {
         get => _isLightSelected;
         set
@@ -100,13 +93,11 @@ public sealed partial class SettingsViewModel : ObservableObject
         }
     }
 
-
-    public SettingsViewModel(TaskPersistenceService taskPersistenceService)
+    // Updated constructor signature
+    public SettingsViewModel(DataExportService dataExportService, DataImportService dataImportService)
     {
-        _taskPersistenceService = taskPersistenceService;
-        _applicationTasksFilePath = Path.Combine(FileSystem.AppDataDirectory, "tasks.json");
-        Debug.WriteLine($"SettingsViewModel: Tasks file path is set to: {_applicationTasksFilePath}");
-
+        _dataExportService = dataExportService; // Added
+        _dataImportService = dataImportService; // Added
         LoadSettings();
     }
 
@@ -133,7 +124,7 @@ public sealed partial class SettingsViewModel : ObservableObject
 
         AppSettings.SelectedCalendarSystem = newSystem;
         Preferences.Set(AppSettings.CalendarSystemKey, (int)newSystem);
-        WeakReferenceMessenger.Default.Send(new CalendarSettingChangedMessage());
+        WeakReferenceMessenger.Default.Send(new CalendarSettingsChangedMessage(newSystem));
     }
 
     private void OnThemeSelectionChanged(ThemeType selectedTheme)
@@ -143,7 +134,7 @@ public sealed partial class SettingsViewModel : ObservableObject
             SetProperty(ref _isPitchBlackSelected, selectedTheme == ThemeType.PitchBlack, nameof(IsPitchBlackSelected));
             SetProperty(ref _isDarkGraySelected, selectedTheme == ThemeType.DarkGray, nameof(IsDarkGraySelected));
             SetProperty(ref _isNordSelected, selectedTheme == ThemeType.Nord, nameof(IsNordSelected));
-            SetProperty(ref _isLightSelected, selectedTheme == ThemeType.Light, nameof(IsLightSelected)); // Update Light flag
+            SetProperty(ref _isLightSelected, selectedTheme == ThemeType.Light, nameof(IsLightSelected));
             UpdateThemeSetting(selectedTheme);
         }
     }
@@ -162,7 +153,6 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     private void LoadSettings()
     {
-        // Load Calendar Setting
         CalendarSystemType currentSystem = AppSettings.SelectedCalendarSystem;
         bool shouldBeGregorian = currentSystem == CalendarSystemType.Gregorian;
         bool shouldBePersian = currentSystem == CalendarSystemType.Persian;
@@ -170,12 +160,11 @@ public sealed partial class SettingsViewModel : ObservableObject
         SetProperty(ref _isPersianSelected, shouldBePersian, nameof(IsPersianSelected));
         if (!_isGregorianSelected && !_isPersianSelected)
         {
-            SetProperty(ref _isGregorianSelected, true, nameof(IsGregorianSelected)); // Default if unset
+            SetProperty(ref _isGregorianSelected, true, nameof(IsGregorianSelected));
             AppSettings.SelectedCalendarSystem = CalendarSystemType.Gregorian;
             Preferences.Set(AppSettings.CalendarSystemKey, (int)CalendarSystemType.Gregorian);
         }
 
-        // Load Theme Setting
         ThemeType currentTheme = AppSettings.SelectedTheme;
         bool shouldBePitchBlack = currentTheme == ThemeType.PitchBlack;
         bool shouldBeDarkGray = currentTheme == ThemeType.DarkGray;
@@ -186,18 +175,15 @@ public sealed partial class SettingsViewModel : ObservableObject
         SetProperty(ref _isNordSelected, shouldBeNord, nameof(IsNordSelected));
         SetProperty(ref _isLightSelected, shouldBeLight, nameof(IsLightSelected));
 
-        // Default theme if no preference is found (respect system theme first)
         if (!Preferences.ContainsKey(AppSettings.ThemePreferenceKey))
         {
             AppTheme systemTheme = Application.Current?.RequestedTheme ?? AppTheme.Dark;
             ThemeType defaultTheme = systemTheme == AppTheme.Light ? ThemeType.Light : ThemeType.PitchBlack;
-            OnThemeSelectionChanged(defaultTheme); // Set the default based on system
-                                                   // Don't save preference here, let the user explicitly choose first
+            OnThemeSelectionChanged(defaultTheme);
             Debug.WriteLine($"LoadSettings: No theme preference found. Defaulting based on system theme to: {defaultTheme}");
         }
         else if (!_isPitchBlackSelected && !_isDarkGraySelected && !_isNordSelected && !_isLightSelected)
         {
-            // Fallback if preference exists but somehow doesn't match any known enum value
             AppTheme systemTheme = Application.Current?.RequestedTheme ?? AppTheme.Dark;
             ThemeType fallbackTheme = systemTheme == AppTheme.Light ? ThemeType.Light : ThemeType.PitchBlack;
             OnThemeSelectionChanged(fallbackTheme);
@@ -206,60 +192,30 @@ public sealed partial class SettingsViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private async Task ExportTasksAsync()
+    private async Task ExportDataAsync()
     {
-        string temporaryExportPath = string.Empty;
-        Debug.WriteLine("ExportTasksAsync: Starting task export process.");
-
+        Debug.WriteLine("SettingsViewModel.ExportDataAsync: Starting data export process.");
         try
         {
-            Debug.WriteLine($"ExportTasksAsync: Checking existence of source file: {_applicationTasksFilePath}");
-            if (!File.Exists(_applicationTasksFilePath))
+            CleanUpOldExportFiles(OldTaskExportFilePrefix, ".json");
+            CleanUpOldExportFiles(NewDataExportFilePrefix, ".json");
+
+            bool success = await _dataExportService.ExportDataAsync(); // Use DataExportService
+
+            if (success)
             {
-                Debug.WriteLine("ExportTasksAsync: Source tasks file does not exist.");
-                await SettingsViewModel.ShowAlertAsync("Export Failed", "No tasks file exists to export.", "OK");
-                return;
+                Debug.WriteLine("SettingsViewModel.ExportDataAsync: ExportDataAsync from service reported success.");
             }
-            Debug.WriteLine("ExportTasksAsync: Source tasks file found.");
-
-            CleanUpOldExportFiles(TaskExportFilePrefix, ".json");
-
-            LogFileInfo(_applicationTasksFilePath, "Source Task");
-
-            string exportFilename = $"{TaskExportFilePrefix}{DateTime.Now:yyyy-MM-dd_HH-mm-ss}.json";
-            temporaryExportPath = Path.Combine(FileSystem.CacheDirectory, exportFilename);
-            Debug.WriteLine($"ExportTasksAsync: Temporary task export path set to: {temporaryExportPath}");
-
-            EnsureDirectoryExists(temporaryExportPath);
-
-            Debug.WriteLine($"ExportTasksAsync: Attempting to copy task file from '{_applicationTasksFilePath}' to '{temporaryExportPath}'");
-            File.Copy(_applicationTasksFilePath, temporaryExportPath, true);
-            Debug.WriteLine("ExportTasksAsync: Task file copy successful.");
-
-            if (!File.Exists(temporaryExportPath))
+            else
             {
-                Debug.WriteLine($"ExportTasksAsync: ERROR - Temporary task file does not exist after copy attempt: {temporaryExportPath}");
-                await SettingsViewModel.ShowAlertAsync("Export Error", "Failed to create temporary export file.", "OK");
-                return;
+                Debug.WriteLine("SettingsViewModel.ExportDataAsync: ExportDataAsync from service reported failure or cancellation.");
+                await ShowAlertAsync("Export Failed", "Could not export Tickly data. The operation may have been cancelled or an error occurred.", "OK");
             }
-            LogFileInfo(temporaryExportPath, "Temporary Task");
-
-            ShareFileRequest request = new()
-            {
-                Title = "Export Tickly Tasks",
-                File = new ShareFile(temporaryExportPath, "application/json")
-            };
-            Debug.WriteLine("ExportTasksAsync: ShareFileRequest created for tasks. Title: " + request.Title + ", File Path: " + request.File.FullPath);
-
-            Debug.WriteLine("ExportTasksAsync: Calling Share.RequestAsync for tasks...");
-            await Share.RequestAsync(request);
-            Debug.WriteLine("ExportTasksAsync: Share.RequestAsync for tasks completed.");
-
         }
-        catch (Exception exception)
+        catch (Exception ex)
         {
-            Debug.WriteLine($"ExportTasksAsync: Exception caught: {exception.GetType().Name} - {exception.Message}\nStackTrace: {exception.StackTrace}");
-            await SettingsViewModel.ShowAlertAsync("Export Error", $"An error occurred during task export: {exception.Message}", "OK");
+            Debug.WriteLine($"SettingsViewModel.ExportDataAsync: Exception caught: {ex.GetType().Name} - {ex.Message}\nStackTrace: {ex.StackTrace}");
+            await ShowAlertAsync("Export Error", $"An error occurred during data export: {ex.Message}", "OK");
         }
     }
 
@@ -287,17 +243,9 @@ public sealed partial class SettingsViewModel : ObservableObject
                     Debug.WriteLine($"CleanUpOldExportFiles: Deleted old file: {file}");
                     count++;
                 }
-                catch (IOException ioEx)
-                {
-                    Debug.WriteLine($"CleanUpOldExportFiles: IO Error deleting old file '{file}': {ioEx.Message}");
-                }
-                catch (UnauthorizedAccessException uaEx)
-                {
-                    Debug.WriteLine($"CleanUpOldExportFiles: Access Error deleting old file '{file}': {uaEx.Message}");
-                }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"CleanUpOldExportFiles: General Error deleting old file '{file}': {ex.Message}");
+                    Debug.WriteLine($"CleanUpOldExportFiles: Error deleting old file '{file}': {ex.Message}");
                 }
             }
             Debug.WriteLine($"CleanUpOldExportFiles: Deleted {count} old export files matching pattern '{searchPattern}'.");
@@ -308,128 +256,42 @@ public sealed partial class SettingsViewModel : ObservableObject
         }
     }
 
-    private void EnsureDirectoryExists(string filePath)
-    {
-        string? directory = Path.GetDirectoryName(filePath);
-        if (directory is not null && !Directory.Exists(directory))
-        {
-            Directory.CreateDirectory(directory);
-            Debug.WriteLine($"EnsureDirectoryExists: Created directory: {directory}");
-        }
-    }
-
-    private void LogFileInfo(string filePath, string fileDescription)
-    {
-        try
-        {
-            FileInfo fileInfo = new(filePath);
-            Debug.WriteLine($"LogFileInfo: {fileDescription} file size: {fileInfo.Length} bytes. Path: {filePath}");
-            if (fileInfo.Length == 0)
-            {
-                Debug.WriteLine($"LogFileInfo: WARNING - {fileDescription} file is 0 bytes!");
-            }
-        }
-        catch (Exception ex)
-        {
-            Debug.WriteLine($"LogFileInfo: Could not get {fileDescription} file info: {ex.Message}. Path: {filePath}");
-        }
-    }
-
     [RelayCommand]
-    private async Task ImportTasksAsync()
+    private async Task ImportDataAsync()
     {
+        Debug.WriteLine("SettingsViewModel.ImportDataAsync: Starting data import process.");
         try
         {
-            FilePickerFileType customFileType = new(
-                new Dictionary<DevicePlatform, IEnumerable<string>>
-                {
-                    [DevicePlatform.iOS] = ["public.json", "public.text"],
-                    [DevicePlatform.Android] = ["application/json", "text/plain"],
-                    [DevicePlatform.WinUI] = [".json", ".txt"],
-                    [DevicePlatform.MacCatalyst] = ["json", "txt"]
-                });
-
-            PickOptions options = new()
-            {
-                PickerTitle = "Select Tickly tasks JSON file",
-                FileTypes = customFileType,
-            };
-
-            Debug.WriteLine("ImportTasksAsync: Calling FilePicker.PickAsync...");
-            FileResult? result = await FilePicker.PickAsync(options);
-
-            if (result is null)
-            {
-                Debug.WriteLine("ImportTasksAsync: FilePicker returned null (user cancelled?).");
-                return;
-            }
-
-            Debug.WriteLine($"ImportTasksAsync: File picked: {result.FileName} ({result.FullPath})");
-            string fileContent;
-
-            try
-            {
-                Debug.WriteLine($"ImportTasksAsync: Reading file content from: {result.FullPath}");
-                using var stream = await result.OpenReadAsync();
-                using var reader = new StreamReader(stream);
-                fileContent = await reader.ReadToEndAsync();
-
-                Debug.WriteLine($"ImportTasksAsync: File content read successfully ({fileContent.Length} chars). Validating JSON...");
-                if (string.IsNullOrWhiteSpace(fileContent))
-                {
-                    throw new JsonException("Imported file content is empty or whitespace.");
-                }
-
-                var validationList = JsonSerializer.Deserialize<List<TaskItem>>(fileContent);
-                if (validationList == null)
-                {
-                    throw new JsonException("Deserialization resulted in null list.");
-                }
-                Debug.WriteLine($"ImportTasksAsync: JSON validation successful ({validationList.Count} tasks potentially found).");
-            }
-            catch (JsonException jsonException)
-            {
-                Debug.WriteLine($"ImportTasksAsync: Invalid JSON format during import validation: {jsonException.Message}");
-                await SettingsViewModel.ShowAlertAsync("Import Failed", "The selected file does not contain valid Tickly task data.", "OK");
-                return;
-            }
-            catch (Exception readException)
-            {
-                Debug.WriteLine($"ImportTasksAsync: Error reading selected file: {readException.GetType().Name} - {readException.Message}");
-                await SettingsViewModel.ShowAlertAsync("Import Failed", $"Could not read the selected file: {readException.Message}", "OK");
-                return;
-            }
-
             bool confirmed = await ShowConfirmationAsync(
                 "Confirm Import",
-                "This will REPLACE your current tasks with the content of the selected file. This cannot be undone. Proceed?",
-                "Replace",
+                "This will REPLACE your current tasks, settings, and progress with the content of the selected file. This cannot be undone. Proceed?",
+                "Replace All Data",
                 "Cancel");
 
             if (!confirmed)
             {
-                Debug.WriteLine("ImportTasksAsync: User cancelled confirmation.");
+                Debug.WriteLine("SettingsViewModel.ImportDataAsync: User cancelled confirmation before file picking.");
                 return;
             }
 
-            try
+            bool success = await _dataImportService.ImportDataAsync(); // Use DataImportService
+
+            if (success)
             {
-                Debug.WriteLine($"ImportTasksAsync: Writing imported content to '{_applicationTasksFilePath}'");
-                await File.WriteAllTextAsync(_applicationTasksFilePath, fileContent);
-                Debug.WriteLine("ImportTasksAsync: File write successful. Sending reload message.");
-                WeakReferenceMessenger.Default.Send(new TasksReloadRequestedMessage());
-                await ShowAlertAsync("Import Successful", "Tasks imported successfully. The task list has been updated.", "OK");
+                Debug.WriteLine("SettingsViewModel.ImportDataAsync: ImportDataAsync from service reported success.");
+                await ShowAlertAsync("Import Successful", "Tickly data (tasks, settings, progress) imported successfully. The application will reflect the changes.", "OK");
+                LoadSettings();
             }
-            catch (Exception writeException)
+            else
             {
-                Debug.WriteLine($"ImportTasksAsync: Error writing imported file: {writeException.GetType().Name} - {writeException.Message}");
-                await ShowAlertAsync("Import Failed", $"Could not replace the tasks file: {writeException.Message}", "OK");
+                Debug.WriteLine("SettingsViewModel.ImportDataAsync: ImportDataAsync from service reported failure or cancellation.");
+                await ShowAlertAsync("Import Failed", "Could not import Tickly data. The file might be invalid, the operation cancelled, or an error occurred.", "OK");
             }
         }
-        catch (Exception exception)
+        catch (Exception ex)
         {
-            Debug.WriteLine($"ImportTasksAsync: General error during import: {exception.GetType().Name} - {exception.Message}\nStackTrace: {exception.StackTrace}");
-            await ShowAlertAsync("Import Error", $"An unexpected error occurred during import: {exception.Message}", "OK");
+            Debug.WriteLine($"SettingsViewModel.ImportDataAsync: Exception caught: {ex.GetType().Name} - {ex.Message}\nStackTrace: {ex.StackTrace}");
+            await ShowAlertAsync("Import Error", $"An unexpected error occurred during data import: {ex.Message}", "OK");
         }
     }
 
@@ -474,31 +336,34 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     private static Page? GetCurrentPage()
     {
-        if (Application.Current?.MainPage is Shell shell && shell.CurrentPage is not null)
+        Page? currentPage = Application.Current?.MainPage;
+
+        if (currentPage is Shell shell)
         {
-            return shell.CurrentPage;
+            currentPage = shell.CurrentPage;
         }
-        if (Application.Current?.MainPage is Page mainPage)
+        else if (currentPage is NavigationPage navPage)
         {
-            if (mainPage is NavigationPage navPage && navPage.CurrentPage != null)
-            {
-                return navPage.CurrentPage;
-            }
-            if (mainPage is TabbedPage tabbedPage && tabbedPage.CurrentPage != null)
-            {
-                return tabbedPage.CurrentPage;
-            }
-            return mainPage;
+            currentPage = navPage.CurrentPage;
         }
-        if (Application.Current?.Windows is { Count: > 0 } windows && windows[0].Page is not null)
+        else if (currentPage is TabbedPage tabbedPage)
         {
-            if (windows[0].Page is NavigationPage navPage && navPage.CurrentPage != null)
-            {
-                return navPage.CurrentPage;
-            }
-            return windows[0].Page;
+            currentPage = tabbedPage.CurrentPage;
         }
-        Debug.WriteLine("GetCurrentPage: Could not determine the current page reliably.");
-        return null;
+
+        if (currentPage == null && Application.Current?.Windows is { Count: > 0 } windows && windows[0].Page is not null)
+        {
+            currentPage = windows[0].Page;
+            if (currentPage is NavigationPage navPageModal && navPageModal.CurrentPage != null)
+            {
+                currentPage = navPageModal.CurrentPage;
+            }
+        }
+
+        if (currentPage == null)
+        {
+            Debug.WriteLine("GetCurrentPage: Could not determine the current page reliably.");
+        }
+        return currentPage;
     }
 }
