@@ -309,4 +309,13 @@
     <SolidColorBrush x:Key="Gray900Brush" Color="{StaticResource Gray900}"/>
     <SolidColorBrush x:Key="Gray950Brush" Color="{StaticResource Gray950}"/>
 
+    <!-- Styles -->
+    <Style TargetType="Page">
+        <Setter Property="BackgroundColor" Value="{DynamicResource AppBackgroundColor}" />
+    </Style>
+
+    <Style TargetType="Shell">
+        <Setter Property="Shell.BackgroundColor" Value="{DynamicResource AppSurfaceColor}" />
+    </Style>
+
 </ResourceDictionary>
