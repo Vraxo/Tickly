@@ -1,7 +1,6 @@
 ﻿using Microsoft.Extensions.Logging;
 using Tickly.ViewModels;
 using Tickly.Views;
-using CommunityToolkit.Mvvm.Messaging;
 using Tickly.Services;
 
 namespace Tickly;
@@ -10,7 +9,7 @@ public static class MauiProgram
 {
     public static MauiApp CreateMauiApp()
     {
-        var builder = MauiApp.CreateBuilder();
+        MauiAppBuilder builder = MauiApp.CreateBuilder();
         builder
             .UseMauiApp<App>()
             .ConfigureFonts(fonts =>
@@ -24,15 +23,13 @@ public static class MauiProgram
         builder.Logging.AddDebug();
 #endif
 
-        // Register split persistence and import/export services
         builder.Services.AddSingleton<TaskStorageService>();
         builder.Services.AddSingleton<ProgressStorageService>();
-        builder.Services.AddSingleton<DataExportService>(); // Added
-        builder.Services.AddSingleton<DataImportService>(); // Added
-        // REMOVED: builder.Services.AddSingleton<DataImportExportService>();
-
+        builder.Services.AddSingleton<DataExportService>();
+        builder.Services.AddSingleton<DataImportService>();
         builder.Services.AddSingleton<RepeatingTaskService>();
         builder.Services.AddSingleton<TaskVisualStateService>();
+        builder.Services.AddSingleton<ThemeService>(); // Added ThemeService registration
 
         builder.Services.AddSingleton<MainViewModel>();
         builder.Services.AddSingleton<SettingsViewModel>();
@@ -42,6 +39,10 @@ public static class MauiProgram
         builder.Services.AddTransient<AddTaskPopupPage>();
         builder.Services.AddSingleton<SettingsPage>();
         builder.Services.AddSingleton<StatsPage>();
+
+        // Register App class itself if needed for DI resolution, especially if constructor injection is used
+        builder.Services.AddSingleton<App>();
+
 
         return builder.Build();
     }

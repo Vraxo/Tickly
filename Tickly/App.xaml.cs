@@ -10,89 +10,27 @@ namespace Tickly;
 
 public partial class App : Application
 {
-    const int WindowWidth = 450;
-    const int WindowHeight = 800;
+    private const int WindowWidth = 450;
+    private const int WindowHeight = 800;
+    private readonly ThemeService _themeService; // Added
 
-    public App()
+    public App(ThemeService themeService) // Inject service
     {
         InitializeComponent();
-        ApplyTheme(AppSettings.SelectedTheme);
+        _themeService = themeService; // Store injected service
+
+        // Apply initial theme using the service
+        _themeService.ApplyTheme(AppSettings.SelectedTheme);
+
         MainPage = new AppShell();
-        WeakReferenceMessenger.Default.Register<ThemeChangedMessage>(this, (r, m) => ApplyTheme(m.Value));
+
+        // Register message handler to use the service
+        WeakReferenceMessenger.Default.Register<ThemeChangedMessage>(this, (r, m) => _themeService.ApplyTheme(m.Value));
     }
 
-    private void ApplyTheme(ThemeType theme)
-    {
-        if (Application.Current == null) return;
+    // REMOVED: ApplyTheme method (logic moved to ThemeService)
 
-        MainThread.BeginInvokeOnMainThread(() =>
-        {
-            string backgroundKey;
-            string surfaceKey;
-            string foregroundKey;
-            string secondaryTextKey;
-            string primaryActionBgKey;
-            string primaryActionFgKey;
-
-            switch (theme)
-            {
-                case ThemeType.Light:
-                    backgroundKey = "LightBackgroundColor";
-                    surfaceKey = "LightSurfaceColor";
-                    foregroundKey = "LightForegroundColor";
-                    secondaryTextKey = "LightSecondaryTextColor";
-                    primaryActionBgKey = "LightPrimaryActionBackgroundColor";
-                    primaryActionFgKey = "LightPrimaryActionForegroundColor";
-                    Application.Current.UserAppTheme = AppTheme.Light;
-                    break;
-                case ThemeType.DarkGray:
-                    backgroundKey = "DarkGrayBackgroundColor";
-                    surfaceKey = "DarkGraySurfaceColor";
-                    foregroundKey = "DarkGrayForegroundColor";
-                    secondaryTextKey = "DarkGraySecondaryTextColor";
-                    primaryActionBgKey = "DarkGrayPrimaryActionBackgroundColor"; // Use specific Dark Gray key
-                    primaryActionFgKey = "DarkGrayPrimaryActionForegroundColor"; // Use specific Dark Gray key
-                    Application.Current.UserAppTheme = AppTheme.Dark;
-                    break;
-                case ThemeType.Nord:
-                    backgroundKey = "NordBackgroundColor";
-                    surfaceKey = "NordSurfaceColor";
-                    foregroundKey = "NordForegroundColor";
-                    secondaryTextKey = "NordSecondaryTextColor";
-                    primaryActionBgKey = "NordPrimaryActionBackgroundColor"; // Use specific Nord key
-                    primaryActionFgKey = "NordPrimaryActionForegroundColor"; // Use specific Nord key
-                    Application.Current.UserAppTheme = AppTheme.Dark;
-                    break;
-                case ThemeType.PitchBlack:
-                default:
-                    backgroundKey = "PitchBlackBackgroundColor";
-                    surfaceKey = "PitchBlackSurfaceColor";
-                    foregroundKey = "PitchBlackForegroundColor";
-                    secondaryTextKey = "PitchBlackSecondaryTextColor";
-                    primaryActionBgKey = "PitchBlackPrimaryActionBackgroundColor"; // Use specific Pitch Black key
-                    primaryActionFgKey = "PitchBlackPrimaryActionForegroundColor"; // Use specific Pitch Black key
-                    Application.Current.UserAppTheme = AppTheme.Dark;
-                    break;
-            }
-
-            Application.Current.Resources["AppBackgroundColor"] = Application.Current.Resources[backgroundKey];
-            Application.Current.Resources["AppSurfaceColor"] = Application.Current.Resources[surfaceKey];
-            Application.Current.Resources["AppForegroundColor"] = Application.Current.Resources[foregroundKey];
-            Application.Current.Resources["AppSecondaryTextColor"] = Application.Current.Resources[secondaryTextKey];
-            Application.Current.Resources["AppPrimaryActionBackgroundColor"] = Application.Current.Resources[primaryActionBgKey];
-            Application.Current.Resources["AppPrimaryActionForegroundColor"] = Application.Current.Resources[primaryActionFgKey];
-
-            Debug.WriteLine($"Theme applied: {theme}. MAUI Theme: {Application.Current.UserAppTheme}. Background: {Application.Current.Resources["AppBackgroundColor"]}, Surface: {Application.Current.Resources["AppSurfaceColor"]}, Foreground: {Application.Current.Resources["AppForegroundColor"]}, Secondary: {Application.Current.Resources["AppSecondaryTextColor"]}, ActionBG: {Application.Current.Resources["AppPrimaryActionBackgroundColor"]}, ActionFG: {Application.Current.Resources["AppPrimaryActionForegroundColor"]}");
-
-            if (MainPage is Shell shell)
-            {
-                shell.BackgroundColor = Colors.Transparent;
-                shell.BackgroundColor = (Color)Application.Current.Resources["AppBackgroundColor"];
-            }
-        });
-    }
-
-    protected override async void OnStart()
+    protected override void OnStart()
     {
         base.OnStart();
         Debug.WriteLine("App.OnStart: Application started.");
@@ -104,9 +42,10 @@ public partial class App : Application
         Debug.WriteLine("App.OnSleep: Application is going to sleep. Saving final progress.");
         try
         {
+            // Use GetService safely
             var mainViewModel = IPlatformApplication.Current?.Services?.GetService<MainViewModel>();
             mainViewModel?.FinalizeAndSaveProgressAsync().FireAndForgetSafeAsync();
-            Debug.WriteLine("App.OnSleep: FinalizeAndSaveProgressAsync completed or task running.");
+            Debug.WriteLine("App.OnSleep: FinalizeAndSaveProgressAsync requested.");
         }
         catch (Exception ex)
         {
@@ -114,7 +53,7 @@ public partial class App : Application
         }
     }
 
-    protected override async void OnResume()
+    protected override void OnResume()
     {
         base.OnResume();
         Debug.WriteLine("App.OnResume: Application is resuming.");
@@ -135,7 +74,7 @@ public partial class App : Application
             {
                 try
                 {
-                    var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(nativeWindow);
+                    IntPtr hwnd = WinRT.Interop.WindowNative.GetWindowHandle(nativeWindow);
                     if (hwnd == IntPtr.Zero) return;
 
                     Microsoft.UI.WindowId windowId = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(hwnd);
@@ -147,21 +86,23 @@ public partial class App : Application
                          Microsoft.UI.Windowing.DisplayArea displayArea = Microsoft.UI.Windowing.DisplayArea.GetFromWindowId(windowId, Microsoft.UI.Windowing.DisplayAreaFallback.Nearest);
                         if (displayArea != null)
                         {
-                            var mainMonitorWorkArea = displayArea.WorkArea;
-                            var centeredX = (mainMonitorWorkArea.Width - WindowWidth) / 2;
-                            var centeredY = (mainMonitorWorkArea.Height - WindowHeight) / 2;
+                            Windows.Graphics.RectInt32 mainMonitorWorkArea = displayArea.WorkArea;
+                            int centeredX = (mainMonitorWorkArea.Width - WindowWidth) / 2;
+                            int centeredY = (mainMonitorWorkArea.Height - WindowHeight) / 2;
 
                             appWindow.MoveAndResize(new Windows.Graphics.RectInt32(centeredX, centeredY, WindowWidth, WindowHeight));
+                            Debug.WriteLine($"App.CreateWindow (Windows): Centered and resized window to {WindowWidth}x{WindowHeight}.");
                         }
                         else
                         {
                             appWindow.ResizeClient(new Windows.Graphics.SizeInt32(WindowWidth, WindowHeight));
+                            Debug.WriteLine($"App.CreateWindow (Windows): Resized client area to {WindowWidth}x{WindowHeight} (DisplayArea not found).");
                         }
                     }
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"Error resizing window: {ex.Message}");
+                    Debug.WriteLine($"App.CreateWindow (Windows): Error resizing/centering window: {ex.Message}");
                 }
             }
         };
@@ -171,11 +112,9 @@ public partial class App : Application
     }
 }
 
-// Simple Fire and Forget helper
 internal static class TaskExtensions
 {
-    internal static async void FireAndForgetSafeAsync(this Task task,
-        Action<Exception>? errorHandler = null)
+    internal static async void FireAndForgetSafeAsync(this Task task, Action<Exception>? errorHandler = null)
     {
         try
         {
@@ -183,6 +122,7 @@ internal static class TaskExtensions
         }
         catch (Exception ex)
         {
+            Debug.WriteLine($"FireAndForgetSafeAsync: Error in awaited task: {ex}");
             errorHandler?.Invoke(ex);
         }
     }

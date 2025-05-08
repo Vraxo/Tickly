@@ -47,6 +47,27 @@
     <Color x:Key="NordAurora3">#A3BE8C</Color>
     <Color x:Key="NordAurora4">#B48EAD</Color>
 
+    <!-- Catppuccin Mocha Palette -->
+    <Color x:Key="CatppuccinMochaBase">#1E1E2E</Color>
+    <!-- Background -->
+    <Color x:Key="CatppuccinMochaMantle">#181825</Color>
+    <!-- Surface -->
+    <Color x:Key="CatppuccinMochaCrust">#11111B</Color>
+    <!-- Darker Background/Surface -->
+    <Color x:Key="CatppuccinMochaText">#CDD6F4</Color>
+    <!-- Foreground -->
+    <Color x:Key="CatppuccinMochaSubtext0">#A6ADC8</Color>
+    <Color x:Key="CatppuccinMochaOverlay0">#6C7086</Color>
+    <!-- Secondary Text -->
+    <Color x:Key="CatppuccinMochaBlue">#89B4FA</Color>
+    <!-- Accent -->
+    <Color x:Key="CatppuccinMochaMauve">#CBA6F7</Color>
+    <!-- Accent -->
+    <Color x:Key="CatppuccinMochaPink">#F5C2E7</Color>
+    <!-- Accent -->
+    <Color x:Key="CatppuccinMochaRed">#F38BA8</Color>
+    <!-- Accent (Alerts/Delete) -->
+
     <!-- Specific Theme Colors -->
     <Color x:Key="PitchBlackBackgroundColor">#000000</Color>
     <Color x:Key="PitchBlackSurfaceColor">#121212</Color>
@@ -69,20 +90,39 @@
     <Color x:Key="NordBackgroundColor">#2E3440</Color>
     <Color x:Key="NordSurfaceColor">#3B4252</Color>
     <Color x:Key="NordForegroundColor">#D8DEE9</Color>
-    <Color x:Key="NordSecondaryTextColor">#E5E9F0</Color>
+    <Color x:Key="NordSecondaryTextColor">#A6ADC8</Color>
+    <!-- Use a color closer to Catppuccin Subtext0 for consistency -->
     <Color x:Key="NordPrimaryActionBackgroundColor">#5E81AC</Color>
     <!-- NordFrost3 -->
-    <Color x:Key="NordPrimaryActionForegroundColor">#2E3440</Color>
-    <!-- NordPolarNight0 -->
+    <Color x:Key="NordPrimaryActionForegroundColor">#ECEFF4</Color>
+    <!-- NordSnowStorm2 (brighter contrast) -->
 
-    <Color x:Key="LightBackgroundColor">#F0F0F0</Color>
+    <Color x:Key="LightBackgroundColor">#EFF1F5</Color>
+    <!-- Catppuccin Latte Base -->
     <Color x:Key="LightSurfaceColor">#FFFFFF</Color>
-    <Color x:Key="LightForegroundColor">#1F1F1F</Color>
-    <Color x:Key="LightSecondaryTextColor">#555555</Color>
-    <Color x:Key="LightPrimaryActionBackgroundColor">#512BD4</Color>
-    <!-- Primary -->
+    <!-- White -->
+    <Color x:Key="LightForegroundColor">#4C4F69</Color>
+    <!-- Catppuccin Latte Text -->
+    <Color x:Key="LightSecondaryTextColor">#6C6F85</Color>
+    <!-- Catppuccin Latte Subtext0 -->
+    <Color x:Key="LightPrimaryActionBackgroundColor">#1E66F5</Color>
+    <!-- Catppuccin Latte Blue -->
     <Color x:Key="LightPrimaryActionForegroundColor">#FFFFFF</Color>
     <!-- White -->
+
+    <Color x:Key="CatppuccinMochaBackgroundColor">#1E1E2E</Color>
+    <!-- Base -->
+    <Color x:Key="CatppuccinMochaSurfaceColor">#181825</Color>
+    <!-- Mantle -->
+    <Color x:Key="CatppuccinMochaForegroundColor">#CDD6F4</Color>
+    <!-- Text -->
+    <Color x:Key="CatppuccinMochaSecondaryTextColor">#6C7086</Color>
+    <!-- Overlay0 -->
+    <Color x:Key="CatppuccinMochaPrimaryActionBackgroundColor">#89B4FA</Color>
+    <!-- Blue -->
+    <Color x:Key="CatppuccinMochaPrimaryActionForegroundColor">#11111B</Color>
+    <!-- Crust -->
+
 
     <!-- DYNAMIC THEME RESOURCES (Initialized to system preference or PitchBlack, App.xaml.cs will update) -->
     <Color x:Key="AppBackgroundColor">#000000</Color>

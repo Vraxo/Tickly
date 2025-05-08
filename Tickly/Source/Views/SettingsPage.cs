@@ -27,7 +27,6 @@ public sealed class SettingsPage : ContentPage
                     new Label
                     {
                         Text = "Theme Settings",
-                        // Style = GetStyle("Headline"), // Use implicit style
                         FontSize = LargeFontSize,
                         FontAttributes = FontAttributes.Bold,
                         Margin = new(0, 0, 0, 10)
@@ -35,46 +34,50 @@ public sealed class SettingsPage : ContentPage
                     new Label
                     {
                         Text = "Choose the application theme:",
-                        Style = GetStyle("LightGrayLabel") // Keep explanatory text style consistent
+                        Style = GetStyle("LightGrayLabel")
                     },
                     new RadioButton
                     {
                         GroupName = "ThemeGroup",
-                        Content = "Light" // Add Light option
+                        Content = "Light"
                     }
                     .Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsLightSelected)),
-                     new RadioButton
+                    new RadioButton
                     {
                         GroupName = "ThemeGroup",
                         Content = "Pitch Black"
                     }
                     .Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsPitchBlackSelected)),
-
                     new RadioButton
                     {
                         GroupName = "ThemeGroup",
                         Content = "Dark Gray"
                     }
                     .Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsDarkGraySelected)),
-
                     new RadioButton
                     {
                         GroupName = "ThemeGroup",
                         Content = "Nord"
                     }
                     .Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsNordSelected)),
+                    // Added Catppuccin RadioButton
+                    new RadioButton
+                    {
+                        GroupName = "ThemeGroup",
+                        Content = "Catppuccin Mocha"
+                    }
+                    .Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsCatppuccinMochaSelected)),
 
                     new BoxView
                     {
                         HeightRequest = 1,
-                        BackgroundColor = Color.FromArgb("#333333"), // Use a dynamic separator?
+                        BackgroundColor = Color.FromArgb("#333333"),
                         Margin = new(0, 15, 0, 15)
                     },
 
                     new Label
                     {
                         Text = "Calendar Settings",
-                        // Style = GetStyle("Headline"), // Use implicit style
                         FontSize = LargeFontSize,
                         FontAttributes = FontAttributes.Bold,
                         Margin = new(0, 0, 0, 10)
@@ -101,14 +104,13 @@ public sealed class SettingsPage : ContentPage
                     new BoxView
                     {
                         HeightRequest = 1,
-                        BackgroundColor = Color.FromArgb("#333333"), // Use a dynamic separator?
+                        BackgroundColor = Color.FromArgb("#333333"),
                         Margin = new(0, 15, 0, 15)
                     },
 
                     new Label
                     {
                         Text = "Data Management",
-                        // Style = GetStyle("Headline"), // Use implicit style
                         FontSize = LargeFontSize,
                         FontAttributes = FontAttributes.Bold,
                         Margin = new(0, 0, 0, 10)
@@ -127,19 +129,19 @@ public sealed class SettingsPage : ContentPage
                         {
                             new Button
                             {
-                                Text = "Export Data", // Changed text
-                                BackgroundColor = Color.FromArgb("#4A6FA5"), 
+                                Text = "Export Data",
+                                BackgroundColor = Color.FromArgb("#4A6FA5"),
                                 TextColor = Colors.WhiteSmoke
                             }
-                            .BindCommand(nameof(SettingsViewModel.ExportDataCommand)), // Changed command
+                            .BindCommand(nameof(SettingsViewModel.ExportDataCommand)),
 
                             new Button
                             {
-                                Text = "Import Data", // Changed text
-                                BackgroundColor = Color.FromArgb("#5A9A78"), 
+                                Text = "Import Data",
+                                BackgroundColor = Color.FromArgb("#5A9A78"),
                                 TextColor = Colors.WhiteSmoke
                             }
-                            .BindCommand(nameof(SettingsViewModel.ImportDataCommand)) // Changed command
+                            .BindCommand(nameof(SettingsViewModel.ImportDataCommand))
                         }
                     }
                 }
@@ -147,22 +149,18 @@ public sealed class SettingsPage : ContentPage
         };
     }
 
-    // Helper to get styles safely
     private static Style GetStyle(string key)
     {
-        // Attempt to find the specific style
         if (Application.Current != null && Application.Current.Resources.TryGetValue(key, out var resource) && resource is Style style)
         {
             return style;
         }
 
-        // Fallback to the base Label style if the specific key isn't found
         if (Application.Current != null && Application.Current.Resources.TryGetValue("BaseLabelStyle", out var baseResource) && baseResource is Style baseStyle)
         {
             return baseStyle;
         }
 
-        // Absolute fallback if even BaseLabelStyle is missing
         return new Style(typeof(Label));
     }
 }

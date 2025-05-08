@@ -5,5 +5,6 @@ public enum ThemeType
     PitchBlack,
     DarkGray,
     Nord,
+    CatppuccinMocha, // Added
     Light
 }

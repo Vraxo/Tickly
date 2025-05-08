@@ -1,22 +1,31 @@
-﻿using System.Diagnostics;
+﻿using System.Collections.ObjectModel;
+using System.Diagnostics;
+using System.Globalization;
+using System.Text;
+using System.Text.Json;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
+using Microsoft.Maui.ApplicationModel.DataTransfer;
+using Microsoft.Maui.Controls;
 using Tickly.Messages;
 using Tickly.Models;
 using Tickly.Services;
+using Tickly.Utils;
+using Tickly.Views;
 
 namespace Tickly.ViewModels;
 
 public sealed partial class SettingsViewModel : ObservableObject
 {
-    private readonly DataExportService _dataExportService; // Added
-    private readonly DataImportService _dataImportService; // Added
+    private readonly DataExportService _dataExportService;
+    private readonly DataImportService _dataImportService;
     private bool _isGregorianSelected;
     private bool _isPersianSelected;
     private bool _isPitchBlackSelected;
     private bool _isDarkGraySelected;
     private bool _isNordSelected;
+    private bool _isCatppuccinMochaSelected; // Added
     private bool _isLightSelected;
     private const string OldTaskExportFilePrefix = "Tickly-Tasks-Export-";
     private const string NewDataExportFilePrefix = "Tickly_";
@@ -81,6 +90,19 @@ public sealed partial class SettingsViewModel : ObservableObject
         }
     }
 
+    // Added Catppuccin Property
+    public bool IsCatppuccinMochaSelected
+    {
+        get => _isCatppuccinMochaSelected;
+        set
+        {
+            if (SetProperty(ref _isCatppuccinMochaSelected, value) && value)
+            {
+                OnThemeSelectionChanged(ThemeType.CatppuccinMocha);
+            }
+        }
+    }
+
     public bool IsLightSelected
     {
         get => _isLightSelected;
@@ -93,11 +115,10 @@ public sealed partial class SettingsViewModel : ObservableObject
         }
     }
 
-    // Updated constructor signature
     public SettingsViewModel(DataExportService dataExportService, DataImportService dataImportService)
     {
-        _dataExportService = dataExportService; // Added
-        _dataImportService = dataImportService; // Added
+        _dataExportService = dataExportService;
+        _dataImportService = dataImportService;
         LoadSettings();
     }
 
@@ -131,9 +152,11 @@ public sealed partial class SettingsViewModel : ObservableObject
     {
         if (AppSettings.SelectedTheme != selectedTheme)
         {
+            // Update all theme flags based on the selected one
             SetProperty(ref _isPitchBlackSelected, selectedTheme == ThemeType.PitchBlack, nameof(IsPitchBlackSelected));
             SetProperty(ref _isDarkGraySelected, selectedTheme == ThemeType.DarkGray, nameof(IsDarkGraySelected));
             SetProperty(ref _isNordSelected, selectedTheme == ThemeType.Nord, nameof(IsNordSelected));
+            SetProperty(ref _isCatppuccinMochaSelected, selectedTheme == ThemeType.CatppuccinMocha, nameof(IsCatppuccinMochaSelected)); // Updated
             SetProperty(ref _isLightSelected, selectedTheme == ThemeType.Light, nameof(IsLightSelected));
             UpdateThemeSetting(selectedTheme);
         }
@@ -169,25 +192,23 @@ public sealed partial class SettingsViewModel : ObservableObject
         bool shouldBePitchBlack = currentTheme == ThemeType.PitchBlack;
         bool shouldBeDarkGray = currentTheme == ThemeType.DarkGray;
         bool shouldBeNord = currentTheme == ThemeType.Nord;
+        bool shouldBeCatppuccin = currentTheme == ThemeType.CatppuccinMocha; // Added check
         bool shouldBeLight = currentTheme == ThemeType.Light;
         SetProperty(ref _isPitchBlackSelected, shouldBePitchBlack, nameof(IsPitchBlackSelected));
         SetProperty(ref _isDarkGraySelected, shouldBeDarkGray, nameof(IsDarkGraySelected));
         SetProperty(ref _isNordSelected, shouldBeNord, nameof(IsNordSelected));
+        SetProperty(ref _isCatppuccinMochaSelected, shouldBeCatppuccin, nameof(IsCatppuccinMochaSelected)); // Set property
         SetProperty(ref _isLightSelected, shouldBeLight, nameof(IsLightSelected));
 
-        if (!Preferences.ContainsKey(AppSettings.ThemePreferenceKey))
+        // Check if any theme is selected after loading preferences
+        bool anyThemeSelected = _isPitchBlackSelected || _isDarkGraySelected || _isNordSelected || _isCatppuccinMochaSelected || _isLightSelected;
+
+        if (!anyThemeSelected) // Apply default only if nothing is selected (covers initial run and potential invalid pref value)
         {
             AppTheme systemTheme = Application.Current?.RequestedTheme ?? AppTheme.Dark;
-            ThemeType defaultTheme = systemTheme == AppTheme.Light ? ThemeType.Light : ThemeType.PitchBlack;
+            ThemeType defaultTheme = systemTheme == AppTheme.Light ? ThemeType.Light : ThemeType.PitchBlack; // Or Catppuccin? Let's stick to PitchBlack default dark.
             OnThemeSelectionChanged(defaultTheme);
-            Debug.WriteLine($"LoadSettings: No theme preference found. Defaulting based on system theme to: {defaultTheme}");
-        }
-        else if (!_isPitchBlackSelected && !_isDarkGraySelected && !_isNordSelected && !_isLightSelected)
-        {
-            AppTheme systemTheme = Application.Current?.RequestedTheme ?? AppTheme.Dark;
-            ThemeType fallbackTheme = systemTheme == AppTheme.Light ? ThemeType.Light : ThemeType.PitchBlack;
-            OnThemeSelectionChanged(fallbackTheme);
-            Debug.WriteLine($"LoadSettings: Invalid theme preference found. Falling back based on system theme to: {fallbackTheme}");
+            Debug.WriteLine($"LoadSettings: No valid theme selected. Defaulting based on system theme to: {defaultTheme}");
         }
     }
 
@@ -200,7 +221,7 @@ public sealed partial class SettingsViewModel : ObservableObject
             CleanUpOldExportFiles(OldTaskExportFilePrefix, ".json");
             CleanUpOldExportFiles(NewDataExportFilePrefix, ".json");
 
-            bool success = await _dataExportService.ExportDataAsync(); // Use DataExportService
+            bool success = await _dataExportService.ExportDataAsync();
 
             if (success)
             {
@@ -274,7 +295,7 @@ public sealed partial class SettingsViewModel : ObservableObject
                 return;
             }
 
-            bool success = await _dataImportService.ImportDataAsync(); // Use DataImportService
+            bool success = await _dataImportService.ImportDataAsync();
 
             if (success)
             {
