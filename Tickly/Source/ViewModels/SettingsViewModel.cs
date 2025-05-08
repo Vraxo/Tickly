@@ -39,9 +39,6 @@ public sealed partial class SettingsViewModel : ObservableObject
     private bool _isHighContrastDarkSelected;
     private bool _isHighContrastLightSelected;
 
-    // Windows Specific Setting
-    private bool _useSystemBackground; // Field for the new setting
-
     private const string OldTaskExportFilePrefix = "Tickly-Tasks-Export-";
     private const string NewDataExportFilePrefix = "Tickly_";
 
@@ -73,36 +70,12 @@ public sealed partial class SettingsViewModel : ObservableObject
     public bool IsHighContrastLightSelected { get => _isHighContrastLightSelected; set { if (SetProperty(ref _isHighContrastLightSelected, value) && value) OnThemeSelectionChanged(ThemeType.HighContrastLight); } }
     #endregion
 
-    #region Windows Settings Properties
-    public bool UseSystemBackground
-    {
-        get => _useSystemBackground;
-        set
-        {
-            // Use SetProperty to automatically handle backing field update and notification
-            if (SetProperty(ref _useSystemBackground, value))
-            {
-                OnSystemBackgroundSelectionChanged(value);
-            }
-        }
-    }
-    #endregion
-
 
     public SettingsViewModel(DataExportService dataExportService, DataImportService dataImportService)
     {
         _dataExportService = dataExportService;
         _dataImportService = dataImportService;
         LoadSettings();
-    }
-
-    // Method called when UseSystemBackground changes
-    private void OnSystemBackgroundSelectionChanged(bool useSystemBackground)
-    {
-        AppSettings.UseWindowsSystemBackground = useSystemBackground;
-        Preferences.Set(AppSettings.UseWindowsSystemBackgroundKey, useSystemBackground);
-        WeakReferenceMessenger.Default.Send(new SystemBackgroundChangedMessage(useSystemBackground));
-        Debug.WriteLine($"SettingsViewModel: System background preference changed to {useSystemBackground}, message sent.");
     }
 
     private void OnCalendarSelectionChanged(bool isGregorianNowSelected)
@@ -206,10 +179,6 @@ public sealed partial class SettingsViewModel : ObservableObject
             OnThemeSelectionChanged(defaultTheme);
             Debug.WriteLine($"LoadSettings: No valid theme selected. Defaulting based on system theme to: {defaultTheme}");
         }
-
-        // Load Windows System Background Setting
-        _useSystemBackground = AppSettings.UseWindowsSystemBackground;
-        OnPropertyChanged(nameof(UseSystemBackground));
     }
 
 

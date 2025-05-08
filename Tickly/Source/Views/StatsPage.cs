@@ -16,8 +16,7 @@ public sealed class StatsPage : ContentPage
     {
         BindingContext = viewModel;
         Title = "Stats";
-        // REMOVED: Explicit background binding - rely on Style targeting Page
-        // this.SetBinding(BackgroundColorProperty, new Binding("AppBackgroundColor", source: Application.Current!.Resources));
+        this.SetDynamicResource(BackgroundColorProperty, "AppBackgroundColor"); // Ensure background follows theme
 
         Color initialChartTextColor = Application.Current?.RequestedTheme == AppTheme.Dark ? Colors.WhiteSmoke : Colors.Black;
         viewModel.ChartDrawable.TextColor = initialChartTextColor;

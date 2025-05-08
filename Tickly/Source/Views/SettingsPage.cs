@@ -14,8 +14,7 @@ public sealed class SettingsPage : ContentPage
     {
         BindingContext = viewModel;
         Title = "Settings";
-        // REMOVED: Explicit background binding - rely on Style targeting Page
-        // this.SetBinding(BackgroundColorProperty, new Binding("AppBackgroundColor", source: Application.Current!.Resources));
+        this.SetDynamicResource(BackgroundColorProperty, "AppBackgroundColor"); // Ensure background follows theme
 
         var mainLayout = new VerticalStackLayout
         {
@@ -46,21 +45,6 @@ public sealed class SettingsPage : ContentPage
                 new RadioButton { GroupName = "ThemeGroup", Content = "High Contrast Light" }.Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsHighContrastLightSelected)),
             }
         };
-
-#if WINDOWS
-        mainLayout.Children.Add(new BoxView { HeightRequest = 1, BackgroundColor = Color.FromArgb("#333333"), Margin = new(0, 15, 0, 15) });
-        mainLayout.Children.Add(new Label { Text = "Windows Settings", FontSize = LargeFontSize, FontAttributes = FontAttributes.Bold, Margin = new(0, 0, 0, 10) });
-        mainLayout.Children.Add(new HorizontalStackLayout
-        {
-             Spacing = 10, VerticalOptions = LayoutOptions.Center,
-             Children =
-             {
-                 new Label { Text = "Use System Background (Mica/Acrylic)", Style = GetStyle("BaseLabelStyle"), VerticalOptions = LayoutOptions.Center },
-                 new Switch { VerticalOptions = LayoutOptions.Center }.Bind(Switch.IsToggledProperty, nameof(SettingsViewModel.UseSystemBackground))
-             }
-        });
-        mainLayout.Children.Add(new Label { Text = "Applies transparency effect. May require restart.", Style = GetStyle("LightGrayLabel"), FontSize = SmallFontSize });
-#endif
 
         mainLayout.Children.Add(new BoxView { HeightRequest = 1, BackgroundColor = Color.FromArgb("#333333"), Margin = new(0, 15, 0, 15) });
         mainLayout.Children.Add(new Label { Text = "Calendar Settings", FontSize = LargeFontSize, FontAttributes = FontAttributes.Bold, Margin = new(0, 0, 0, 10) });
