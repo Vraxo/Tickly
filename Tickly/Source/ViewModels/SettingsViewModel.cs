@@ -1,10 +1,18 @@
-﻿using System.Diagnostics;
+﻿using System.Collections.ObjectModel;
+using System.Diagnostics;
+using System.Globalization;
+using System.Text;
+using System.Text.Json;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
+using Microsoft.Maui.ApplicationModel.DataTransfer;
+using Microsoft.Maui.Controls;
 using Tickly.Messages;
 using Tickly.Models;
 using Tickly.Services;
+using Tickly.Utils;
+using Tickly.Views;
 
 namespace Tickly.ViewModels;
 
@@ -31,12 +39,23 @@ public sealed partial class SettingsViewModel : ObservableObject
     private bool _isHighContrastDarkSelected;
     private bool _isHighContrastLightSelected;
 
+    // Windows Specific Setting
+    private bool _useSystemBackground; // Field for the new setting
+
     private const string OldTaskExportFilePrefix = "Tickly-Tasks-Export-";
     private const string NewDataExportFilePrefix = "Tickly_";
 
     #region Calendar Properties Getters/Setters
-    public bool IsGregorianSelected { get => _isGregorianSelected; set { if (SetProperty(ref _isGregorianSelected, value) && value) OnCalendarSelectionChanged(true); } }
-    public bool IsPersianSelected { get => _isPersianSelected; set { if (SetProperty(ref _isPersianSelected, value) && value) OnCalendarSelectionChanged(false); } }
+    public bool IsGregorianSelected
+    {
+        get => _isGregorianSelected;
+        set { if (SetProperty(ref _isGregorianSelected, value) && value) OnCalendarSelectionChanged(true); }
+    }
+    public bool IsPersianSelected
+    {
+        get => _isPersianSelected;
+        set { if (SetProperty(ref _isPersianSelected, value) && value) OnCalendarSelectionChanged(false); }
+    }
     #endregion
 
     #region Theme Properties Getters/Setters
@@ -54,11 +73,36 @@ public sealed partial class SettingsViewModel : ObservableObject
     public bool IsHighContrastLightSelected { get => _isHighContrastLightSelected; set { if (SetProperty(ref _isHighContrastLightSelected, value) && value) OnThemeSelectionChanged(ThemeType.HighContrastLight); } }
     #endregion
 
+    #region Windows Settings Properties
+    public bool UseSystemBackground
+    {
+        get => _useSystemBackground;
+        set
+        {
+            // Use SetProperty to automatically handle backing field update and notification
+            if (SetProperty(ref _useSystemBackground, value))
+            {
+                OnSystemBackgroundSelectionChanged(value);
+            }
+        }
+    }
+    #endregion
+
+
     public SettingsViewModel(DataExportService dataExportService, DataImportService dataImportService)
     {
         _dataExportService = dataExportService;
         _dataImportService = dataImportService;
         LoadSettings();
+    }
+
+    // Method called when UseSystemBackground changes
+    private void OnSystemBackgroundSelectionChanged(bool useSystemBackground)
+    {
+        AppSettings.UseWindowsSystemBackground = useSystemBackground;
+        Preferences.Set(AppSettings.UseWindowsSystemBackgroundKey, useSystemBackground);
+        WeakReferenceMessenger.Default.Send(new SystemBackgroundChangedMessage(useSystemBackground));
+        Debug.WriteLine($"SettingsViewModel: System background preference changed to {useSystemBackground}, message sent.");
     }
 
     private void OnCalendarSelectionChanged(bool isGregorianNowSelected)
@@ -103,6 +147,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         UpdateThemeSetting(selectedTheme);
     }
 
+
     private void UpdateThemeSetting(ThemeType newTheme)
     {
         if (AppSettings.SelectedTheme == newTheme) return;
@@ -141,15 +186,30 @@ public sealed partial class SettingsViewModel : ObservableObject
         _isSepiaSelected = currentTheme == ThemeType.Sepia;
         _isHighContrastDarkSelected = currentTheme == ThemeType.HighContrastDark;
         _isHighContrastLightSelected = currentTheme == ThemeType.HighContrastLight;
-        OnPropertyChanged(nameof(IsPitchBlackSelected)); OnPropertyChanged(nameof(IsDarkGraySelected)); OnPropertyChanged(nameof(IsNordSelected)); OnPropertyChanged(nameof(IsCatppuccinMochaSelected)); OnPropertyChanged(nameof(IsSolarizedDarkSelected)); OnPropertyChanged(nameof(IsGruvboxDarkSelected)); OnPropertyChanged(nameof(IsMonokaiSelected)); OnPropertyChanged(nameof(IsLightSelected)); OnPropertyChanged(nameof(IsSolarizedLightSelected)); OnPropertyChanged(nameof(IsSepiaSelected)); OnPropertyChanged(nameof(IsHighContrastDarkSelected)); OnPropertyChanged(nameof(IsHighContrastLightSelected));
+        OnPropertyChanged(nameof(IsPitchBlackSelected));
+        OnPropertyChanged(nameof(IsDarkGraySelected));
+        OnPropertyChanged(nameof(IsNordSelected));
+        OnPropertyChanged(nameof(IsCatppuccinMochaSelected));
+        OnPropertyChanged(nameof(IsSolarizedDarkSelected));
+        OnPropertyChanged(nameof(IsGruvboxDarkSelected));
+        OnPropertyChanged(nameof(IsMonokaiSelected));
+        OnPropertyChanged(nameof(IsLightSelected));
+        OnPropertyChanged(nameof(IsSolarizedLightSelected));
+        OnPropertyChanged(nameof(IsSepiaSelected));
+        OnPropertyChanged(nameof(IsHighContrastDarkSelected));
+        OnPropertyChanged(nameof(IsHighContrastLightSelected));
         bool anyThemeSelected = _isPitchBlackSelected || _isDarkGraySelected || _isNordSelected || _isCatppuccinMochaSelected || _isSolarizedDarkSelected || _isGruvboxDarkSelected || _isMonokaiSelected || _isLightSelected || _isSolarizedLightSelected || _isSepiaSelected || _isHighContrastDarkSelected || _isHighContrastLightSelected;
         if (!anyThemeSelected)
         {
-            AppTheme systemTheme = Microsoft.Maui.Controls.Application.Current?.RequestedTheme ?? AppTheme.Dark;
+            AppTheme systemTheme = Application.Current?.RequestedTheme ?? AppTheme.Dark;
             ThemeType defaultTheme = systemTheme == AppTheme.Light ? ThemeType.Light : ThemeType.PitchBlack;
             OnThemeSelectionChanged(defaultTheme);
             Debug.WriteLine($"LoadSettings: No valid theme selected. Defaulting based on system theme to: {defaultTheme}");
         }
+
+        // Load Windows System Background Setting
+        _useSystemBackground = AppSettings.UseWindowsSystemBackground;
+        OnPropertyChanged(nameof(UseSystemBackground));
     }
 
 
@@ -159,23 +219,35 @@ public sealed partial class SettingsViewModel : ObservableObject
         Debug.WriteLine("SettingsViewModel.ExportDataAsync: Starting data export process.");
         try
         {
-            CleanUpOldExportFiles(OldTaskExportFilePrefix, ".json"); CleanUpOldExportFiles(NewDataExportFilePrefix, ".json");
+            CleanUpOldExportFiles(OldTaskExportFilePrefix, ".json");
+            CleanUpOldExportFiles(NewDataExportFilePrefix, ".json");
             bool success = await _dataExportService.ExportDataAsync();
             if (!success) await ShowAlertAsync("Export Failed", "Could not export Tickly data.", "OK");
         }
-        catch (Exception ex) { Debug.WriteLine($"SettingsViewModel.ExportDataAsync: Exception: {ex.Message}"); await ShowAlertAsync("Export Error", $"An error occurred: {ex.Message}", "OK"); }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"SettingsViewModel.ExportDataAsync: Exception caught: {ex.GetType().Name} - {ex.Message}\nStackTrace: {ex.StackTrace}");
+            await ShowAlertAsync("Export Error", $"An error occurred during data export: {ex.Message}", "OK");
+        }
     }
 
     private void CleanUpOldExportFiles(string prefix, string extension)
     {
         try
         {
-            string cacheDir = FileSystem.CacheDirectory; if (!Directory.Exists(cacheDir)) return;
-            string searchPattern = $"{prefix}*{extension}"; IEnumerable<string> oldFiles = Directory.EnumerateFiles(cacheDir, searchPattern);
-            int count = 0; foreach (string file in oldFiles) { try { File.Delete(file); count++; } catch (Exception ex) { Debug.WriteLine($"Cleanup Error: {ex.Message}"); } }
-            Debug.WriteLine($"CleanUpOldExportFiles: Deleted {count} files matching '{searchPattern}'.");
+            string cacheDir = FileSystem.CacheDirectory;
+            if (!Directory.Exists(cacheDir)) return;
+            string searchPattern = $"{prefix}*{extension}";
+            IEnumerable<string> oldFiles = Directory.EnumerateFiles(cacheDir, searchPattern);
+            int count = 0;
+            foreach (string file in oldFiles)
+            {
+                try { File.Delete(file); count++; }
+                catch (Exception ex) { Debug.WriteLine($"CleanUpOldExportFiles: Error deleting old file '{file}': {ex.Message}"); }
+            }
+            Debug.WriteLine($"CleanUpOldExportFiles: Deleted {count} old export files matching pattern '{searchPattern}'.");
         }
-        catch (Exception ex) { Debug.WriteLine($"CleanUpOldExportFiles: Error: {ex.Message}"); }
+        catch (Exception ex) { Debug.WriteLine($"CleanUpOldExportFiles: Error during cleanup for pattern '{prefix}*{extension}': {ex.Message}"); }
     }
 
     [RelayCommand]
@@ -184,13 +256,24 @@ public sealed partial class SettingsViewModel : ObservableObject
         Debug.WriteLine("SettingsViewModel.ImportDataAsync: Starting data import process.");
         try
         {
-            bool confirmed = await ShowConfirmationAsync("Confirm Import", "REPLACE current tasks, settings, and progress? This cannot be undone.", "Replace All Data", "Cancel");
+            bool confirmed = await ShowConfirmationAsync("Confirm Import", "This will REPLACE your current tasks, settings, and progress with the content of the selected file. This cannot be undone. Proceed?", "Replace All Data", "Cancel");
             if (!confirmed) return;
             bool success = await _dataImportService.ImportDataAsync();
-            if (success) { await ShowAlertAsync("Import Successful", "Tickly data imported successfully.", "OK"); LoadSettings(); }
-            else { await ShowAlertAsync("Import Failed", "Could not import Tickly data.", "OK"); }
+            if (success)
+            {
+                await ShowAlertAsync("Import Successful", "Tickly data imported successfully.", "OK");
+                LoadSettings(); // Reload VM settings
+            }
+            else
+            {
+                await ShowAlertAsync("Import Failed", "Could not import Tickly data.", "OK");
+            }
         }
-        catch (Exception ex) { Debug.WriteLine($"SettingsViewModel.ImportDataAsync: Exception: {ex.Message}"); await ShowAlertAsync("Import Error", $"An unexpected error occurred: {ex.Message}", "OK"); }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"SettingsViewModel.ImportDataAsync: Exception caught: {ex.GetType().Name} - {ex.Message}\nStackTrace: {ex.StackTrace}");
+            await ShowAlertAsync("Import Error", $"An unexpected error occurred during data import: {ex.Message}", "OK");
+        }
     }
 
     private static async Task ShowAlertAsync(string title, string message, string cancelAction)
@@ -198,7 +281,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         if (!MainThread.IsMainThread) { await MainThread.InvokeOnMainThreadAsync(() => ShowAlertAsync(title, message, cancelAction)); return; }
         Page? currentPage = GetCurrentPage();
         if (currentPage is not null) await currentPage.DisplayAlert(title, message, cancelAction);
-        else Debug.WriteLine($"ShowAlert: Could not find current page: {title}");
+        else Debug.WriteLine($"ShowAlert: Could not find current page to display alert: {title}");
     }
 
     private static async Task<bool> ShowConfirmationAsync(string title, string message, string acceptAction, string cancelAction)
@@ -211,13 +294,14 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     private static Page? GetCurrentPage()
     {
-        Page? currentPage = Microsoft.Maui.Controls.Application.Current?.MainPage;
+        Page? currentPage = Application.Current?.MainPage;
         if (currentPage is Shell shell) currentPage = shell.CurrentPage;
         else if (currentPage is NavigationPage navPage) currentPage = navPage.CurrentPage;
         else if (currentPage is TabbedPage tabbedPage) currentPage = tabbedPage.CurrentPage;
-        if (currentPage == null && Microsoft.Maui.Controls.Application.Current?.Windows is { Count: > 0 } windows && windows[0].Page is not null)
+        if (currentPage == null && Application.Current?.Windows is { Count: > 0 } windows && windows[0].Page is not null)
         {
-            currentPage = windows[0].Page; if (currentPage is NavigationPage navPageModal && navPageModal.CurrentPage != null) currentPage = navPageModal.CurrentPage;
+            currentPage = windows[0].Page;
+            if (currentPage is NavigationPage navPageModal && navPageModal.CurrentPage != null) currentPage = navPageModal.CurrentPage;
         }
         if (currentPage == null) Debug.WriteLine("GetCurrentPage: Could not determine current page.");
         return currentPage;

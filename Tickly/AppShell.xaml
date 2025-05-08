@@ -6,14 +6,14 @@
     xmlns:local="clr-namespace:Tickly"
     xmlns:views="clr-namespace:Tickly.Views"
     Shell.FlyoutBehavior="Flyout"
+    Shell.BackgroundColor="{DynamicResource AppBackgroundColor}"
     Shell.TitleColor="{DynamicResource AppForegroundColor}"
     Shell.DisabledColor="{DynamicResource AppSecondaryTextColor}"
     Shell.UnselectedColor="{DynamicResource AppSecondaryTextColor}"
-    Shell.BackgroundColor="{DynamicResource AppSurfaceColor}"
-    >
+    Shell.FlyoutBackgroundColor="{DynamicResource AppSurfaceColor}">
 
     <Shell.FlyoutHeader>
-        <ContentView BackgroundColor="{DynamicResource AppSurfaceColor}">
+        <ContentView>
             <ContentView.Padding>
                 <OnPlatform x:TypeArguments="Thickness">
                     <On Platform="Android" Value="0,40,0,0"/>
