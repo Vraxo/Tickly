@@ -56,12 +56,41 @@ public sealed partial class MainViewModel : ObservableObject
         UpdateUiVisualState();
     }
 
+    private async Task ShowAndroidDebugAlert(string title, string message)
+    {
+#if ANDROID
+        try
+        {
+            if (Shell.Current?.CurrentPage != null)
+            {
+                await Shell.Current.DisplayAlert(title, message, "OK");
+            }
+            else
+            {
+                Debug.WriteLine($"[ANDROID_DEBUG_ALERT] {title}: {message} - Shell.Current.CurrentPage is null.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[ANDROID_DEBUG_ALERT_FAIL] {title}: {ex.Message}");
+        }
+#else
+        // Keep compiler happy for non-Android builds if this helper were used elsewhere
+        await Task.CompletedTask; 
+#endif
+    }
+
+
     [RelayCommand]
     private async Task NavigateToAddPage()
     {
         try
         {
-            Dictionary<string, object> navigationParameter = new() { { "TaskToEdit", null! } };
+            Dictionary<string, object> navigationParameter = new() 
+            { 
+                { "TaskToEdit", null! } 
+            };
+
             await Shell.Current.GoToAsync(nameof(AddTaskPopupPage), true, navigationParameter);
         }
         catch (Exception exception)
@@ -73,7 +102,10 @@ public sealed partial class MainViewModel : ObservableObject
     [RelayCommand]
     private async Task NavigateToEditPage(TaskItem? taskToEdit)
     {
-        if (taskToEdit is null) return;
+        if (taskToEdit is null)
+        {
+            return;
+        }
 
         try
         {
@@ -83,6 +115,7 @@ public sealed partial class MainViewModel : ObservableObject
         catch (Exception exception)
         {
             Debug.WriteLine($"Error navigating to edit page for task {taskToEdit.Id}: {exception.Message}");
+            await ShowAndroidDebugAlert("Navigation Error", $"Error in NavigateToEditPage: {exception.Message}");
         }
     }
 
@@ -121,7 +154,12 @@ public sealed partial class MainViewModel : ObservableObject
             await MainThread.InvokeOnMainThreadAsync(() =>
             {
                 Tasks.Clear();
-                foreach (var task in tasksToAdd) { Tasks.Add(task); }
+
+                foreach (TaskItem task in tasksToAdd)
+                { 
+                    Tasks.Add(task); 
+                }
+
                 UpdateUiVisualState();
                 Debug.WriteLine($"MainViewModel.LoadTasksAsync: Updated Tasks collection on UI thread.");
             });
@@ -300,22 +338,35 @@ public sealed partial class MainViewModel : ObservableObject
             }
 
             removedSuccessfully = Tasks.Remove(taskToRemove);
-            if (removedSuccessfully) { UpdateUiVisualState(); TriggerSave(); }
+            
+            if (removedSuccessfully) 
+            {
+                UpdateUiVisualState(); 
+                TriggerSave(); 
+            }
         });
     }
 
     private void Tasks_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs eventArgs)
     {
         UpdateUiVisualState();
-        if (eventArgs.Action == NotifyCollectionChangedAction.Move)
+        if (eventArgs.Action != NotifyCollectionChangedAction.Move)
         {
-            // Ensure order property matches new physical index after move
-            for (int i = 0; i < Tasks.Count; i++)
-            {
-                if (Tasks[i].Order != i) Tasks[i].Order = i;
-            }
-            TriggerSave();
+            return;
         }
+
+        // Ensure order property matches new physical index after move
+        for (int i = 0; i < Tasks.Count; i++)
+        {
+            if (Tasks[i].Order == i)
+            {
+                continue;
+            }
+
+            Tasks[i].Order = i;
+        }
+
+        TriggerSave();
         // Saves for Add/Remove/Replace are triggered by their respective handlers now
     }
 
@@ -350,6 +401,7 @@ public sealed partial class MainViewModel : ObservableObject
     private void TriggerSave()
     {
         _debounceTaskSaveTimer?.Dispose();
+
         _debounceTaskSaveTimer = new(async (state) =>
         {
             await SaveTasks();
@@ -383,6 +435,7 @@ public sealed partial class MainViewModel : ObservableObject
     private void TriggerSaveDailyProgress()
     {
         _debounceProgressSaveTimer?.Dispose();
+
         _debounceProgressSaveTimer = new(async (state) =>
         {
             await SaveCurrentDayProgressAsync();

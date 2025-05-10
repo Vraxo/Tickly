@@ -23,19 +23,12 @@ using Tickly.Services;
 using System.Diagnostics;
 using Tickly.Messages;
 using Tickly.Models;
-using System.Collections.Generic; // For List
-using System.Linq; // For Linq operations on list
 
 #if WINDOWS
-using Microsoft.UI.Xaml;
-using Microsoft.UI;
-using Microsoft.UI.Windowing;
-using WinRT.Interop;
-using Microsoft.UI.Composition.SystemBackdrops;
-using WinRT;
+using Microsoft.UI; // Still needed for positioning potentially
+using Microsoft.UI.Windowing; // Still needed for positioning
+using WinRT.Interop; // Still needed for positioning
 #endif
-
-using MauiColors = Microsoft.Maui.Graphics.Colors;
 
 namespace Tickly;
 
@@ -46,11 +39,7 @@ public partial class App : Microsoft.Maui.Controls.Application
     private readonly ThemeService _themeService;
 
 #if WINDOWS
-    private Microsoft.UI.Xaml.Window? _nativeWindow;
-    private MicaController? _micaController;
-    private SystemBackdropConfiguration? _backdropConfiguration;
-    // Re-introduced page tracking
-    private readonly List<WeakReference<Page>> _shellManagedPages = [];
+    private Microsoft.UI.Xaml.Window? _nativeWindow; // Keep for resizing
 #endif
 
     public App(ThemeService themeService)
@@ -58,136 +47,16 @@ public partial class App : Microsoft.Maui.Controls.Application
         InitializeComponent();
         _themeService = themeService;
 
-        // 1. Apply theme resources
         _themeService.ApplyTheme(AppSettings.SelectedTheme);
-
-        // 2. Apply system background override (may change page backgrounds)
-        // Defer slightly to allow MainPage/Shell to initialize better
-        Dispatcher.DispatchDelayed(TimeSpan.FromMilliseconds(100), () =>
-        {
-            ApplySystemBackgroundOverride(AppSettings.UseWindowsSystemBackground);
-        });
 
         MainPage = new AppShell();
 
-#if WINDOWS
-        if (MainPage is Shell shell)
-        {
-            shell.Navigated += Shell_Navigated;
-            // Attempt initial registration after a short delay
-            shell.Dispatcher.DispatchDelayed(TimeSpan.FromMilliseconds(50), () => RegisterCurrentShellPage(shell));
-        }
-#endif
-
         WeakReferenceMessenger.Default.Register<ThemeChangedMessage>(this, HandleThemeChanged);
-        WeakReferenceMessenger.Default.Register<SystemBackgroundChangedMessage>(this, HandleSystemBackgroundChanged);
     }
-
-#if WINDOWS
-    private void Shell_Navigated(object? sender, ShellNavigatedEventArgs e)
-    {
-        if (sender is Shell shell)
-        {
-            RegisterCurrentShellPage(shell); // Register the page that was navigated TO
-        }
-        CleanupWeakReferences();
-    }
-
-    // Renamed and simplified registration
-    private void RegisterCurrentShellPage(Shell shell)
-    {
-        var currentPage = shell.CurrentPage;
-        if (currentPage == null) return;
-
-        if (!_shellManagedPages.Any(wr => wr.TryGetTarget(out var target) && target == currentPage))
-        {
-            _shellManagedPages.Add(new WeakReference<Page>(currentPage));
-            Debug.WriteLine($"Registered Shell Page: {currentPage.GetType().Name}");
-            // Apply current override state immediately to the newly registered page
-            ApplySystemBackgroundOverrideToPage(currentPage, AppSettings.UseWindowsSystemBackground);
-        }
-    }
-
-    private void CleanupWeakReferences()
-    {
-        _shellManagedPages.RemoveAll(wr => !wr.TryGetTarget(out _));
-        // Debug.WriteLine($"CleanupWeakReferences: {_shellManagedPages.Count} references remain.");
-    }
-
-    // Consolidated direct background setting logic
-    private void ApplySystemBackgroundOverrideToPage(Page page, bool useSystemBackground)
-    {
-        if (page == null) return;
-
-        MainThread.BeginInvokeOnMainThread(() => // Ensure UI updates on main thread
-        {
-            Color targetColor;
-            if (useSystemBackground)
-            {
-                targetColor = MauiColors.Transparent;
-                // Debug.WriteLine($"ApplySystemBackgroundOverrideToPage: Setting {page.GetType().Name} BG -> Transparent.");
-            }
-            else
-            {
-                // Fetch the *actual* theme color from the resource dictionary
-                if (Microsoft.Maui.Controls.Application.Current?.Resources.TryGetValue("AppBackgroundColor", out var themeColor) == true && themeColor is Color color)
-                {
-                    targetColor = color;
-                    // Debug.WriteLine($"ApplySystemBackgroundOverrideToPage: Setting {page.GetType().Name} BG -> Theme Color ({targetColor}).");
-                }
-                else
-                {
-                    targetColor = MauiColors.Black; // Fallback
-                    Debug.WriteLine($"ApplySystemBackgroundOverrideToPage: Theme color resource not found for {page.GetType().Name}. Falling back to Black.");
-                }
-            }
-            page.BackgroundColor = targetColor;
-        });
-    }
-#endif
 
     private void HandleThemeChanged(object recipient, ThemeChangedMessage message)
     {
-        // 1. Apply the theme resource changes
         _themeService.ApplyTheme(message.Value);
-        // 2. Re-apply the background override based on the *current* setting
-        ApplySystemBackgroundOverride(AppSettings.UseWindowsSystemBackground);
-    }
-
-    private void HandleSystemBackgroundChanged(object recipient, SystemBackgroundChangedMessage message)
-    {
-        // Only apply the background override when this specific setting changes
-        ApplySystemBackgroundOverride(message.Value);
-    }
-
-    // Renamed: This now specifically handles the background override logic
-    private void ApplySystemBackgroundOverride(bool useSystemBackground)
-    {
-#if WINDOWS
-        // Update Mica First
-        bool micaSuccess = TrySetMica(useSystemBackground);
-
-        // Apply background color override to known pages *after* Mica state is set
-        MainThread.BeginInvokeOnMainThread(() => // Run UI updates on main thread
-        {
-            CleanupWeakReferences();
-            foreach (var weakRef in _shellManagedPages)
-            {
-                if (weakRef.TryGetTarget(out var page))
-                {
-                     // If Mica failed to apply, force non-transparent background regardless of setting
-                    ApplySystemBackgroundOverrideToPage(page, useSystemBackground && micaSuccess);
-                }
-            }
-
-            // Apply to Shell itself
-            if (MainPage is Shell shell)
-            {
-                ApplySystemBackgroundOverrideToPage(shell, useSystemBackground && micaSuccess);
-                Debug.WriteLine($"ApplySystemBackgroundOverride: Updated Shell Background (UseSystemBG: {useSystemBackground}, MicaSuccess: {micaSuccess})");
-            }
-        });
-#endif
     }
 
     protected override void OnStart() { base.OnStart(); }
@@ -212,11 +81,8 @@ public partial class App : Microsoft.Maui.Controls.Application
     private void Window_Stopped(object? sender, EventArgs e)
     {
 #if WINDOWS
-         if (_micaController != null) { _micaController.Dispose(); _micaController = null; }
-         _nativeWindow = null; _backdropConfiguration = null;
-         _shellManagedPages.Clear();
-          if (MainPage is Shell shell) shell.Navigated -= Shell_Navigated;
-         Debug.WriteLine("Window_Stopped: Cleaned up WinUI resources.");
+         _nativeWindow = null;
+         Debug.WriteLine("Window_Stopped: Cleaned up WinUI native window reference.");
 #endif
     }
 
@@ -228,9 +94,6 @@ public partial class App : Microsoft.Maui.Controls.Application
          _nativeWindow = mauiWindow.Handler?.PlatformView as Microsoft.UI.Xaml.Window;
          if (_nativeWindow != null)
          {
-              // Initial Mica attempt deferred to ApplySystemBackgroundOverride in App constructor
-
-              // Resizing Logic
               try { PositionAndResizeWindow(); } catch (Exception ex) { Debug.WriteLine($"Window_Created_Windows: Error resizing: {ex.Message}"); }
          }
      }
@@ -257,94 +120,6 @@ public partial class App : Microsoft.Maui.Controls.Application
              Debug.WriteLine($"PositionAndResizeWindow: Window positioned/resized.");
          }
      }
-
-
-    private bool TrySetMica(bool enable)
-    {
-        if (_nativeWindow == null) { Debug.WriteLine("TrySetMica: Native window is null."); return false; }
-        if (!MicaController.IsSupported())
-        {
-             if (enable) Debug.WriteLine("TrySetMica: Mica not supported.");
-             if (_micaController != null) { _micaController.Dispose(); _micaController = null; }
-             return false;
-        }
-
-        if (enable)
-        {
-            if (_micaController == null)
-            {
-                _micaController = new MicaController();
-                _backdropConfiguration ??= new SystemBackdropConfiguration();
-                _nativeWindow.Activated -= Window_Activated; _nativeWindow.Activated += Window_Activated;
-                _nativeWindow.Closed -= Window_Closed; _nativeWindow.Closed += Window_Closed;
-                if(_nativeWindow.Content is FrameworkElement fwE) fwE.ActualThemeChanged -= Window_ThemeChanged;
-                if(_nativeWindow.Content is FrameworkElement fwE2) fwE2.ActualThemeChanged += Window_ThemeChanged;
-                _backdropConfiguration.IsInputActive = _nativeWindow.Visible;
-                SetConfigurationSourceTheme();
-                _micaController.SetSystemBackdropConfiguration(_backdropConfiguration);
-                bool result = _micaController.AddSystemBackdropTarget(_nativeWindow.As<Microsoft.UI.Composition.ICompositionSupportsSystemBackdrop>());
-                if(result) Debug.WriteLine("TrySetMica: Mica ENABLED."); else Debug.WriteLine("TrySetMica: AddSystemBackdropTarget FAILED.");
-                return result;
-            }
-            SetConfigurationSourceTheme(); // Refresh theme config if already enabled
-            return true; // Already enabled
-        }
-        else // Disabling Mica
-        {
-            if (_micaController != null)
-            {
-                _micaController.Dispose(); _micaController = null;
-                _nativeWindow.Activated -= Window_Activated;
-                _nativeWindow.Closed -= Window_Closed;
-                 if(_nativeWindow.Content is FrameworkElement fwElement) fwElement.ActualThemeChanged -= Window_ThemeChanged;
-                Debug.WriteLine("TrySetMica: Mica DISABLED.");
-            }
-            return true;
-        }
-    }
-
-    private void Window_Activated(object sender, WindowActivatedEventArgs args)
-    {
-        if (_backdropConfiguration != null)
-            _backdropConfiguration.IsInputActive = args.WindowActivationState != WindowActivationState.Deactivated;
-    }
-
-    private void Window_Closed(object sender, WindowEventArgs args)
-    {
-        if (_micaController != null) { _micaController.Dispose(); _micaController = null; }
-        if (sender is Microsoft.UI.Xaml.Window window)
-        {
-            window.Activated -= Window_Activated; window.Closed -= Window_Closed;
-            if(window.Content is FrameworkElement content) content.ActualThemeChanged -= Window_ThemeChanged;
-        }
-         _nativeWindow = null; _backdropConfiguration = null; _shellManagedPages.Clear();
-         if(MainPage is Shell shell) shell.Navigated -= Shell_Navigated;
-         Debug.WriteLine("Window_Closed: Cleaned up Mica controller and handlers.");
-    }
-
-    private void Window_ThemeChanged(FrameworkElement sender, object args) => SetConfigurationSourceTheme();
-
-    private void SetConfigurationSourceTheme()
-    {
-        if (_backdropConfiguration == null) return;
-
-        var currentMauiTheme = Microsoft.Maui.Controls.Application.Current?.UserAppTheme ?? AppTheme.Unspecified;
-        ElementTheme? frameworkElementTheme = (_nativeWindow?.Content as FrameworkElement)?.ActualTheme;
-
-        if (frameworkElementTheme.HasValue)
-        {
-             _backdropConfiguration.Theme = frameworkElementTheme.Value switch {
-                 ElementTheme.Dark => SystemBackdropTheme.Dark, ElementTheme.Light => SystemBackdropTheme.Light, _ => SystemBackdropTheme.Default
-             };
-        }
-        else if (currentMauiTheme != AppTheme.Unspecified)
-        {
-             _backdropConfiguration.Theme = currentMauiTheme switch {
-                 AppTheme.Dark => SystemBackdropTheme.Dark, AppTheme.Light => SystemBackdropTheme.Light, _ => SystemBackdropTheme.Default
-             };
-        }
-        else { _backdropConfiguration.Theme = SystemBackdropTheme.Default; }
-    }
 #endif
 }
 
@@ -9714,17 +9489,15 @@ public sealed class SystemBackgroundChangedMessage(bool useSystemBackground) : V
 </file>
 
 <file path="Source\Messages\TasksReloadRequestedMessage.cs">
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using Tickly;
+using CommunityToolkit.Mvvm.Messaging.Messages;
 
 namespace Tickly.Messages;
 
-public class TasksReloadRequestedMessage : Commu
+public class TasksReloadRequestedMessage : ValueChangedMessage<bool>
 {
+    public TasksReloadRequestedMessage() : base(true)
+    {
+    }
 }
 </file>
 
@@ -9913,11 +9686,9 @@ public static class AppSettings
 {
     public const string CalendarSystemKey = "CalendarSystemPreference";
     public const string ThemePreferenceKey = "ThemePreference";
-    public const string UseWindowsSystemBackgroundKey = "UseWindowsSystemBackground"; // Added Key
 
     private static CalendarSystemType _selectedCalendarSystem;
     private static ThemeType _selectedTheme;
-    private static bool _useWindowsSystemBackground; // Added Field
 
     static AppSettings()
     {
@@ -9928,10 +9699,6 @@ public static class AppSettings
         int storedThemeValue = Preferences.Get(ThemePreferenceKey, (int)ThemeType.PitchBlack); // Default to PitchBlack if not set
         _selectedTheme = (ThemeType)storedThemeValue;
         Debug.WriteLine($"AppSettings (Static Constructor): Initialized Theme to {_selectedTheme} from Preferences.");
-
-        // Load the system background setting, default to false
-        _useWindowsSystemBackground = Preferences.Get(UseWindowsSystemBackgroundKey, false);
-        Debug.WriteLine($"AppSettings (Static Constructor): Initialized UseWindowsSystemBackground to {_useWindowsSystemBackground} from Preferences.");
     }
 
     public static CalendarSystemType SelectedCalendarSystem
@@ -9957,21 +9724,6 @@ public static class AppSettings
             {
                 _selectedTheme = value;
                 Debug.WriteLine($"AppSettings: Theme changed to {value}.");
-                // Note: Saving is handled by SettingsViewModel to ensure UI updates
-            }
-        }
-    }
-
-    // Added Property for system background
-    public static bool UseWindowsSystemBackground
-    {
-        get => _useWindowsSystemBackground;
-        set
-        {
-            if (_useWindowsSystemBackground != value)
-            {
-                _useWindowsSystemBackground = value;
-                Debug.WriteLine($"AppSettings: UseWindowsSystemBackground changed to {value}.");
                 // Note: Saving is handled by SettingsViewModel to ensure UI updates
             }
         }
@@ -11261,9 +11013,6 @@ public sealed partial class SettingsViewModel : ObservableObject
     private bool _isHighContrastDarkSelected;
     private bool _isHighContrastLightSelected;
 
-    // Windows Specific Setting
-    private bool _useSystemBackground; // Field for the new setting
-
     private const string OldTaskExportFilePrefix = "Tickly-Tasks-Export-";
     private const string NewDataExportFilePrefix = "Tickly_";
 
@@ -11295,36 +11044,12 @@ public sealed partial class SettingsViewModel : ObservableObject
     public bool IsHighContrastLightSelected { get => _isHighContrastLightSelected; set { if (SetProperty(ref _isHighContrastLightSelected, value) && value) OnThemeSelectionChanged(ThemeType.HighContrastLight); } }
     #endregion
 
-    #region Windows Settings Properties
-    public bool UseSystemBackground
-    {
-        get => _useSystemBackground;
-        set
-        {
-            // Use SetProperty to automatically handle backing field update and notification
-            if (SetProperty(ref _useSystemBackground, value))
-            {
-                OnSystemBackgroundSelectionChanged(value);
-            }
-        }
-    }
-    #endregion
-
 
     public SettingsViewModel(DataExportService dataExportService, DataImportService dataImportService)
     {
         _dataExportService = dataExportService;
         _dataImportService = dataImportService;
         LoadSettings();
-    }
-
-    // Method called when UseSystemBackground changes
-    private void OnSystemBackgroundSelectionChanged(bool useSystemBackground)
-    {
-        AppSettings.UseWindowsSystemBackground = useSystemBackground;
-        Preferences.Set(AppSettings.UseWindowsSystemBackgroundKey, useSystemBackground);
-        WeakReferenceMessenger.Default.Send(new SystemBackgroundChangedMessage(useSystemBackground));
-        Debug.WriteLine($"SettingsViewModel: System background preference changed to {useSystemBackground}, message sent.");
     }
 
     private void OnCalendarSelectionChanged(bool isGregorianNowSelected)
@@ -11428,10 +11153,6 @@ public sealed partial class SettingsViewModel : ObservableObject
             OnThemeSelectionChanged(defaultTheme);
             Debug.WriteLine($"LoadSettings: No valid theme selected. Defaulting based on system theme to: {defaultTheme}");
         }
-
-        // Load Windows System Background Setting
-        _useSystemBackground = AppSettings.UseWindowsSystemBackground;
-        OnPropertyChanged(nameof(UseSystemBackground));
     }
 
 
@@ -11906,20 +11627,6 @@ public sealed partial class StatsViewModel : ObservableObject
             return color;
         }
         return Application.Current?.RequestedTheme == AppTheme.Dark ? Colors.WhiteSmoke : Colors.Black;
-    }
-}
-</file>
-
-<file path="Source\ViewModels\TasksReloadRequestedMessage.cs">
-using CommunityToolkit.Mvvm.Messaging.Messages;
-
-namespace Tickly.Messages;
-
-public class TasksReloadRequestedMessage : ValueChangedMessage<bool>
-{
-    public TasksReloadRequestedMessage() : base(true)
-    {
-
     }
 }
 </file>
@@ -12413,8 +12120,7 @@ public sealed class SettingsPage : ContentPage
     {
         BindingContext = viewModel;
         Title = "Settings";
-        // REMOVED: Explicit background binding - rely on Style targeting Page
-        // this.SetBinding(BackgroundColorProperty, new Binding("AppBackgroundColor", source: Application.Current!.Resources));
+        this.SetDynamicResource(BackgroundColorProperty, "AppBackgroundColor"); // Ensure background follows theme
 
         var mainLayout = new VerticalStackLayout
         {
@@ -12445,21 +12151,6 @@ public sealed class SettingsPage : ContentPage
                 new RadioButton { GroupName = "ThemeGroup", Content = "High Contrast Light" }.Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsHighContrastLightSelected)),
             }
         };
-
-#if WINDOWS
-        mainLayout.Children.Add(new BoxView { HeightRequest = 1, BackgroundColor = Color.FromArgb("#333333"), Margin = new(0, 15, 0, 15) });
-        mainLayout.Children.Add(new Label { Text = "Windows Settings", FontSize = LargeFontSize, FontAttributes = FontAttributes.Bold, Margin = new(0, 0, 0, 10) });
-        mainLayout.Children.Add(new HorizontalStackLayout
-        {
-             Spacing = 10, VerticalOptions = LayoutOptions.Center,
-             Children =
-             {
-                 new Label { Text = "Use System Background (Mica/Acrylic)", Style = GetStyle("BaseLabelStyle"), VerticalOptions = LayoutOptions.Center },
-                 new Switch { VerticalOptions = LayoutOptions.Center }.Bind(Switch.IsToggledProperty, nameof(SettingsViewModel.UseSystemBackground))
-             }
-        });
-        mainLayout.Children.Add(new Label { Text = "Applies transparency effect. May require restart.", Style = GetStyle("LightGrayLabel"), FontSize = SmallFontSize });
-#endif
 
         mainLayout.Children.Add(new BoxView { HeightRequest = 1, BackgroundColor = Color.FromArgb("#333333"), Margin = new(0, 15, 0, 15) });
         mainLayout.Children.Add(new Label { Text = "Calendar Settings", FontSize = LargeFontSize, FontAttributes = FontAttributes.Bold, Margin = new(0, 0, 0, 10) });
@@ -12512,8 +12203,7 @@ public sealed class StatsPage : ContentPage
     {
         BindingContext = viewModel;
         Title = "Stats";
-        // REMOVED: Explicit background binding - rely on Style targeting Page
-        // this.SetBinding(BackgroundColorProperty, new Binding("AppBackgroundColor", source: Application.Current!.Resources));
+        this.SetDynamicResource(BackgroundColorProperty, "AppBackgroundColor"); // Ensure background follows theme
 
         Color initialChartTextColor = Application.Current?.RequestedTheme == AppTheme.Dark ? Colors.WhiteSmoke : Colors.Black;
         viewModel.ChartDrawable.TextColor = initialChartTextColor;

@@ -94,10 +94,6 @@
 	</ItemGroup>
 
 	<ItemGroup>
-	  <Compile Remove="Source\Messages\TasksReloadRequestedMessage.cs" />
-	</ItemGroup>
-
-	<ItemGroup>
 	  <None Remove="Resources\AppIcon\appicon.svg" />
 	</ItemGroup>
 
