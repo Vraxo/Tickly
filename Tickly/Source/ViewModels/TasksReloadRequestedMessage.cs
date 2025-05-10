@@ -6,5 +6,6 @@ public class TasksReloadRequestedMessage : ValueChangedMessage<bool>
 {
     public TasksReloadRequestedMessage() : base(true)
     {
+
     }
 }

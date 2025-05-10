@@ -13,7 +13,7 @@ namespace Tickly.ViewModels;
 
 public sealed partial class MainViewModel : ObservableObject
 {
-    private ObservableCollection<TaskItem> _tasks = [];
+    private ObservableCollection<TaskItem> _tasks = []; // Initialize directly
 
     public ObservableCollection<TaskItem> Tasks
     {
@@ -24,8 +24,8 @@ public sealed partial class MainViewModel : ObservableObject
     private Timer? _debounceTaskSaveTimer;
     private Timer? _debounceProgressSaveTimer;
     private readonly TaskVisualStateService _taskVisualStateService;
-    private readonly TaskStorageService _taskStorageService;
-    private readonly ProgressStorageService _progressStorageService;
+    private readonly TaskStorageService _taskStorageService; // Changed
+    private readonly ProgressStorageService _progressStorageService; // Added
     private readonly RepeatingTaskService _repeatingTaskService;
 
     [ObservableProperty]
@@ -35,13 +35,13 @@ public sealed partial class MainViewModel : ObservableObject
     private Color taskProgressColor = Color.FromRgba(0, 255, 0, 1);
 
     public MainViewModel(
-        TaskStorageService taskStorageService,
-        ProgressStorageService progressStorageService,
+        TaskStorageService taskStorageService,         // Changed
+        ProgressStorageService progressStorageService,   // Added
         RepeatingTaskService repeatingTaskService,
         TaskVisualStateService taskVisualStateService)
     {
-        _taskStorageService = taskStorageService;
-        _progressStorageService = progressStorageService;
+        _taskStorageService = taskStorageService;       // Changed
+        _progressStorageService = progressStorageService; // Added
         _repeatingTaskService = repeatingTaskService;
         _taskVisualStateService = taskVisualStateService;
 
@@ -59,7 +59,6 @@ public sealed partial class MainViewModel : ObservableObject
     [RelayCommand]
     private async Task NavigateToAddPage()
     {
-        Debug.WriteLine($"MainViewModel.NavigateToAddPage: Command invoked on {DeviceInfo.Platform}.");
         try
         {
             Dictionary<string, object> navigationParameter = new() { { "TaskToEdit", null! } };
@@ -92,15 +91,16 @@ public sealed partial class MainViewModel : ObservableObject
     {
         Debug.WriteLine($"MainViewModel.LoadTasksAsync: Requesting tasks from storage service.");
 
-        bool wasSubscribed = Tasks.Count > 0;
+        bool wasSubscribed = Tasks.Count > 0; // Simple check if collection might have been subscribed
         bool changesMade = false;
         List<TaskItem> loadedTasks = [];
 
         try
         {
+            // Unsubscribe temporarily to prevent triggering saves during batch load
             Tasks.CollectionChanged -= Tasks_CollectionChanged;
 
-            loadedTasks = await _taskStorageService.LoadTasksAsync();
+            loadedTasks = await _taskStorageService.LoadTasksAsync(); // Use TaskStorageService
             Debug.WriteLine($"MainViewModel.LoadTasksAsync: Received {loadedTasks.Count} tasks from service.");
 
             var today = DateTime.Today;
@@ -138,12 +138,13 @@ public sealed partial class MainViewModel : ObservableObject
 
             await MainThread.InvokeOnMainThreadAsync(() =>
             {
-                Tasks.Clear();
+                Tasks.Clear(); // Clear tasks on error
                 UpdateUiVisualState();
             });
         }
         finally
         {
+            // Re-subscribe after loading is complete
             Tasks.CollectionChanged += Tasks_CollectionChanged;
             Debug.WriteLine("MainViewModel.LoadTasksAsync: Finished and re-subscribed to CollectionChanged.");
         }
@@ -178,11 +179,12 @@ public sealed partial class MainViewModel : ObservableObject
             {
                 await MainThread.InvokeOnMainThreadAsync(() =>
                 {
-                    Tasks.CollectionChanged -= Tasks_CollectionChanged;
+                    // Re-sort potentially? Or just update visuals
+                    Tasks.CollectionChanged -= Tasks_CollectionChanged; // Temporarily unsubscribe
                     var sortedTasks = Tasks.OrderBy(t => t.Order).ToList();
                     Tasks.Clear();
                     foreach (var t in sortedTasks) Tasks.Add(t);
-                    Tasks.CollectionChanged += Tasks_CollectionChanged;
+                    Tasks.CollectionChanged += Tasks_CollectionChanged; // Re-subscribe
 
                     UpdateUiVisualState();
                     TriggerSave();
@@ -213,11 +215,12 @@ public sealed partial class MainViewModel : ObservableObject
         {
             await MainThread.InvokeOnMainThreadAsync(() =>
             {
-                Tasks.CollectionChanged -= Tasks_CollectionChanged;
+                // Re-sort potentially? Or just update visuals
+                Tasks.CollectionChanged -= Tasks_CollectionChanged; // Temporarily unsubscribe
                 var sortedTasks = Tasks.OrderBy(t => t.Order).ToList();
                 Tasks.Clear();
                 foreach (var t in sortedTasks) Tasks.Add(t);
-                Tasks.CollectionChanged += Tasks_CollectionChanged;
+                Tasks.CollectionChanged += Tasks_CollectionChanged; // Re-subscribe
 
                 UpdateUiVisualState();
                 TriggerSave();
@@ -225,15 +228,16 @@ public sealed partial class MainViewModel : ObservableObject
         }
         else
         {
-            Debug.WriteLine($"ResetDailyTask Command: Task '{task?.Title}' (ID: {task?.Id}) did not meet criteria or service failed.");
+            Debug.WriteLine($"ResetDailyTask Command: Task '{task?.Title}' did not meet criteria or service failed.");
         }
     }
 
     private async Task HandleCalendarSettingChanged()
     {
+        // Force UI update which uses the new calendar setting via converter
         await MainThread.InvokeOnMainThreadAsync(() =>
         {
-            UpdateUiVisualState();
+            UpdateUiVisualState(); // Refresh visuals that depend on converters
         });
     }
 
@@ -268,9 +272,10 @@ public sealed partial class MainViewModel : ObservableObject
             if (index != -1)
             {
                 updatedTask.Order = Tasks[index].Order;
-                updatedTask.Index = index;
+                updatedTask.Index = index; // Ensure Index is preserved/updated correctly
                 Tasks[index] = updatedTask;
 
+                // Update visuals which might depend on DueDate etc.
                 UpdateUiVisualState();
                 TriggerSave();
             }
@@ -304,12 +309,14 @@ public sealed partial class MainViewModel : ObservableObject
         UpdateUiVisualState();
         if (eventArgs.Action == NotifyCollectionChangedAction.Move)
         {
+            // Ensure order property matches new physical index after move
             for (int i = 0; i < Tasks.Count; i++)
             {
                 if (Tasks[i].Order != i) Tasks[i].Order = i;
             }
             TriggerSave();
         }
+        // Saves for Add/Remove/Replace are triggered by their respective handlers now
     }
 
     private void UpdateUiVisualState()
@@ -333,9 +340,10 @@ public sealed partial class MainViewModel : ObservableObject
         Debug.WriteLine("MainViewModel.SaveTasks: Delegating save to TaskStorageService.");
         List<TaskItem> currentTasks = [];
 
+        // No need for MainThread here as ToList creates a copy
         currentTasks = [.. Tasks];
 
-        await _taskStorageService.SaveTasksAsync(currentTasks);
+        await _taskStorageService.SaveTasksAsync(currentTasks); // Use TaskStorageService
         Debug.WriteLine("MainViewModel.SaveTasks: Save delegation completed.");
     }
 
@@ -355,7 +363,7 @@ public sealed partial class MainViewModel : ObservableObject
 
     private async Task SaveCurrentDayProgressAsync()
     {
-        if (_progressStorageService is null)
+        if (_progressStorageService is null) // Use ProgressStorageService
         {
             Debug.WriteLine("MainViewModel.SaveCurrentDayProgressAsync: ProgressStorageService is null. Cannot save progress.");
             return;
@@ -367,7 +375,7 @@ public sealed partial class MainViewModel : ObservableObject
         Debug.WriteLine($"MainViewModel.SaveCurrentDayProgressAsync: Saving progress for {todayDate:yyyy-MM-dd} - {currentProgress:P2}");
 
         DailyProgress progressEntry = new(todayDate, currentProgress);
-        await _progressStorageService.AddOrUpdateDailyProgressEntryAsync(progressEntry);
+        await _progressStorageService.AddOrUpdateDailyProgressEntryAsync(progressEntry); // Use ProgressStorageService
 
         Debug.WriteLine($"MainViewModel.SaveCurrentDayProgressAsync: Progress for {todayDate:yyyy-MM-dd} saved/updated.");
     }
