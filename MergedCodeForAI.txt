@@ -23,19 +23,12 @@ using Tickly.Services;
 using System.Diagnostics;
 using Tickly.Messages;
 using Tickly.Models;
-using System.Collections.Generic; // For List
-using System.Linq; // For Linq operations on list
 
 #if WINDOWS
-using Microsoft.UI.Xaml;
-using Microsoft.UI;
-using Microsoft.UI.Windowing;
-using WinRT.Interop;
-using Microsoft.UI.Composition.SystemBackdrops;
-using WinRT;
+using Microsoft.UI; // Still needed for positioning potentially
+using Microsoft.UI.Windowing; // Still needed for positioning
+using WinRT.Interop; // Still needed for positioning
 #endif
-
-using MauiColors = Microsoft.Maui.Graphics.Colors;
 
 namespace Tickly;
 
@@ -46,11 +39,7 @@ public partial class App : Microsoft.Maui.Controls.Application
     private readonly ThemeService _themeService;
 
 #if WINDOWS
-    private Microsoft.UI.Xaml.Window? _nativeWindow;
-    private MicaController? _micaController;
-    private SystemBackdropConfiguration? _backdropConfiguration;
-    // Re-introduced page tracking
-    private readonly List<WeakReference<Page>> _shellManagedPages = [];
+    private Microsoft.UI.Xaml.Window? _nativeWindow; // Keep for resizing
 #endif
 
     public App(ThemeService themeService)
@@ -58,136 +47,16 @@ public partial class App : Microsoft.Maui.Controls.Application
         InitializeComponent();
         _themeService = themeService;
 
-        // 1. Apply theme resources
         _themeService.ApplyTheme(AppSettings.SelectedTheme);
-
-        // 2. Apply system background override (may change page backgrounds)
-        // Defer slightly to allow MainPage/Shell to initialize better
-        Dispatcher.DispatchDelayed(TimeSpan.FromMilliseconds(100), () =>
-        {
-            ApplySystemBackgroundOverride(AppSettings.UseWindowsSystemBackground);
-        });
 
         MainPage = new AppShell();
 
-#if WINDOWS
-        if (MainPage is Shell shell)
-        {
-            shell.Navigated += Shell_Navigated;
-            // Attempt initial registration after a short delay
-            shell.Dispatcher.DispatchDelayed(TimeSpan.FromMilliseconds(50), () => RegisterCurrentShellPage(shell));
-        }
-#endif
-
         WeakReferenceMessenger.Default.Register<ThemeChangedMessage>(this, HandleThemeChanged);
-        WeakReferenceMessenger.Default.Register<SystemBackgroundChangedMessage>(this, HandleSystemBackgroundChanged);
     }
-
-#if WINDOWS
-    private void Shell_Navigated(object? sender, ShellNavigatedEventArgs e)
-    {
-        if (sender is Shell shell)
-        {
-            RegisterCurrentShellPage(shell); // Register the page that was navigated TO
-        }
-        CleanupWeakReferences();
-    }
-
-    // Renamed and simplified registration
-    private void RegisterCurrentShellPage(Shell shell)
-    {
-        var currentPage = shell.CurrentPage;
-        if (currentPage == null) return;
-
-        if (!_shellManagedPages.Any(wr => wr.TryGetTarget(out var target) && target == currentPage))
-        {
-            _shellManagedPages.Add(new WeakReference<Page>(currentPage));
-            Debug.WriteLine($"Registered Shell Page: {currentPage.GetType().Name}");
-            // Apply current override state immediately to the newly registered page
-            ApplySystemBackgroundOverrideToPage(currentPage, AppSettings.UseWindowsSystemBackground);
-        }
-    }
-
-    private void CleanupWeakReferences()
-    {
-        _shellManagedPages.RemoveAll(wr => !wr.TryGetTarget(out _));
-        // Debug.WriteLine($"CleanupWeakReferences: {_shellManagedPages.Count} references remain.");
-    }
-
-    // Consolidated direct background setting logic
-    private void ApplySystemBackgroundOverrideToPage(Page page, bool useSystemBackground)
-    {
-        if (page == null) return;
-
-        MainThread.BeginInvokeOnMainThread(() => // Ensure UI updates on main thread
-        {
-            Color targetColor;
-            if (useSystemBackground)
-            {
-                targetColor = MauiColors.Transparent;
-                // Debug.WriteLine($"ApplySystemBackgroundOverrideToPage: Setting {page.GetType().Name} BG -> Transparent.");
-            }
-            else
-            {
-                // Fetch the *actual* theme color from the resource dictionary
-                if (Microsoft.Maui.Controls.Application.Current?.Resources.TryGetValue("AppBackgroundColor", out var themeColor) == true && themeColor is Color color)
-                {
-                    targetColor = color;
-                    // Debug.WriteLine($"ApplySystemBackgroundOverrideToPage: Setting {page.GetType().Name} BG -> Theme Color ({targetColor}).");
-                }
-                else
-                {
-                    targetColor = MauiColors.Black; // Fallback
-                    Debug.WriteLine($"ApplySystemBackgroundOverrideToPage: Theme color resource not found for {page.GetType().Name}. Falling back to Black.");
-                }
-            }
-            page.BackgroundColor = targetColor;
-        });
-    }
-#endif
 
     private void HandleThemeChanged(object recipient, ThemeChangedMessage message)
     {
-        // 1. Apply the theme resource changes
         _themeService.ApplyTheme(message.Value);
-        // 2. Re-apply the background override based on the *current* setting
-        ApplySystemBackgroundOverride(AppSettings.UseWindowsSystemBackground);
-    }
-
-    private void HandleSystemBackgroundChanged(object recipient, SystemBackgroundChangedMessage message)
-    {
-        // Only apply the background override when this specific setting changes
-        ApplySystemBackgroundOverride(message.Value);
-    }
-
-    // Renamed: This now specifically handles the background override logic
-    private void ApplySystemBackgroundOverride(bool useSystemBackground)
-    {
-#if WINDOWS
-        // Update Mica First
-        bool micaSuccess = TrySetMica(useSystemBackground);
-
-        // Apply background color override to known pages *after* Mica state is set
-        MainThread.BeginInvokeOnMainThread(() => // Run UI updates on main thread
-        {
-            CleanupWeakReferences();
-            foreach (var weakRef in _shellManagedPages)
-            {
-                if (weakRef.TryGetTarget(out var page))
-                {
-                     // If Mica failed to apply, force non-transparent background regardless of setting
-                    ApplySystemBackgroundOverrideToPage(page, useSystemBackground && micaSuccess);
-                }
-            }
-
-            // Apply to Shell itself
-            if (MainPage is Shell shell)
-            {
-                ApplySystemBackgroundOverrideToPage(shell, useSystemBackground && micaSuccess);
-                Debug.WriteLine($"ApplySystemBackgroundOverride: Updated Shell Background (UseSystemBG: {useSystemBackground}, MicaSuccess: {micaSuccess})");
-            }
-        });
-#endif
     }
 
     protected override void OnStart() { base.OnStart(); }
@@ -212,11 +81,8 @@ public partial class App : Microsoft.Maui.Controls.Application
     private void Window_Stopped(object? sender, EventArgs e)
     {
 #if WINDOWS
-         if (_micaController != null) { _micaController.Dispose(); _micaController = null; }
-         _nativeWindow = null; _backdropConfiguration = null;
-         _shellManagedPages.Clear();
-          if (MainPage is Shell shell) shell.Navigated -= Shell_Navigated;
-         Debug.WriteLine("Window_Stopped: Cleaned up WinUI resources.");
+         _nativeWindow = null;
+         Debug.WriteLine("Window_Stopped: Cleaned up WinUI native window reference.");
 #endif
     }
 
@@ -228,9 +94,6 @@ public partial class App : Microsoft.Maui.Controls.Application
          _nativeWindow = mauiWindow.Handler?.PlatformView as Microsoft.UI.Xaml.Window;
          if (_nativeWindow != null)
          {
-              // Initial Mica attempt deferred to ApplySystemBackgroundOverride in App constructor
-
-              // Resizing Logic
               try { PositionAndResizeWindow(); } catch (Exception ex) { Debug.WriteLine($"Window_Created_Windows: Error resizing: {ex.Message}"); }
          }
      }
@@ -257,94 +120,6 @@ public partial class App : Microsoft.Maui.Controls.Application
              Debug.WriteLine($"PositionAndResizeWindow: Window positioned/resized.");
          }
      }
-
-
-    private bool TrySetMica(bool enable)
-    {
-        if (_nativeWindow == null) { Debug.WriteLine("TrySetMica: Native window is null."); return false; }
-        if (!MicaController.IsSupported())
-        {
-             if (enable) Debug.WriteLine("TrySetMica: Mica not supported.");
-             if (_micaController != null) { _micaController.Dispose(); _micaController = null; }
-             return false;
-        }
-
-        if (enable)
-        {
-            if (_micaController == null)
-            {
-                _micaController = new MicaController();
-                _backdropConfiguration ??= new SystemBackdropConfiguration();
-                _nativeWindow.Activated -= Window_Activated; _nativeWindow.Activated += Window_Activated;
-                _nativeWindow.Closed -= Window_Closed; _nativeWindow.Closed += Window_Closed;
-                if(_nativeWindow.Content is FrameworkElement fwE) fwE.ActualThemeChanged -= Window_ThemeChanged;
-                if(_nativeWindow.Content is FrameworkElement fwE2) fwE2.ActualThemeChanged += Window_ThemeChanged;
-                _backdropConfiguration.IsInputActive = _nativeWindow.Visible;
-                SetConfigurationSourceTheme();
-                _micaController.SetSystemBackdropConfiguration(_backdropConfiguration);
-                bool result = _micaController.AddSystemBackdropTarget(_nativeWindow.As<Microsoft.UI.Composition.ICompositionSupportsSystemBackdrop>());
-                if(result) Debug.WriteLine("TrySetMica: Mica ENABLED."); else Debug.WriteLine("TrySetMica: AddSystemBackdropTarget FAILED.");
-                return result;
-            }
-            SetConfigurationSourceTheme(); // Refresh theme config if already enabled
-            return true; // Already enabled
-        }
-        else // Disabling Mica
-        {
-            if (_micaController != null)
-            {
-                _micaController.Dispose(); _micaController = null;
-                _nativeWindow.Activated -= Window_Activated;
-                _nativeWindow.Closed -= Window_Closed;
-                 if(_nativeWindow.Content is FrameworkElement fwElement) fwElement.ActualThemeChanged -= Window_ThemeChanged;
-                Debug.WriteLine("TrySetMica: Mica DISABLED.");
-            }
-            return true;
-        }
-    }
-
-    private void Window_Activated(object sender, WindowActivatedEventArgs args)
-    {
-        if (_backdropConfiguration != null)
-            _backdropConfiguration.IsInputActive = args.WindowActivationState != WindowActivationState.Deactivated;
-    }
-
-    private void Window_Closed(object sender, WindowEventArgs args)
-    {
-        if (_micaController != null) { _micaController.Dispose(); _micaController = null; }
-        if (sender is Microsoft.UI.Xaml.Window window)
-        {
-            window.Activated -= Window_Activated; window.Closed -= Window_Closed;
-            if(window.Content is FrameworkElement content) content.ActualThemeChanged -= Window_ThemeChanged;
-        }
-         _nativeWindow = null; _backdropConfiguration = null; _shellManagedPages.Clear();
-         if(MainPage is Shell shell) shell.Navigated -= Shell_Navigated;
-         Debug.WriteLine("Window_Closed: Cleaned up Mica controller and handlers.");
-    }
-
-    private void Window_ThemeChanged(FrameworkElement sender, object args) => SetConfigurationSourceTheme();
-
-    private void SetConfigurationSourceTheme()
-    {
-        if (_backdropConfiguration == null) return;
-
-        var currentMauiTheme = Microsoft.Maui.Controls.Application.Current?.UserAppTheme ?? AppTheme.Unspecified;
-        ElementTheme? frameworkElementTheme = (_nativeWindow?.Content as FrameworkElement)?.ActualTheme;
-
-        if (frameworkElementTheme.HasValue)
-        {
-             _backdropConfiguration.Theme = frameworkElementTheme.Value switch {
-                 ElementTheme.Dark => SystemBackdropTheme.Dark, ElementTheme.Light => SystemBackdropTheme.Light, _ => SystemBackdropTheme.Default
-             };
-        }
-        else if (currentMauiTheme != AppTheme.Unspecified)
-        {
-             _backdropConfiguration.Theme = currentMauiTheme switch {
-                 AppTheme.Dark => SystemBackdropTheme.Dark, AppTheme.Light => SystemBackdropTheme.Light, _ => SystemBackdropTheme.Default
-             };
-        }
-        else { _backdropConfiguration.Theme = SystemBackdropTheme.Default; }
-    }
 #endif
 }
 
@@ -594,7 +369,7 @@ public static class MauiProgram
         </ResourceDictionary>
     </ContentPage.Resources>
 
-    <Grid RowDefinitions="Auto,*" ColumnDefinitions="*">
+    <Grid RowDefinitions="Auto,*,Auto" ColumnDefinitions="*">
 
         <ProgressBar Grid.Row="0" Grid.Column="0"
                      Progress="{Binding TaskProgress}"
@@ -720,7 +495,7 @@ public static class MauiProgram
 
         </CollectionView>
 
-        <Button Grid.Row="1" Grid.Column="0"
+        <Button Grid.Row="2" Grid.Column="0"
             Style="{StaticResource AddButtonStyle}"
             Command="{Binding NavigateToAddPageCommand}"/>
 
@@ -9913,11 +9688,9 @@ public static class AppSettings
 {
     public const string CalendarSystemKey = "CalendarSystemPreference";
     public const string ThemePreferenceKey = "ThemePreference";
-    public const string UseWindowsSystemBackgroundKey = "UseWindowsSystemBackground"; // Added Key
 
     private static CalendarSystemType _selectedCalendarSystem;
     private static ThemeType _selectedTheme;
-    private static bool _useWindowsSystemBackground; // Added Field
 
     static AppSettings()
     {
@@ -9928,10 +9701,6 @@ public static class AppSettings
         int storedThemeValue = Preferences.Get(ThemePreferenceKey, (int)ThemeType.PitchBlack); // Default to PitchBlack if not set
         _selectedTheme = (ThemeType)storedThemeValue;
         Debug.WriteLine($"AppSettings (Static Constructor): Initialized Theme to {_selectedTheme} from Preferences.");
-
-        // Load the system background setting, default to false
-        _useWindowsSystemBackground = Preferences.Get(UseWindowsSystemBackgroundKey, false);
-        Debug.WriteLine($"AppSettings (Static Constructor): Initialized UseWindowsSystemBackground to {_useWindowsSystemBackground} from Preferences.");
     }
 
     public static CalendarSystemType SelectedCalendarSystem
@@ -9957,21 +9726,6 @@ public static class AppSettings
             {
                 _selectedTheme = value;
                 Debug.WriteLine($"AppSettings: Theme changed to {value}.");
-                // Note: Saving is handled by SettingsViewModel to ensure UI updates
-            }
-        }
-    }
-
-    // Added Property for system background
-    public static bool UseWindowsSystemBackground
-    {
-        get => _useWindowsSystemBackground;
-        set
-        {
-            if (_useWindowsSystemBackground != value)
-            {
-                _useWindowsSystemBackground = value;
-                Debug.WriteLine($"AppSettings: UseWindowsSystemBackground changed to {value}.");
                 // Note: Saving is handled by SettingsViewModel to ensure UI updates
             }
         }
@@ -10822,7 +10576,7 @@ namespace Tickly.ViewModels;
 
 public sealed partial class MainViewModel : ObservableObject
 {
-    private ObservableCollection<TaskItem> _tasks = []; // Initialize directly
+    private ObservableCollection<TaskItem> _tasks = [];
 
     public ObservableCollection<TaskItem> Tasks
     {
@@ -10833,8 +10587,8 @@ public sealed partial class MainViewModel : ObservableObject
     private Timer? _debounceTaskSaveTimer;
     private Timer? _debounceProgressSaveTimer;
     private readonly TaskVisualStateService _taskVisualStateService;
-    private readonly TaskStorageService _taskStorageService; // Changed
-    private readonly ProgressStorageService _progressStorageService; // Added
+    private readonly TaskStorageService _taskStorageService;
+    private readonly ProgressStorageService _progressStorageService;
     private readonly RepeatingTaskService _repeatingTaskService;
 
     [ObservableProperty]
@@ -10844,13 +10598,13 @@ public sealed partial class MainViewModel : ObservableObject
     private Color taskProgressColor = Color.FromRgba(0, 255, 0, 1);
 
     public MainViewModel(
-        TaskStorageService taskStorageService,         // Changed
-        ProgressStorageService progressStorageService,   // Added
+        TaskStorageService taskStorageService,
+        ProgressStorageService progressStorageService,
         RepeatingTaskService repeatingTaskService,
         TaskVisualStateService taskVisualStateService)
     {
-        _taskStorageService = taskStorageService;       // Changed
-        _progressStorageService = progressStorageService; // Added
+        _taskStorageService = taskStorageService;
+        _progressStorageService = progressStorageService;
         _repeatingTaskService = repeatingTaskService;
         _taskVisualStateService = taskVisualStateService;
 
@@ -10868,6 +10622,7 @@ public sealed partial class MainViewModel : ObservableObject
     [RelayCommand]
     private async Task NavigateToAddPage()
     {
+        Debug.WriteLine($"MainViewModel.NavigateToAddPage: Command invoked on {DeviceInfo.Platform}.");
         try
         {
             Dictionary<string, object> navigationParameter = new() { { "TaskToEdit", null! } };
@@ -10900,16 +10655,15 @@ public sealed partial class MainViewModel : ObservableObject
     {
         Debug.WriteLine($"MainViewModel.LoadTasksAsync: Requesting tasks from storage service.");
 
-        bool wasSubscribed = Tasks.Count > 0; // Simple check if collection might have been subscribed
+        bool wasSubscribed = Tasks.Count > 0;
         bool changesMade = false;
         List<TaskItem> loadedTasks = [];
 
         try
         {
-            // Unsubscribe temporarily to prevent triggering saves during batch load
             Tasks.CollectionChanged -= Tasks_CollectionChanged;
 
-            loadedTasks = await _taskStorageService.LoadTasksAsync(); // Use TaskStorageService
+            loadedTasks = await _taskStorageService.LoadTasksAsync();
             Debug.WriteLine($"MainViewModel.LoadTasksAsync: Received {loadedTasks.Count} tasks from service.");
 
             var today = DateTime.Today;
@@ -10947,13 +10701,12 @@ public sealed partial class MainViewModel : ObservableObject
 
             await MainThread.InvokeOnMainThreadAsync(() =>
             {
-                Tasks.Clear(); // Clear tasks on error
+                Tasks.Clear();
                 UpdateUiVisualState();
             });
         }
         finally
         {
-            // Re-subscribe after loading is complete
             Tasks.CollectionChanged += Tasks_CollectionChanged;
             Debug.WriteLine("MainViewModel.LoadTasksAsync: Finished and re-subscribed to CollectionChanged.");
         }
@@ -10988,12 +10741,11 @@ public sealed partial class MainViewModel : ObservableObject
             {
                 await MainThread.InvokeOnMainThreadAsync(() =>
                 {
-                    // Re-sort potentially? Or just update visuals
-                    Tasks.CollectionChanged -= Tasks_CollectionChanged; // Temporarily unsubscribe
+                    Tasks.CollectionChanged -= Tasks_CollectionChanged;
                     var sortedTasks = Tasks.OrderBy(t => t.Order).ToList();
                     Tasks.Clear();
                     foreach (var t in sortedTasks) Tasks.Add(t);
-                    Tasks.CollectionChanged += Tasks_CollectionChanged; // Re-subscribe
+                    Tasks.CollectionChanged += Tasks_CollectionChanged;
 
                     UpdateUiVisualState();
                     TriggerSave();
@@ -11024,12 +10776,11 @@ public sealed partial class MainViewModel : ObservableObject
         {
             await MainThread.InvokeOnMainThreadAsync(() =>
             {
-                // Re-sort potentially? Or just update visuals
-                Tasks.CollectionChanged -= Tasks_CollectionChanged; // Temporarily unsubscribe
+                Tasks.CollectionChanged -= Tasks_CollectionChanged;
                 var sortedTasks = Tasks.OrderBy(t => t.Order).ToList();
                 Tasks.Clear();
                 foreach (var t in sortedTasks) Tasks.Add(t);
-                Tasks.CollectionChanged += Tasks_CollectionChanged; // Re-subscribe
+                Tasks.CollectionChanged += Tasks_CollectionChanged;
 
                 UpdateUiVisualState();
                 TriggerSave();
@@ -11037,16 +10788,15 @@ public sealed partial class MainViewModel : ObservableObject
         }
         else
         {
-            Debug.WriteLine($"ResetDailyTask Command: Task '{task?.Title}' did not meet criteria or service failed.");
+            Debug.WriteLine($"ResetDailyTask Command: Task '{task?.Title}' (ID: {task?.Id}) did not meet criteria or service failed.");
         }
     }
 
     private async Task HandleCalendarSettingChanged()
     {
-        // Force UI update which uses the new calendar setting via converter
         await MainThread.InvokeOnMainThreadAsync(() =>
         {
-            UpdateUiVisualState(); // Refresh visuals that depend on converters
+            UpdateUiVisualState();
         });
     }
 
@@ -11081,10 +10831,9 @@ public sealed partial class MainViewModel : ObservableObject
             if (index != -1)
             {
                 updatedTask.Order = Tasks[index].Order;
-                updatedTask.Index = index; // Ensure Index is preserved/updated correctly
+                updatedTask.Index = index;
                 Tasks[index] = updatedTask;
 
-                // Update visuals which might depend on DueDate etc.
                 UpdateUiVisualState();
                 TriggerSave();
             }
@@ -11118,14 +10867,12 @@ public sealed partial class MainViewModel : ObservableObject
         UpdateUiVisualState();
         if (eventArgs.Action == NotifyCollectionChangedAction.Move)
         {
-            // Ensure order property matches new physical index after move
             for (int i = 0; i < Tasks.Count; i++)
             {
                 if (Tasks[i].Order != i) Tasks[i].Order = i;
             }
             TriggerSave();
         }
-        // Saves for Add/Remove/Replace are triggered by their respective handlers now
     }
 
     private void UpdateUiVisualState()
@@ -11149,10 +10896,9 @@ public sealed partial class MainViewModel : ObservableObject
         Debug.WriteLine("MainViewModel.SaveTasks: Delegating save to TaskStorageService.");
         List<TaskItem> currentTasks = [];
 
-        // No need for MainThread here as ToList creates a copy
         currentTasks = [.. Tasks];
 
-        await _taskStorageService.SaveTasksAsync(currentTasks); // Use TaskStorageService
+        await _taskStorageService.SaveTasksAsync(currentTasks);
         Debug.WriteLine("MainViewModel.SaveTasks: Save delegation completed.");
     }
 
@@ -11172,7 +10918,7 @@ public sealed partial class MainViewModel : ObservableObject
 
     private async Task SaveCurrentDayProgressAsync()
     {
-        if (_progressStorageService is null) // Use ProgressStorageService
+        if (_progressStorageService is null)
         {
             Debug.WriteLine("MainViewModel.SaveCurrentDayProgressAsync: ProgressStorageService is null. Cannot save progress.");
             return;
@@ -11184,7 +10930,7 @@ public sealed partial class MainViewModel : ObservableObject
         Debug.WriteLine($"MainViewModel.SaveCurrentDayProgressAsync: Saving progress for {todayDate:yyyy-MM-dd} - {currentProgress:P2}");
 
         DailyProgress progressEntry = new(todayDate, currentProgress);
-        await _progressStorageService.AddOrUpdateDailyProgressEntryAsync(progressEntry); // Use ProgressStorageService
+        await _progressStorageService.AddOrUpdateDailyProgressEntryAsync(progressEntry);
 
         Debug.WriteLine($"MainViewModel.SaveCurrentDayProgressAsync: Progress for {todayDate:yyyy-MM-dd} saved/updated.");
     }
@@ -11261,9 +11007,6 @@ public sealed partial class SettingsViewModel : ObservableObject
     private bool _isHighContrastDarkSelected;
     private bool _isHighContrastLightSelected;
 
-    // Windows Specific Setting
-    private bool _useSystemBackground; // Field for the new setting
-
     private const string OldTaskExportFilePrefix = "Tickly-Tasks-Export-";
     private const string NewDataExportFilePrefix = "Tickly_";
 
@@ -11295,36 +11038,12 @@ public sealed partial class SettingsViewModel : ObservableObject
     public bool IsHighContrastLightSelected { get => _isHighContrastLightSelected; set { if (SetProperty(ref _isHighContrastLightSelected, value) && value) OnThemeSelectionChanged(ThemeType.HighContrastLight); } }
     #endregion
 
-    #region Windows Settings Properties
-    public bool UseSystemBackground
-    {
-        get => _useSystemBackground;
-        set
-        {
-            // Use SetProperty to automatically handle backing field update and notification
-            if (SetProperty(ref _useSystemBackground, value))
-            {
-                OnSystemBackgroundSelectionChanged(value);
-            }
-        }
-    }
-    #endregion
-
 
     public SettingsViewModel(DataExportService dataExportService, DataImportService dataImportService)
     {
         _dataExportService = dataExportService;
         _dataImportService = dataImportService;
         LoadSettings();
-    }
-
-    // Method called when UseSystemBackground changes
-    private void OnSystemBackgroundSelectionChanged(bool useSystemBackground)
-    {
-        AppSettings.UseWindowsSystemBackground = useSystemBackground;
-        Preferences.Set(AppSettings.UseWindowsSystemBackgroundKey, useSystemBackground);
-        WeakReferenceMessenger.Default.Send(new SystemBackgroundChangedMessage(useSystemBackground));
-        Debug.WriteLine($"SettingsViewModel: System background preference changed to {useSystemBackground}, message sent.");
     }
 
     private void OnCalendarSelectionChanged(bool isGregorianNowSelected)
@@ -11428,10 +11147,6 @@ public sealed partial class SettingsViewModel : ObservableObject
             OnThemeSelectionChanged(defaultTheme);
             Debug.WriteLine($"LoadSettings: No valid theme selected. Defaulting based on system theme to: {defaultTheme}");
         }
-
-        // Load Windows System Background Setting
-        _useSystemBackground = AppSettings.UseWindowsSystemBackground;
-        OnPropertyChanged(nameof(UseSystemBackground));
     }
 
 
@@ -11919,7 +11634,6 @@ public class TasksReloadRequestedMessage : ValueChangedMessage<bool>
 {
     public TasksReloadRequestedMessage() : base(true)
     {
-
     }
 }
 </file>
@@ -12413,8 +12127,7 @@ public sealed class SettingsPage : ContentPage
     {
         BindingContext = viewModel;
         Title = "Settings";
-        // REMOVED: Explicit background binding - rely on Style targeting Page
-        // this.SetBinding(BackgroundColorProperty, new Binding("AppBackgroundColor", source: Application.Current!.Resources));
+        this.SetDynamicResource(BackgroundColorProperty, "AppBackgroundColor"); // Ensure background follows theme
 
         var mainLayout = new VerticalStackLayout
         {
@@ -12445,21 +12158,6 @@ public sealed class SettingsPage : ContentPage
                 new RadioButton { GroupName = "ThemeGroup", Content = "High Contrast Light" }.Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsHighContrastLightSelected)),
             }
         };
-
-#if WINDOWS
-        mainLayout.Children.Add(new BoxView { HeightRequest = 1, BackgroundColor = Color.FromArgb("#333333"), Margin = new(0, 15, 0, 15) });
-        mainLayout.Children.Add(new Label { Text = "Windows Settings", FontSize = LargeFontSize, FontAttributes = FontAttributes.Bold, Margin = new(0, 0, 0, 10) });
-        mainLayout.Children.Add(new HorizontalStackLayout
-        {
-             Spacing = 10, VerticalOptions = LayoutOptions.Center,
-             Children =
-             {
-                 new Label { Text = "Use System Background (Mica/Acrylic)", Style = GetStyle("BaseLabelStyle"), VerticalOptions = LayoutOptions.Center },
-                 new Switch { VerticalOptions = LayoutOptions.Center }.Bind(Switch.IsToggledProperty, nameof(SettingsViewModel.UseSystemBackground))
-             }
-        });
-        mainLayout.Children.Add(new Label { Text = "Applies transparency effect. May require restart.", Style = GetStyle("LightGrayLabel"), FontSize = SmallFontSize });
-#endif
 
         mainLayout.Children.Add(new BoxView { HeightRequest = 1, BackgroundColor = Color.FromArgb("#333333"), Margin = new(0, 15, 0, 15) });
         mainLayout.Children.Add(new Label { Text = "Calendar Settings", FontSize = LargeFontSize, FontAttributes = FontAttributes.Bold, Margin = new(0, 0, 0, 10) });
@@ -12495,14 +12193,11 @@ public sealed class SettingsPage : ContentPage
 
 <file path="Source\Views\StatsPage.cs">
 using CommunityToolkit.Maui.Markup;
-using Microsoft.Maui.Controls;
-using Microsoft.Maui.Graphics;
 using Tickly.ViewModels;
-using Tickly.Views.Plotting;
 
 namespace Tickly.Views;
 
-public sealed class StatsPage : ContentPage
+public sealed partial class StatsPage : ContentPage
 {
     private const double LargeFontSize = 20;
     private const double SmallFontSize = 12;
@@ -12512,14 +12207,20 @@ public sealed class StatsPage : ContentPage
     {
         BindingContext = viewModel;
         Title = "Stats";
-        // REMOVED: Explicit background binding - rely on Style targeting Page
-        // this.SetBinding(BackgroundColorProperty, new Binding("AppBackgroundColor", source: Application.Current!.Resources));
+        SetDynamicResource(BackgroundColorProperty, "AppBackgroundColor");
 
-        Color initialChartTextColor = Application.Current?.RequestedTheme == AppTheme.Dark ? Colors.WhiteSmoke : Colors.Black;
+        Color initialChartTextColor = Application.Current?.RequestedTheme == AppTheme.Dark 
+            ? Colors.WhiteSmoke
+            : Colors.Black;
+
         viewModel.ChartDrawable.TextColor = initialChartTextColor;
 
-        _barChartView = new GraphicsView { HeightRequest = 200, Margin = new Thickness(0, 10, 0, 10) }
-            .Bind(GraphicsView.DrawableProperty, nameof(StatsViewModel.ChartDrawable));
+        _barChartView = new GraphicsView
+        { 
+            HeightRequest = 200,
+            Margin = new(0, 10, 0, 10)
+        }
+        .Bind(GraphicsView.DrawableProperty, nameof(StatsViewModel.ChartDrawable));
 
         Content = new ScrollView
         {
@@ -12529,8 +12230,22 @@ public sealed class StatsPage : ContentPage
                 Spacing = 15,
                 Children =
                 {
-                    new Label { Text = "Daily Progress Activity", FontSize = LargeFontSize, FontAttributes = FontAttributes.Bold, Margin = new(0, 0, 0, 5) },
-                    new Label { Text = "Time Range:", Style = GetStyle("BaseLabelStyle"), FontSize = SmallFontSize, Margin = new(0,0,0,0) },
+                    new Label 
+                    { 
+                        Text = "Daily Progress Activity",
+                        FontSize = LargeFontSize,
+                        FontAttributes = FontAttributes.Bold,
+                        Margin = new(0, 0, 0, 5) 
+                    },
+
+                    new Label 
+                    { 
+                        Text = "Time Range:", 
+                        Style = GetStyle("BaseLabelStyle"),
+                        FontSize = SmallFontSize,
+                        Margin = new(0,0,0,0)
+                    },
+
                     new Picker
                     {
                         Title = "Select Time Range",
@@ -12538,11 +12253,41 @@ public sealed class StatsPage : ContentPage
                     }
                     .Bind(Picker.ItemsSourceProperty, nameof(StatsViewModel.PlotTimeRanges))
                     .Bind(Picker.SelectedItemProperty, nameof(StatsViewModel.SelectedPlotTimeRange)),
+
                     _barChartView,
-                    new BoxView { HeightRequest = 1, BackgroundColor = Color.FromArgb("#333333"), Margin = new(0, 15, 0, 15) },
-                    new Label { Text = "Export Daily Progress", FontSize = LargeFontSize, FontAttributes = FontAttributes.Bold, Margin = new(0, 0, 0, 10) },
-                    new Label { Text = "Export your daily task completion percentages to a .txt file.", Style = GetStyle("LightGrayLabel"), FontSize = SmallFontSize, LineBreakMode = LineBreakMode.WordWrap, Margin = new(0,0,0,10) },
-                    new Label { Text = "Sort Order:", Style = GetStyle("BaseLabelStyle"), FontSize = SmallFontSize, Margin = new(0,5,0,0) },
+
+                    new BoxView
+                    { 
+                        HeightRequest = 1,
+                        BackgroundColor = Color.FromArgb("#333333"),
+                        Margin = new(0, 15, 0, 15)
+                    },
+
+                    new Label 
+                    { 
+                        Text = "Export Daily Progress", 
+                        FontSize = LargeFontSize,
+                        FontAttributes = FontAttributes.Bold,
+                        Margin = new(0, 0, 0, 10)
+                    },
+                    
+                    new Label 
+                    { 
+                        Text = "Export your daily task completion percentages to a .txt file.",
+                        Style = GetStyle("LightGrayLabel"),
+                        FontSize = SmallFontSize,
+                        LineBreakMode = LineBreakMode.WordWrap,
+                        Margin = new(0,0,0,10)
+                    },
+                    
+                    new Label
+                    {
+                        Text = "Sort Order:",
+                        Style = GetStyle("BaseLabelStyle"),
+                        FontSize = SmallFontSize,
+                        Margin = new(0,5,0,0)
+                    },
+                    
                     new Picker
                     {
                         Title = "Select Sort Order",
@@ -12550,7 +12295,15 @@ public sealed class StatsPage : ContentPage
                     }
                     .Bind(Picker.ItemsSourceProperty, nameof(StatsViewModel.ExportSortOrders))
                     .Bind(Picker.SelectedItemProperty, nameof(StatsViewModel.SelectedExportSortOrder)),
-                    new Label { Text = "Calendar For Dates:", Style = GetStyle("BaseLabelStyle"), FontSize = SmallFontSize, Margin = new(0,10,0,0) },
+                    
+                    new Label
+                    { 
+                        Text = "Calendar For Dates:",
+                        Style = GetStyle("BaseLabelStyle"),
+                        FontSize = SmallFontSize,
+                        Margin = new(0,10,0,0) 
+                    },
+                    
                     new Picker
                     {
                         Title = "Select Calendar Type",
@@ -12558,6 +12311,7 @@ public sealed class StatsPage : ContentPage
                     }
                     .Bind(Picker.ItemsSourceProperty, nameof(StatsViewModel.ExportCalendarTypes))
                     .Bind(Picker.SelectedItemProperty, nameof(StatsViewModel.SelectedExportCalendarType)),
+                    
                     new Button
                     {
                         Text = "Export Daily Progress", BackgroundColor = Color.FromArgb("#3B71CA"), TextColor = Colors.WhiteSmoke, Margin = new(0, 15, 0, 0)
@@ -12571,17 +12325,23 @@ public sealed class StatsPage : ContentPage
     protected override async void OnAppearing()
     {
         base.OnAppearing();
+
         if (BindingContext is StatsViewModel vm && vm.LoadProgressCommand.CanExecute(null))
         {
             await vm.LoadProgressCommand.ExecuteAsync(null);
         }
+
         _barChartView?.Invalidate();
     }
 
     private static Style GetStyle(string key)
     {
-        if (Application.Current?.Resources.TryGetValue(key, out var resource) == true && resource is Style style) return style;
-        return new Style(typeof(Label));
+        if (Application.Current?.Resources.TryGetValue(key, out var resource) == true && resource is Style style)
+        {
+            return style;
+        }
+
+        return new(typeof(Label));
     }
 }
 </file>
