@@ -20,14 +20,13 @@ using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Maui.LifecycleEvents;
 using Tickly.ViewModels;
 using Tickly.Services;
-using System.Diagnostics;
 using Tickly.Messages;
 using Tickly.Models;
 
 #if WINDOWS
-using Microsoft.UI; // Still needed for positioning potentially
-using Microsoft.UI.Windowing; // Still needed for positioning
-using WinRT.Interop; // Still needed for positioning
+using Microsoft.UI;
+using Microsoft.UI.Windowing;
+using WinRT.Interop;
 #endif
 
 namespace Tickly;
@@ -36,10 +35,11 @@ public partial class App : Microsoft.Maui.Controls.Application
 {
     private const int WindowWidth = 450;
     private const int WindowHeight = 800;
+
     private readonly ThemeService _themeService;
 
 #if WINDOWS
-    private Microsoft.UI.Xaml.Window? _nativeWindow; // Keep for resizing
+    private Microsoft.UI.Xaml.Window? _nativeWindow;
 #endif
 
     public App(ThemeService themeService)
@@ -59,19 +59,34 @@ public partial class App : Microsoft.Maui.Controls.Application
         _themeService.ApplyTheme(message.Value);
     }
 
-    protected override void OnStart() { base.OnStart(); }
+    protected override void OnStart()
+    {
+        base.OnStart();
+    }
+
     protected override async void OnSleep()
     {
         base.OnSleep();
-        try { IPlatformApplication.Current?.Services?.GetService<MainViewModel>()?.FinalizeAndSaveProgressAsync().FireAndForgetSafeAsync(); }
-        catch (Exception ex) { Debug.WriteLine($"App.OnSleep: Error: {ex.Message}"); }
+        try
+        {
+            IPlatformApplication.Current?.Services?.GetService<MainViewModel>()?.FinalizeAndSaveProgressAsync().FireAndForgetSafeAsync();
+        }
+        catch (Exception)
+        {
+            // Error already logged by FireAndForgetSafeAsync
+        }
     }
-    protected override void OnResume() { base.OnResume(); }
+
+    protected override void OnResume()
+    {
+        base.OnResume();
+    }
 
     protected override Microsoft.Maui.Controls.Window CreateWindow(IActivationState activationState)
     {
         Microsoft.Maui.Controls.Window window = base.CreateWindow(activationState);
         window.Stopped += Window_Stopped;
+
 #if WINDOWS
         window.Created += Window_Created_Windows;
 #endif
@@ -82,44 +97,68 @@ public partial class App : Microsoft.Maui.Controls.Application
     {
 #if WINDOWS
          _nativeWindow = null;
-         Debug.WriteLine("Window_Stopped: Cleaned up WinUI native window reference.");
 #endif
     }
 
 #if WINDOWS
-     private void Window_Created_Windows(object? sender, EventArgs e)
-     {
-         var mauiWindow = sender as Microsoft.Maui.Controls.Window;
-         if (mauiWindow == null) return;
-         _nativeWindow = mauiWindow.Handler?.PlatformView as Microsoft.UI.Xaml.Window;
-         if (_nativeWindow != null)
-         {
-              try { PositionAndResizeWindow(); } catch (Exception ex) { Debug.WriteLine($"Window_Created_Windows: Error resizing: {ex.Message}"); }
-         }
-     }
+    private void Window_Created_Windows(object? sender, EventArgs e)
+    {
+        var mauiWindow = sender as Microsoft.Maui.Controls.Window;
+        if (mauiWindow == null)
+        {
+            return;
+        }
 
-     private void PositionAndResizeWindow()
-     {
-         if (_nativeWindow == null) return;
-         IntPtr hwnd = WindowNative.GetWindowHandle(_nativeWindow);
-         if (hwnd == IntPtr.Zero) return;
-         WindowId windowId = Win32Interop.GetWindowIdFromWindow(hwnd);
-         if (windowId.Value == 0) return;
-         AppWindow appWindow = AppWindow.GetFromWindowId(windowId);
-         if (appWindow != null)
-         {
-             DisplayArea displayArea = DisplayArea.GetFromWindowId(windowId, DisplayAreaFallback.Nearest);
-             if (displayArea != null)
-             {
-                 Windows.Graphics.RectInt32 workArea = displayArea.WorkArea;
-                 int x = (workArea.Width - WindowWidth) / 2;
-                 int y = (workArea.Height - WindowHeight) / 2;
-                 appWindow.MoveAndResize(new Windows.Graphics.RectInt32(x, y, WindowWidth, WindowHeight));
-             }
-             else { appWindow.ResizeClient(new Windows.Graphics.SizeInt32(WindowWidth, WindowHeight)); }
-             Debug.WriteLine($"PositionAndResizeWindow: Window positioned/resized.");
-         }
-     }
+        _nativeWindow = mauiWindow.Handler?.PlatformView as Microsoft.UI.Xaml.Window;
+        if (_nativeWindow != null)
+        {
+            try
+            {
+                PositionAndResizeWindow();
+            }
+            catch (Exception)
+            {
+                // Error already logged by PositionAndResizeWindow if it occurs
+            }
+        }
+    }
+
+    private void PositionAndResizeWindow()
+    {
+        if (_nativeWindow == null)
+        {
+            return;
+        }
+
+        IntPtr hwnd = WindowNative.GetWindowHandle(_nativeWindow);
+        if (hwnd == IntPtr.Zero)
+        {
+            return;
+        }
+
+        WindowId windowId = Win32Interop.GetWindowIdFromWindow(hwnd);
+        if (windowId.Value == 0)
+        {
+            return;
+        }
+        
+        AppWindow appWindow = AppWindow.GetFromWindowId(windowId);
+        if (appWindow != null)
+        {
+            DisplayArea displayArea = DisplayArea.GetFromWindowId(windowId, DisplayAreaFallback.Nearest);
+            if (displayArea != null)
+            {
+                Windows.Graphics.RectInt32 workArea = displayArea.WorkArea;
+                int x = (workArea.Width - WindowWidth) / 2;
+                int y = (workArea.Height - WindowHeight) / 2;
+                appWindow.MoveAndResize(new Windows.Graphics.RectInt32(x, y, WindowWidth, WindowHeight));
+            }
+            else
+            {
+                appWindow.ResizeClient(new Windows.Graphics.SizeInt32(WindowWidth, WindowHeight));
+            }
+        }
+    }
 #endif
 }
 
@@ -127,8 +166,14 @@ internal static class TaskExtensions
 {
     internal static async void FireAndForgetSafeAsync(this Task task, Action<Exception>? errorHandler = null)
     {
-        try { await task; }
-        catch (Exception ex) { Debug.WriteLine($"FireAndForgetSafeAsync: Error: {ex}"); errorHandler?.Invoke(ex); }
+        try
+        {
+            await task;
+        }
+        catch (Exception ex)
+        {
+            errorHandler?.Invoke(ex);
+        }
     }
 }
 </file>
@@ -233,7 +278,7 @@ public static class MauiProgram
         builder.Services.AddSingleton<DataImportService>();
         builder.Services.AddSingleton<RepeatingTaskService>();
         builder.Services.AddSingleton<TaskVisualStateService>();
-        builder.Services.AddSingleton<ThemeService>(); // Added ThemeService registration
+        builder.Services.AddSingleton<ThemeService>();
 
         builder.Services.AddSingleton<MainViewModel>();
         builder.Services.AddSingleton<SettingsViewModel>();
@@ -244,9 +289,7 @@ public static class MauiProgram
         builder.Services.AddSingleton<SettingsPage>();
         builder.Services.AddSingleton<StatsPage>();
 
-        // Register App class itself if needed for DI resolution, especially if constructor injection is used
         builder.Services.AddSingleton<App>();
-
 
         return builder.Build();
     }
@@ -511,10 +554,19 @@ namespace Tickly;
 
 public partial class MainPage : ContentPage
 {
+    private readonly MainViewModel _viewModel;
+
     public MainPage(MainViewModel viewModel)
     {
         InitializeComponent();
-        BindingContext = viewModel;
+        _viewModel = viewModel;
+        BindingContext = _viewModel;
+    }
+
+    protected override async void OnAppearing()
+    {
+        base.OnAppearing();
+        await _viewModel.InitializeAsync();
     }
 }
 </file>
@@ -9942,15 +9994,12 @@ public sealed class ProgressStorageService
     public ProgressStorageService()
     {
         _progressFilePath = Path.Combine(FileSystem.AppDataDirectory, "dailyProgress.json");
-        Debug.WriteLine($"ProgressStorageService: Initialized with progress file path: {_progressFilePath}");
     }
 
     public async Task<List<DailyProgress>> LoadDailyProgressAsync()
     {
-        Debug.WriteLine($"ProgressStorageService.LoadDailyProgressAsync: Attempting to load from: {_progressFilePath}");
         if (!File.Exists(_progressFilePath))
         {
-            Debug.WriteLine("ProgressStorageService.LoadDailyProgressAsync: File not found, returning empty list.");
             return [];
         }
 
@@ -9959,32 +10008,26 @@ public sealed class ProgressStorageService
             string json = await File.ReadAllTextAsync(_progressFilePath);
             if (string.IsNullOrWhiteSpace(json))
             {
-                Debug.WriteLine("ProgressStorageService.LoadDailyProgressAsync: File exists but is empty, returning empty list.");
                 return [];
             }
 
             List<DailyProgress>? loadedProgress = JsonSerializer.Deserialize<List<DailyProgress>>(json);
-            Debug.WriteLine($"ProgressStorageService.LoadDailyProgressAsync: Successfully deserialized {(loadedProgress?.Count ?? 0)} progress entries.");
             return loadedProgress ?? [];
         }
-        catch (JsonException jsonEx)
+        catch (JsonException)
         {
-            Debug.WriteLine($"ProgressStorageService.LoadDailyProgressAsync: Error deserializing JSON: {jsonEx.Message}. Returning empty list.");
             return [];
         }
-        catch (IOException ioEx)
+        catch (IOException)
         {
-            Debug.WriteLine($"ProgressStorageService.LoadDailyProgressAsync: IO Error reading file: {ioEx.Message}. Returning empty list.");
             return [];
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            Debug.WriteLine($"ProgressStorageService.LoadDailyProgressAsync: Unexpected error: {ex.GetType().Name} - {ex.Message}. Returning empty list.");
             return [];
         }
     }
 
-    // Made internal for DataImportExportService
     internal async Task SaveDailyProgressListAsync(List<DailyProgress> progressList)
     {
         bool acquiredLock = false;
@@ -9993,7 +10036,6 @@ public sealed class ProgressStorageService
         {
             if (_isSavingProgress)
             {
-                Debug.WriteLine("ProgressStorageService.SaveDailyProgressListAsync: Save already in progress, skipping.");
                 return;
             }
             _isSavingProgress = true;
@@ -10005,55 +10047,86 @@ public sealed class ProgressStorageService
             return;
         }
 
-        Debug.WriteLine("ProgressStorageService.SaveDailyProgressListAsync: Starting save operation.");
         try
         {
             List<DailyProgress> progressToSave = progressList?.ToList() ?? [];
             JsonSerializerOptions options = new() { WriteIndented = true };
             string json = JsonSerializer.Serialize(progressToSave, options);
-
-            Debug.WriteLine($"ProgressStorageService.SaveDailyProgressListAsync: Writing JSON ({json.Length} chars) to {_progressFilePath}");
             await File.WriteAllTextAsync(_progressFilePath, json);
-            Debug.WriteLine("ProgressStorageService.SaveDailyProgressListAsync: Write operation completed.");
         }
-        catch (IOException ioEx)
+        catch (IOException)
         {
-            Debug.WriteLine($"ProgressStorageService.SaveDailyProgressListAsync: IO Error writing file: {ioEx.Message}");
+            // Log or handle
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            Debug.WriteLine($"ProgressStorageService.SaveDailyProgressListAsync: Unexpected error: {ex.GetType().Name} - {ex.Message}");
+            // Log or handle
         }
         finally
         {
             lock (_progressSaveLock)
             {
                 _isSavingProgress = false;
-                Debug.WriteLine("ProgressStorageService.SaveDailyProgressListAsync: Save lock released.");
             }
         }
     }
 
     public async Task AddOrUpdateDailyProgressEntryAsync(DailyProgress newEntry)
     {
-        Debug.WriteLine($"ProgressStorageService.AddOrUpdateDailyProgressEntryAsync: Processing entry for date: {newEntry.Date}");
         List<DailyProgress> currentProgress = await LoadDailyProgressAsync();
-
         DailyProgress? existingEntry = currentProgress.FirstOrDefault(p => p.Date.Date == newEntry.Date.Date);
 
         if (existingEntry != null)
         {
-            Debug.WriteLine($"ProgressStorageService.AddOrUpdateDailyProgressEntryAsync: Updating existing entry for date: {newEntry.Date}");
             existingEntry.PercentageCompleted = newEntry.PercentageCompleted;
         }
         else
         {
-            Debug.WriteLine($"ProgressStorageService.AddOrUpdateDailyProgressEntryAsync: Adding as new entry for date: {newEntry.Date}");
             currentProgress.Add(newEntry);
         }
-
         await SaveDailyProgressListAsync(currentProgress);
-        Debug.WriteLine($"ProgressStorageService.AddOrUpdateDailyProgressEntryAsync: Successfully added/updated and saved entry for date: {newEntry.Date}");
+    }
+
+    public async Task ClearAllProgressAsync()
+    {
+        bool acquiredLock = false;
+        lock (_progressSaveLock)
+        {
+            if (_isSavingProgress)
+            {
+                return;
+            }
+            _isSavingProgress = true;
+            acquiredLock = true;
+        }
+
+        if (!acquiredLock)
+        {
+            return;
+        }
+
+        try
+        {
+            if (File.Exists(_progressFilePath))
+            {
+                File.Delete(_progressFilePath);
+            }
+        }
+        catch (IOException)
+        {
+            // Log or handle
+        }
+        catch (Exception)
+        {
+            // Log or handle
+        }
+        finally
+        {
+            lock (_progressSaveLock)
+            {
+                _isSavingProgress = false;
+            }
+        }
     }
 }
 </file>
@@ -10576,7 +10649,6 @@ public static class DateUtils
 <file path="Source\ViewModels\MainViewModel.cs">
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
-using System.Diagnostics;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
@@ -10589,7 +10661,7 @@ namespace Tickly.ViewModels;
 
 public sealed partial class MainViewModel : ObservableObject
 {
-    private ObservableCollection<TaskItem> _tasks = []; // Initialize directly
+    private ObservableCollection<TaskItem> _tasks = [];
 
     public ObservableCollection<TaskItem> Tasks
     {
@@ -10600,28 +10672,27 @@ public sealed partial class MainViewModel : ObservableObject
     private Timer? _debounceTaskSaveTimer;
     private Timer? _debounceProgressSaveTimer;
     private readonly TaskVisualStateService _taskVisualStateService;
-    private readonly TaskStorageService _taskStorageService; // Changed
-    private readonly ProgressStorageService _progressStorageService; // Added
+    private readonly TaskStorageService _taskStorageService;
+    private readonly ProgressStorageService _progressStorageService;
     private readonly RepeatingTaskService _repeatingTaskService;
+    private bool _isInitialized = false;
 
     [ObservableProperty]
-    private double taskProgress = 0;
+    private double _taskProgress = 0;
 
     [ObservableProperty]
-    private Color taskProgressColor = Color.FromRgba(0, 255, 0, 1);
+    private Color _taskProgressColor = Color.FromRgba(0, 255, 0, 1);
 
     public MainViewModel(
-        TaskStorageService taskStorageService,         // Changed
-        ProgressStorageService progressStorageService,   // Added
+        TaskStorageService taskStorageService,
+        ProgressStorageService progressStorageService,
         RepeatingTaskService repeatingTaskService,
         TaskVisualStateService taskVisualStateService)
     {
-        _taskStorageService = taskStorageService;       // Changed
-        _progressStorageService = progressStorageService; // Added
+        _taskStorageService = taskStorageService;
+        _progressStorageService = progressStorageService;
         _repeatingTaskService = repeatingTaskService;
         _taskVisualStateService = taskVisualStateService;
-
-        _ = LoadTasksAsync();
 
         WeakReferenceMessenger.Default.Register<AddTaskMessage>(this, (recipient, message) => HandleAddTask(message.Value));
         WeakReferenceMessenger.Default.Register<UpdateTaskMessage>(this, (recipient, message) => HandleUpdateTask(message.Value));
@@ -10629,49 +10700,35 @@ public sealed partial class MainViewModel : ObservableObject
         WeakReferenceMessenger.Default.Register<CalendarSettingsChangedMessage>(this, async (recipient, message) => await HandleCalendarSettingChanged());
         WeakReferenceMessenger.Default.Register<TasksReloadRequestedMessage>(this, async (recipient, message) => await HandleTasksReloadRequested());
 
+        // Initial UI state update, tasks will be loaded in InitializeAsync
         UpdateUiVisualState();
     }
 
-    private async Task ShowAndroidDebugAlert(string title, string message)
+    public async Task InitializeAsync()
     {
-#if ANDROID
-        try
+        if (_isInitialized)
         {
-            if (Shell.Current?.CurrentPage != null)
-            {
-                await Shell.Current.DisplayAlert(title, message, "OK");
-            }
-            else
-            {
-                Debug.WriteLine($"[ANDROID_DEBUG_ALERT] {title}: {message} - Shell.Current.CurrentPage is null.");
-            }
+            return;
         }
-        catch (Exception ex)
-        {
-            Debug.WriteLine($"[ANDROID_DEBUG_ALERT_FAIL] {title}: {ex.Message}");
-        }
-#else
-        // Keep compiler happy for non-Android builds if this helper were used elsewhere
-        await Task.CompletedTask; 
-#endif
-    }
 
+        await LoadTasksAsync();
+        _isInitialized = true;
+    }
 
     [RelayCommand]
     private async Task NavigateToAddPage()
     {
         try
         {
-            Dictionary<string, object> navigationParameter = new() 
-            { 
-                { "TaskToEdit", null! } 
+            Dictionary<string, object> navigationParameter = new()
+            {
+                { "TaskToEdit", null! }
             };
-
             await Shell.Current.GoToAsync(nameof(AddTaskPopupPage), true, navigationParameter);
         }
-        catch (Exception exception)
+        catch (Exception)
         {
-            Debug.WriteLine($"Error navigating to add page: {exception.Message}");
+            // Error handling if needed, e.g., display an alert
         }
     }
 
@@ -10688,30 +10745,26 @@ public sealed partial class MainViewModel : ObservableObject
             Dictionary<string, object> navigationParameter = new() { { "TaskToEdit", taskToEdit } };
             await Shell.Current.GoToAsync(nameof(AddTaskPopupPage), true, navigationParameter);
         }
-        catch (Exception exception)
+        catch (Exception)
         {
-            Debug.WriteLine($"Error navigating to edit page for task {taskToEdit.Id}: {exception.Message}");
-            await ShowAndroidDebugAlert("Navigation Error", $"Error in NavigateToEditPage: {exception.Message}");
+            // Error handling
         }
     }
 
     [RelayCommand]
     private async Task LoadTasksAsync()
     {
-        Debug.WriteLine($"MainViewModel.LoadTasksAsync: Requesting tasks from storage service.");
-
-        bool wasSubscribed = Tasks.Count > 0; // Simple check if collection might have been subscribed
         bool changesMade = false;
         List<TaskItem> loadedTasks = [];
 
         try
         {
-            // Unsubscribe temporarily to prevent triggering saves during batch load
-            Tasks.CollectionChanged -= Tasks_CollectionChanged;
+            if (Tasks.Any()) // Check if there are existing event handlers to remove
+            {
+                Tasks.CollectionChanged -= Tasks_CollectionChanged;
+            }
 
-            loadedTasks = await _taskStorageService.LoadTasksAsync(); // Use TaskStorageService
-            Debug.WriteLine($"MainViewModel.LoadTasksAsync: Received {loadedTasks.Count} tasks from service.");
-
+            loadedTasks = await _taskStorageService.LoadTasksAsync();
             var today = DateTime.Today;
 
             foreach (TaskItem task in loadedTasks)
@@ -10720,7 +10773,6 @@ public sealed partial class MainViewModel : ObservableObject
                 {
                     changesMade = true;
                 }
-
                 task.IsFadingOut = false;
                 task.PositionColor = Colors.Transparent;
             }
@@ -10730,37 +10782,29 @@ public sealed partial class MainViewModel : ObservableObject
             await MainThread.InvokeOnMainThreadAsync(() =>
             {
                 Tasks.Clear();
-
                 foreach (TaskItem task in tasksToAdd)
-                { 
-                    Tasks.Add(task); 
+                {
+                    Tasks.Add(task);
                 }
-
                 UpdateUiVisualState();
-                Debug.WriteLine($"MainViewModel.LoadTasksAsync: Updated Tasks collection on UI thread.");
             });
 
             if (changesMade)
             {
-                Debug.WriteLine("MainViewModel.LoadTasksAsync: Changes made to due dates, triggering save.");
                 TriggerSave();
             }
         }
-        catch (Exception exception)
+        catch (Exception)
         {
-            Debug.WriteLine($"MainViewModel.LoadTasksAsync: Error during loading/processing: {exception.GetType().Name} - {exception.Message}");
-
             await MainThread.InvokeOnMainThreadAsync(() =>
             {
-                Tasks.Clear(); // Clear tasks on error
+                Tasks.Clear();
                 UpdateUiVisualState();
             });
         }
         finally
         {
-            // Re-subscribe after loading is complete
             Tasks.CollectionChanged += Tasks_CollectionChanged;
-            Debug.WriteLine("MainViewModel.LoadTasksAsync: Finished and re-subscribed to CollectionChanged.");
         }
     }
 
@@ -10793,13 +10837,11 @@ public sealed partial class MainViewModel : ObservableObject
             {
                 await MainThread.InvokeOnMainThreadAsync(() =>
                 {
-                    // Re-sort potentially? Or just update visuals
-                    Tasks.CollectionChanged -= Tasks_CollectionChanged; // Temporarily unsubscribe
+                    Tasks.CollectionChanged -= Tasks_CollectionChanged;
                     var sortedTasks = Tasks.OrderBy(t => t.Order).ToList();
                     Tasks.Clear();
                     foreach (var t in sortedTasks) Tasks.Add(t);
-                    Tasks.CollectionChanged += Tasks_CollectionChanged; // Re-subscribe
-
+                    Tasks.CollectionChanged += Tasks_CollectionChanged;
                     UpdateUiVisualState();
                     TriggerSave();
                 });
@@ -10823,35 +10865,33 @@ public sealed partial class MainViewModel : ObservableObject
     [RelayCommand]
     private async Task ResetDailyTask(TaskItem? task)
     {
+        if (task is null)
+        {
+            return;
+        }
+
         bool resetSuccessful = _repeatingTaskService.ResetDailyTaskDueDate(task);
 
         if (resetSuccessful)
         {
             await MainThread.InvokeOnMainThreadAsync(() =>
             {
-                // Re-sort potentially? Or just update visuals
-                Tasks.CollectionChanged -= Tasks_CollectionChanged; // Temporarily unsubscribe
+                Tasks.CollectionChanged -= Tasks_CollectionChanged;
                 var sortedTasks = Tasks.OrderBy(t => t.Order).ToList();
                 Tasks.Clear();
                 foreach (var t in sortedTasks) Tasks.Add(t);
-                Tasks.CollectionChanged += Tasks_CollectionChanged; // Re-subscribe
-
+                Tasks.CollectionChanged += Tasks_CollectionChanged;
                 UpdateUiVisualState();
                 TriggerSave();
             });
-        }
-        else
-        {
-            Debug.WriteLine($"ResetDailyTask Command: Task '{task?.Title}' did not meet criteria or service failed.");
         }
     }
 
     private async Task HandleCalendarSettingChanged()
     {
-        // Force UI update which uses the new calendar setting via converter
         await MainThread.InvokeOnMainThreadAsync(() =>
         {
-            UpdateUiVisualState(); // Refresh visuals that depend on converters
+            UpdateUiVisualState();
         });
     }
 
@@ -10865,7 +10905,6 @@ public sealed partial class MainViewModel : ObservableObject
         await MainThread.InvokeOnMainThreadAsync(() =>
         {
             newTask.Order = Tasks.Count;
-
             Tasks.Add(newTask);
             UpdateUiVisualState();
             TriggerSave();
@@ -10882,43 +10921,32 @@ public sealed partial class MainViewModel : ObservableObject
         await MainThread.InvokeOnMainThreadAsync(() =>
         {
             int index = Tasks.ToList().FindIndex(task => task.Id == updatedTask.Id);
-
             if (index != -1)
             {
                 updatedTask.Order = Tasks[index].Order;
-                updatedTask.Index = index; // Ensure Index is preserved/updated correctly
+                updatedTask.Index = index;
                 Tasks[index] = updatedTask;
-
-                // Update visuals which might depend on DueDate etc.
                 UpdateUiVisualState();
                 TriggerSave();
-            }
-            else
-            {
-                Debug.WriteLine($"HandleUpdateTask: Task with ID {updatedTask.Id} not found.");
             }
         });
     }
 
     private async void HandleDeleteTask(Guid taskId)
     {
-        bool removedSuccessfully = false;
-
         await MainThread.InvokeOnMainThreadAsync(() =>
         {
             TaskItem? taskToRemove = Tasks.FirstOrDefault(task => task.Id == taskId);
-
             if (taskToRemove is null)
             {
                 return;
             }
 
-            removedSuccessfully = Tasks.Remove(taskToRemove);
-            
-            if (removedSuccessfully) 
+            bool removedSuccessfully = Tasks.Remove(taskToRemove);
+            if (removedSuccessfully)
             {
-                UpdateUiVisualState(); 
-                TriggerSave(); 
+                UpdateUiVisualState();
+                TriggerSave();
             }
         });
     }
@@ -10931,19 +10959,15 @@ public sealed partial class MainViewModel : ObservableObject
             return;
         }
 
-        // Ensure order property matches new physical index after move
         for (int i = 0; i < Tasks.Count; i++)
         {
             if (Tasks[i].Order == i)
             {
                 continue;
             }
-
             Tasks[i].Order = i;
         }
-
         TriggerSave();
-        // Saves for Add/Remove/Replace are triggered by their respective handlers now
     }
 
     private void UpdateUiVisualState()
@@ -10964,20 +10988,13 @@ public sealed partial class MainViewModel : ObservableObject
 
     private async Task SaveTasks()
     {
-        Debug.WriteLine("MainViewModel.SaveTasks: Delegating save to TaskStorageService.");
-        List<TaskItem> currentTasks = [];
-
-        // No need for MainThread here as ToList creates a copy
-        currentTasks = [.. Tasks];
-
-        await _taskStorageService.SaveTasksAsync(currentTasks); // Use TaskStorageService
-        Debug.WriteLine("MainViewModel.SaveTasks: Save delegation completed.");
+        List<TaskItem> currentTasks = [.. Tasks];
+        await _taskStorageService.SaveTasksAsync(currentTasks);
     }
 
     private void TriggerSave()
     {
         _debounceTaskSaveTimer?.Dispose();
-
         _debounceTaskSaveTimer = new(async (state) =>
         {
             await SaveTasks();
@@ -10991,27 +11008,20 @@ public sealed partial class MainViewModel : ObservableObject
 
     private async Task SaveCurrentDayProgressAsync()
     {
-        if (_progressStorageService is null) // Use ProgressStorageService
+        if (_progressStorageService is null)
         {
-            Debug.WriteLine("MainViewModel.SaveCurrentDayProgressAsync: ProgressStorageService is null. Cannot save progress.");
             return;
         }
 
         DateTime todayDate = DateTime.Today;
         double currentProgress = TaskProgress;
-
-        Debug.WriteLine($"MainViewModel.SaveCurrentDayProgressAsync: Saving progress for {todayDate:yyyy-MM-dd} - {currentProgress:P2}");
-
         DailyProgress progressEntry = new(todayDate, currentProgress);
-        await _progressStorageService.AddOrUpdateDailyProgressEntryAsync(progressEntry); // Use ProgressStorageService
-
-        Debug.WriteLine($"MainViewModel.SaveCurrentDayProgressAsync: Progress for {todayDate:yyyy-MM-dd} saved/updated.");
+        await _progressStorageService.AddOrUpdateDailyProgressEntryAsync(progressEntry);
     }
 
     private void TriggerSaveDailyProgress()
     {
         _debounceProgressSaveTimer?.Dispose();
-
         _debounceProgressSaveTimer = new(async (state) =>
         {
             await SaveCurrentDayProgressAsync();
@@ -11028,12 +11038,10 @@ public sealed partial class MainViewModel : ObservableObject
         _debounceProgressSaveTimer?.Dispose();
         _debounceProgressSaveTimer = null;
         await SaveCurrentDayProgressAsync();
-        Debug.WriteLine("MainViewModel.FinalizeAndSaveProgressAsync: Final progress save executed for today.");
     }
 
     private async Task HandleTasksReloadRequested()
     {
-        Debug.WriteLine("MainViewModel: Received TasksReloadRequestedMessage. Reloading tasks...");
         await LoadTasksAsync();
     }
 }
@@ -11336,7 +11344,7 @@ namespace Tickly.ViewModels;
 
 public sealed partial class StatsViewModel : ObservableObject
 {
-    private readonly ProgressStorageService _progressStorageService; // Changed
+    private readonly ProgressStorageService _progressStorageService;
     private const string ProgressExportFilePrefix = "Tickly-Progress-Export-";
 
     [ObservableProperty]
@@ -11364,9 +11372,9 @@ public sealed partial class StatsViewModel : ObservableObject
     [ObservableProperty]
     private BarChartDrawable _chartDrawable;
 
-    public StatsViewModel(ProgressStorageService progressStorageService) // Changed
+    public StatsViewModel(ProgressStorageService progressStorageService)
     {
-        _progressStorageService = progressStorageService; // Changed
+        _progressStorageService = progressStorageService;
         _allProgressData = [];
         _plotData = [];
 
@@ -11403,29 +11411,23 @@ public sealed partial class StatsViewModel : ObservableObject
 
     partial void OnSelectedPlotTimeRangeChanged(string value)
     {
-        Debug.WriteLine($"StatsViewModel: Time range changed to '{value}'. Updating plot data.");
         UpdatePlotData();
     }
 
     [RelayCommand]
     private async Task LoadProgressAsync()
     {
-        Debug.WriteLine("StatsViewModel: LoadProgressAsync started.");
-        var progress = await _progressStorageService.LoadDailyProgressAsync(); // Use ProgressStorageService
-        Debug.WriteLine($"StatsViewModel: Loaded {progress.Count} progress entries.");
+        var progress = await _progressStorageService.LoadDailyProgressAsync();
         AllProgressData = new ObservableCollection<DailyProgress>(progress.OrderBy(p => p.Date));
-        Debug.WriteLine("StatsViewModel: AllProgressData populated and sorted.");
         UpdatePlotData();
     }
 
     private void UpdatePlotData()
     {
-        Debug.WriteLine($"StatsViewModel: UpdatePlotData started for range '{SelectedPlotTimeRange}'.");
         Color currentTextColor = GetCurrentThemeTextColor();
 
         if (AllProgressData == null || !AllProgressData.Any())
         {
-            Debug.WriteLine("StatsViewModel: No progress data available. Clearing plot.");
             PlotData = [];
             ChartDrawable = new BarChartDrawable { DataPoints = PlotData, TextColor = currentTextColor };
             return;
@@ -11441,22 +11443,13 @@ public sealed partial class StatsViewModel : ObservableObject
             "Last 3 Months" => today.AddMonths(-3).AddDays(1),
             "Last 6 Months" => today.AddMonths(-6).AddDays(1),
             "Last Year" => today.AddYears(-1).AddDays(1),
-            _ => AllProgressData.Any() ? AllProgressData.Min(p => p.Date) : DateTime.Today,// Handle empty case
+            _ => AllProgressData.Any() ? AllProgressData.Min(p => p.Date) : DateTime.Today,
         };
-        Debug.WriteLine($"StatsViewModel: Date range calculated: {startDate:yyyy-MM-dd} to {today:yyyy-MM-dd}");
 
         var filteredProgress = AllProgressData
             .Where(p => p.Date.Date >= startDate.Date && p.Date.Date <= today.Date)
             .OrderBy(p => p.Date)
             .ToList();
-
-        Debug.WriteLine($"StatsViewModel: Filtered data count: {filteredProgress.Count}");
-
-        if (SelectedPlotTimeRange == "All Time" && filteredProgress.Count > 90)
-        {
-            Debug.WriteLine($"StatsViewModel: Plot has {filteredProgress.Count} points for All Time. Consider aggregation for performance/readability.");
-            // Future: Implement aggregation logic here if needed
-        }
 
         CalendarSystemType calendarSystem = AppSettings.SelectedCalendarSystem;
         CultureInfo formatCulture = calendarSystem == CalendarSystemType.Persian ? new("fa-IR") : CultureInfo.InvariantCulture;
@@ -11486,7 +11479,6 @@ public sealed partial class StatsViewModel : ObservableObject
             newPlotData.Add(new PlotDataPoint(label, progress.PercentageCompleted, DetermineBarColor(progress.PercentageCompleted)));
         }
         PlotData = newPlotData;
-        Debug.WriteLine($"StatsViewModel: Created new PlotData list with {PlotData.Count} points.");
 
         var newDrawable = new BarChartDrawable
         {
@@ -11494,7 +11486,6 @@ public sealed partial class StatsViewModel : ObservableObject
             TextColor = currentTextColor
         };
         ChartDrawable = newDrawable;
-        Debug.WriteLine("StatsViewModel: Assigned new BarChartDrawable instance to ChartDrawable property. UI should update.");
     }
 
     private string GetPersianAbbreviatedMonthName(int month)
@@ -11502,7 +11493,6 @@ public sealed partial class StatsViewModel : ObservableObject
         string[] names = ["", "فر", "ار", "خر", "تی", "مر", "شه", "مه", "آب", "آذ", "دی", "به", "اس"];
         return (month >= 1 && month <= 12) ? names[month] : "?";
     }
-
 
     private Color DetermineBarColor(double percentage)
     {
@@ -11517,7 +11507,7 @@ public sealed partial class StatsViewModel : ObservableObject
         string temporaryExportPath = string.Empty;
         try
         {
-            List<DailyProgress> dailyProgressList = await _progressStorageService.LoadDailyProgressAsync(); // Use ProgressStorageService
+            List<DailyProgress> dailyProgressList = await _progressStorageService.LoadDailyProgressAsync();
 
             if (dailyProgressList == null || !dailyProgressList.Any())
             {
@@ -11530,7 +11520,7 @@ public sealed partial class StatsViewModel : ObservableObject
                 : dailyProgressList.OrderByDescending(p => p.Date);
 
             StringBuilder sb = new();
-            sb.AppendLine("Date - Progress"); // Add header
+            sb.AppendLine("Date - Progress");
             foreach (var progress in sortedProgress)
             {
                 string dateString = SelectedExportCalendarType == "Persian"
@@ -11553,10 +11543,7 @@ public sealed partial class StatsViewModel : ObservableObject
             temporaryExportPath = Path.Combine(FileSystem.CacheDirectory, exportFilename);
 
             EnsureDirectoryExists(temporaryExportPath);
-
             await File.WriteAllTextAsync(temporaryExportPath, fileContent);
-
-            LogFileInfo(temporaryExportPath, "Temporary Progress");
 
             ShareFileRequest request = new()
             {
@@ -11567,9 +11554,23 @@ public sealed partial class StatsViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"ExportProgressAsync: Exception: {ex.Message}");
             await ShowAlertAsync("Export Error", $"An unexpected error occurred: {ex.Message}", "OK");
         }
+    }
+
+    [RelayCommand]
+    private async Task ResetProgressAsync()
+    {
+        bool confirmed = await ShowConfirmationAsync("Reset Progress", "Are you sure you want to delete ALL progress data? This action cannot be undone.", "Delete All", "Cancel");
+        if (!confirmed)
+        {
+            return;
+        }
+
+        await _progressStorageService.ClearAllProgressAsync();
+        AllProgressData.Clear(); // Clear the local collection
+        UpdatePlotData(); // This will now show "No data" or an empty chart
+        await ShowAlertAsync("Progress Reset", "All progress data has been cleared.", "OK");
     }
 
     private void CleanUpOldExportFiles(string prefix, string extension)
@@ -11577,35 +11578,28 @@ public sealed partial class StatsViewModel : ObservableObject
         try
         {
             string cacheDir = FileSystem.CacheDirectory;
-            string searchPattern = $"{prefix}*{extension}";
-            Debug.WriteLine($"CleanUpOldExportFiles: Searching for old files in '{cacheDir}' with pattern '{searchPattern}'");
-
             if (!Directory.Exists(cacheDir))
             {
-                Debug.WriteLine($"CleanUpOldExportFiles: Cache directory not found: {cacheDir}");
                 return;
             }
 
+            string searchPattern = $"{prefix}*{extension}";
             IEnumerable<string> oldFiles = Directory.EnumerateFiles(cacheDir, searchPattern);
-            int count = 0;
             foreach (string file in oldFiles)
             {
                 try
                 {
                     File.Delete(file);
-                    Debug.WriteLine($"CleanUpOldExportFiles: Deleted old file: {file}");
-                    count++;
                 }
-                catch (Exception ex)
+                catch (Exception)
                 {
-                    Debug.WriteLine($"CleanUpOldExportFiles: Error deleting old file '{file}': {ex.Message}");
+                    // Log or ignore
                 }
             }
-            Debug.WriteLine($"CleanUpOldExportFiles: Deleted {count} old export files matching pattern '{searchPattern}'.");
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            Debug.WriteLine($"CleanUpOldExportFiles: Error during cleanup for pattern '{prefix}*{extension}': {ex.Message}");
+            // Log or ignore
         }
     }
 
@@ -11618,23 +11612,6 @@ public sealed partial class StatsViewModel : ObservableObject
         }
     }
 
-    private void LogFileInfo(string filePath, string fileDescription)
-    {
-        try
-        {
-            FileInfo fileInfo = new(filePath);
-            Debug.WriteLine($"LogFileInfo: {fileDescription} file size: {fileInfo.Length} bytes. Path: {filePath}");
-            if (fileInfo.Length == 0)
-            {
-                Debug.WriteLine($"LogFileInfo: WARNING - {fileDescription} file is 0 bytes!");
-            }
-        }
-        catch (Exception ex)
-        {
-            Debug.WriteLine($"LogFileInfo: Could not get {fileDescription} file info: {ex.Message}. Path: {filePath}");
-        }
-    }
-
     private static async Task ShowAlertAsync(string title, string message, string cancelAction)
     {
         if (!MainThread.IsMainThread)
@@ -11644,21 +11621,31 @@ public sealed partial class StatsViewModel : ObservableObject
         }
 
         Page? currentPage = GetCurrentPage();
-
         if (currentPage is not null)
         {
             await currentPage.DisplayAlert(title, message, cancelAction);
         }
-        else
-        {
-            Debug.WriteLine($"ShowAlert: Could not find current page to display alert: {title}");
-        }
     }
+
+    private static async Task<bool> ShowConfirmationAsync(string title, string message, string accept, string cancel)
+    {
+        if (!MainThread.IsMainThread)
+        {
+            return await MainThread.InvokeOnMainThreadAsync(() => ShowConfirmationAsync(title, message, accept, cancel));
+        }
+
+        Page? currentPage = GetCurrentPage();
+        if (currentPage is not null)
+        {
+            return await currentPage.DisplayAlert(title, message, accept, cancel);
+        }
+        return false;
+    }
+
 
     private static Page? GetCurrentPage()
     {
         Page? currentPage = Application.Current?.MainPage;
-
         if (currentPage is Shell shell)
         {
             currentPage = shell.CurrentPage;
@@ -11680,11 +11667,6 @@ public sealed partial class StatsViewModel : ObservableObject
                 currentPage = navPageModal.CurrentPage;
             }
         }
-
-        if (currentPage == null)
-        {
-            Debug.WriteLine("GetCurrentPage: Could not determine the current page reliably.");
-        }
         return currentPage;
     }
 
@@ -11699,144 +11681,24 @@ public sealed partial class StatsViewModel : ObservableObject
 }
 </file>
 
-<file path="Source\Views\AddTaskPopupPage.xaml">
-<?xml version="1.0" encoding="utf-8" ?>
-<!-- Views/AddTaskPopupPage.xaml -->
-<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
-             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-             xmlns:models="clr-namespace:Tickly.Models"
-             xmlns:converters="clr-namespace:Tickly.Converters"
-             xmlns:vm="clr-namespace:Tickly.Views"
-             x:Class="Tickly.Views.AddTaskPopupPage"
-             x:DataType="vm:AddTaskPopupPageViewModel"
-             BackgroundColor="{DynamicResource AppBackgroundColor}"
-             Title="{Binding PageTitle}">
-
-    <ContentPage.Resources>
-        <ResourceDictionary>
-            <converters:InverseBooleanConverter x:Key="InverseBooleanConverter" />
-            <Style TargetType="Entry" x:Key="MinimalEntry">
-                <Setter Property="TextColor" Value="{DynamicResource AppForegroundColor}" />
-                <Setter Property="PlaceholderColor" Value="{DynamicResource AppSecondaryTextColor}" />
-                <Setter Property="BackgroundColor" Value="Transparent" />
-                <Setter Property="Margin" Value="0,0,0,5" />
-            </Style>
-            <Style TargetType="Label" x:Key="SettingsLabelStyle" BasedOn="{StaticResource BaseLabelStyle}">
-                <Setter Property="TextColor" Value="{DynamicResource AppForegroundColor}"/>
-                <Setter Property="Margin" Value="0,0,0,2"/>
-            </Style>
-            <Style TargetType="RadioButton" BasedOn="{StaticResource BaseStyle}">
-                <Setter Property="TextColor" Value="{DynamicResource AppForegroundColor}" />
-                <Setter Property="BackgroundColor" Value="Transparent"/>
-            </Style>
-            <Style TargetType="DatePicker" BasedOn="{StaticResource BaseStyle}">
-                <Setter Property="TextColor" Value="{DynamicResource AppForegroundColor}" />
-                <Setter Property="BackgroundColor" Value="{DynamicResource AppSurfaceColor}" />
-                <Setter Property="Margin" Value="20,0,0,0"/>
-            </Style>
-            <Style TargetType="Picker" BasedOn="{StaticResource BaseStyle}">
-                <Setter Property="TextColor" Value="{DynamicResource AppForegroundColor}" />
-                <Setter Property="TitleColor" Value="{DynamicResource AppSecondaryTextColor}"/>
-                <Setter Property="BackgroundColor" Value="{DynamicResource AppSurfaceColor}" />
-                <Setter Property="WidthRequest" Value="150"/>
-            </Style>
-            <Style x:Key="DeleteButton" TargetType="Button" BasedOn="{StaticResource BaseStyle}">
-                <Setter Property="BackgroundColor" Value="{StaticResource NordAurora0}" />
-                <Setter Property="TextColor" Value="{DynamicResource NordPolarNight0}" />
-                <Setter Property="HorizontalOptions" Value="Start"/>
-            </Style>
-            <Style x:Key="CancelButton" TargetType="Button" BasedOn="{StaticResource BaseStyle}">
-                <Setter Property="BackgroundColor" Value="{DynamicResource AppSurfaceColor}" />
-                <Setter Property="TextColor" Value="{DynamicResource AppForegroundColor}" />
-                <Setter Property="HorizontalOptions" Value="End"/>
-            </Style>
-            <Style x:Key="ConfirmButton" TargetType="Button" BasedOn="{StaticResource BaseStyle}">
-                <Setter Property="BackgroundColor" Value="{DynamicResource AppPrimaryActionBackgroundColor}" />
-                <Setter Property="TextColor" Value="{DynamicResource AppPrimaryActionForegroundColor}" />
-                <Setter Property="HorizontalOptions" Value="End"/>
-            </Style>
-        </ResourceDictionary>
-    </ContentPage.Resources>
-
-    <ScrollView>
-        <VerticalStackLayout Padding="20" Spacing="15">
-
-            <!-- Task Title Input -->
-            <Label Text="Task Title" Style="{StaticResource SettingsLabelStyle}"/>
-            <Entry x:Name="TitleEntry"
-                   Placeholder="Enter task title"
-                   Text="{Binding Title}"
-                   Style="{StaticResource MinimalEntry}" />
-
-            <!-- Time / Repetition Type Selection -->
-            <Label Text="Time / Repetition" Style="{StaticResource SettingsLabelStyle}"/>
-            <VerticalStackLayout Spacing="5">
-                <RadioButton GroupName="TimeTypeGroup" Content="None (Any time)"
-                             IsChecked="{Binding IsTimeTypeNone}" />
-                <RadioButton GroupName="TimeTypeGroup" Content="Specific Date"
-                             IsChecked="{Binding IsTimeTypeSpecificDate}" />
-                <RadioButton GroupName="TimeTypeGroup" Content="Repeating"
-                              IsChecked="{Binding IsTimeTypeRepeating}" />
-            </VerticalStackLayout>
-
-            <!-- Specific Date Picker (Visible only when SpecificDate is selected) -->
-            <DatePicker x:Name="DueDatePicker"
-                        Date="{Binding DueDate}"
-                        IsVisible="{Binding IsTimeTypeSpecificDate}" />
-
-            <!-- Repetition Options Section (Visible only when Repeating is selected) -->
-            <VerticalStackLayout Spacing="10" Margin="20,5,0,0"
-                                 IsVisible="{Binding IsTimeTypeRepeating}">
-
-                <Label Text="Repeat:" Style="{StaticResource SettingsLabelStyle}" TextColor="{DynamicResource AppSecondaryTextColor}"/>
-                <HorizontalStackLayout Spacing="10" BindableLayout.ItemsSource="{Binding RepetitionTypeOptions}">
-                    <BindableLayout.ItemTemplate>
-                        <DataTemplate x:DataType="vm:SelectableOption(models:TaskRepetitionType)">
-                            <RadioButton GroupName="RepetitionTypeGroup"
-                                         IsChecked="{Binding IsSelected}"
-                                         Content="{Binding Name}" />
-                        </DataTemplate>
-                    </BindableLayout.ItemTemplate>
-                </HorizontalStackLayout>
-
-                <!-- Day of Week Picker (Visible only for Weekly repetition) -->
-                <StackLayout Orientation="Horizontal" Spacing="5" Margin="0,5,0,0"
-                             IsVisible="{Binding IsWeeklySelected}">
-                    <Label Text="On:" VerticalOptions="Center" Style="{StaticResource SettingsLabelStyle}" TextColor="{DynamicResource AppSecondaryTextColor}"/>
-                    <Picker x:Name="DayOfWeekPicker"
-                            Title="Select Day"
-                            ItemsSource="{Binding DisplayDaysOfWeek}"
-                            SelectedItem="{Binding SelectedDisplayDayOfWeek}" />
-                </StackLayout>
-            </VerticalStackLayout>
-
-            <!-- Action Buttons -->
-            <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="10" Margin="0,20,0,0">
-                <Button Grid.Column="0" Text="Delete" Clicked="OnDeleteClicked" IsVisible="{Binding IsEditMode}" Style="{StaticResource DeleteButton}" />
-                <Button Grid.Column="2" Text="Cancel" Clicked="OnCancelClicked" Style="{StaticResource CancelButton}" />
-                <Button Grid.Column="3" Text="{Binding ConfirmButtonText}" Clicked="OnConfirmClicked" Style="{StaticResource ConfirmButton}" />
-            </Grid>
-
-        </VerticalStackLayout>
-    </ScrollView>
-</ContentPage>
-</file>
-
-<file path="Source\Views\AddTaskPopupPage.xaml.cs">
+<file path="Source\Views\AddTaskPopupPage.cs">
 using System.Collections.ObjectModel;
-using System.Diagnostics; // For Debug.WriteLine
+using System.Globalization;
+using CommunityToolkit.Maui.Markup;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Messaging;
-using Tickly.Messages; // Ensure UpdateTaskMessage and DeleteTaskMessage are included
+using Tickly.Messages;
 using Tickly.Models;
+using static CommunityToolkit.Maui.Markup.GridRowsColumns;
 
 namespace Tickly.Views;
 
-// Helper class for binding collections to RadioButtons
+// Helper class for binding collections to RadioButtons (Remains the same)
 public partial class SelectableOption<T> : ObservableObject
 {
     [ObservableProperty]
     private bool _isSelected;
+
     public string Name { get; }
     public T Value { get; }
 
@@ -11848,51 +11710,38 @@ public partial class SelectableOption<T> : ObservableObject
     }
 }
 
-// ViewModel for the Add/Edit Task Page
+// ViewModel for the Add/Edit Task Page (Remains the same)
 public partial class AddTaskPopupPageViewModel : ObservableObject
 {
-    // Properties bound to UI controls
-    [ObservableProperty] private string _title = string.Empty; // Add Title property for binding
+    [ObservableProperty] private string _title = string.Empty;
     [ObservableProperty] private DateTime _dueDate = DateTime.Today;
-    [ObservableProperty] private bool _isTimeTypeNone = true; // Default selection
+    [ObservableProperty] private bool _isTimeTypeNone = true;
     [ObservableProperty] private bool _isTimeTypeSpecificDate;
     [ObservableProperty] private bool _isTimeTypeRepeating;
-    // REMOVED: PriorityOptions
-    // [ObservableProperty] private ObservableCollection<SelectableOption<TaskPriority>> _priorityOptions;
     [ObservableProperty] private ObservableCollection<SelectableOption<TaskRepetitionType>> _repetitionTypeOptions;
-    [ObservableProperty] private bool _isWeeklySelected; // Controls visibility of DayOfWeek picker
-
-    // Updated: Use List<string> for display names to simplify binding
+    [ObservableProperty] private bool _isWeeklySelected;
     [ObservableProperty] private List<string> _displayDaysOfWeek;
-    [ObservableProperty] private string _selectedDisplayDayOfWeek;
+    [ObservableProperty] private string _selectedDisplayDayOfWeek = string.Empty;
 
-    // Internal property to track the original TaskItem for Edit mode
     private TaskItem? _originalTask;
 
-    // Properties for UI state (EditMode, Titles)
     [ObservableProperty] private bool _isEditMode;
     [ObservableProperty] private string _pageTitle = "Add New Task";
     [ObservableProperty] private string _confirmButtonText = "Add Task";
 
     public AddTaskPopupPageViewModel()
     {
-        // REMOVED: Priority options initialization
-        // PriorityOptions = new ObservableCollection<SelectableOption<TaskPriority>> { ... };
-
-        // Initialize Repetition options
         RepetitionTypeOptions = new ObservableCollection<SelectableOption<TaskRepetitionType>>
         {
-            new SelectableOption<TaskRepetitionType>("Daily", TaskRepetitionType.Daily, true), // Default selected
+            new SelectableOption<TaskRepetitionType>("Daily", TaskRepetitionType.Daily, true),
             new SelectableOption<TaskRepetitionType>("Alternate Day", TaskRepetitionType.AlternateDay),
             new SelectableOption<TaskRepetitionType>("Weekly", TaskRepetitionType.Weekly)
         };
 
-        // Initialize Display Days of Week
-        var culture = System.Globalization.CultureInfo.InvariantCulture;
+        var culture = CultureInfo.InvariantCulture;
         DisplayDaysOfWeek = culture.DateTimeFormat.DayNames.ToList();
         SelectedDisplayDayOfWeek = culture.DateTimeFormat.GetDayName(DateTime.Today.DayOfWeek);
 
-        // Handle changes in RepetitionType selection
         foreach (var option in RepetitionTypeOptions)
         {
             option.PropertyChanged += (sender, args) =>
@@ -11916,7 +11765,6 @@ public partial class AddTaskPopupPageViewModel : ObservableObject
         }
         IsWeeklySelected = RepetitionTypeOptions.FirstOrDefault(o => o.IsSelected)?.Value == TaskRepetitionType.Weekly;
 
-        // Handle changes in the main TimeType selection
         this.PropertyChanged += (sender, args) =>
         {
             if (args.PropertyName == nameof(IsTimeTypeRepeating) || args.PropertyName == nameof(IsTimeTypeSpecificDate) || args.PropertyName == nameof(IsTimeTypeNone))
@@ -11934,33 +11782,23 @@ public partial class AddTaskPopupPageViewModel : ObservableObject
         ConfirmButtonText = "Update Task";
 
         Title = task.Title;
-
-        // REMOVED: Loading priority
-        // foreach (var option in PriorityOptions) option.IsSelected = (option.Value == task.Priority);
-        // if (!PriorityOptions.Any(o => o.IsSelected)) PriorityOptions.FirstOrDefault(o => o.Value == TaskPriority.Medium)!.IsSelected = true;
-
         IsTimeTypeNone = task.TimeType == TaskTimeType.None;
         IsTimeTypeSpecificDate = task.TimeType == TaskTimeType.SpecificDate;
         IsTimeTypeRepeating = task.TimeType == TaskTimeType.Repeating;
-
         DueDate = task.DueDate ?? DateTime.Today;
 
         if (task.TimeType == TaskTimeType.Repeating)
         {
-            foreach (var option in RepetitionTypeOptions)
-                option.IsSelected = (option.Value == task.RepetitionType);
-            if (!RepetitionTypeOptions.Any(o => o.IsSelected))
-                RepetitionTypeOptions.FirstOrDefault(o => o.Value == TaskRepetitionType.Daily)!.IsSelected = true;
-
-            var culture = System.Globalization.CultureInfo.InvariantCulture;
+            foreach (var option in RepetitionTypeOptions) option.IsSelected = (option.Value == task.RepetitionType);
+            if (!RepetitionTypeOptions.Any(o => o.IsSelected)) RepetitionTypeOptions.FirstOrDefault(o => o.Value == TaskRepetitionType.Daily)!.IsSelected = true;
+            var culture = CultureInfo.InvariantCulture;
             SelectedDisplayDayOfWeek = culture.DateTimeFormat.GetDayName(task.RepetitionDayOfWeek ?? DateTime.Today.DayOfWeek);
-
             IsWeeklySelected = RepetitionTypeOptions.FirstOrDefault(o => o.IsSelected)?.Value == TaskRepetitionType.Weekly;
         }
         else
         {
             RepetitionTypeOptions.FirstOrDefault(o => o.Value == TaskRepetitionType.Daily)!.IsSelected = true;
-            var culture = System.Globalization.CultureInfo.InvariantCulture;
+            var culture = CultureInfo.InvariantCulture;
             SelectedDisplayDayOfWeek = culture.DateTimeFormat.GetDayName(DateTime.Today.DayOfWeek);
             IsWeeklySelected = false;
         }
@@ -11968,25 +11806,20 @@ public partial class AddTaskPopupPageViewModel : ObservableObject
 
     public TaskItem? GetTaskItem()
     {
-        string title = Title?.Trim();
-        if (string.IsNullOrWhiteSpace(title))
+        string? currentTitle = Title?.Trim();
+        if (string.IsNullOrWhiteSpace(currentTitle))
         {
-            Debug.WriteLine("Validation Error: Task title cannot be empty.");
             return null;
         }
-
-        // REMOVED: Reading priority
-        // var selectedPriorityOption = PriorityOptions.FirstOrDefault(p => p.IsSelected);
-        // TaskPriority priority = selectedPriorityOption?.Value ?? TaskPriority.Medium;
 
         TaskTimeType timeType = IsTimeTypeSpecificDate ? TaskTimeType.SpecificDate :
                                 IsTimeTypeRepeating ? TaskTimeType.Repeating :
                                 TaskTimeType.None;
 
-        DateTime? dueDate = null;
+        DateTime? finalDueDate = null;
         if (timeType == TaskTimeType.SpecificDate || timeType == TaskTimeType.Repeating)
         {
-            dueDate = DueDate;
+            finalDueDate = DueDate;
         }
 
         TaskRepetitionType? repetitionType = null;
@@ -11995,41 +11828,29 @@ public partial class AddTaskPopupPageViewModel : ObservableObject
         {
             var selectedRepetitionOption = RepetitionTypeOptions.FirstOrDefault(r => r.IsSelected);
             repetitionType = selectedRepetitionOption?.Value ?? TaskRepetitionType.Daily;
-
-            if (repetitionType == TaskRepetitionType.Weekly)
-            {
-                repetitionDayOfWeek = GetDayOfWeekFromDisplayName(SelectedDisplayDayOfWeek);
-            }
+            if (repetitionType == TaskRepetitionType.Weekly) repetitionDayOfWeek = GetDayOfWeekFromDisplayName(SelectedDisplayDayOfWeek);
         }
 
         if (IsEditMode && _originalTask != null)
         {
-            var updatedTask = new TaskItem(
-                title, /* REMOVED: priority, */ timeType, dueDate, repetitionType, repetitionDayOfWeek, _originalTask.Order
-            )
+            return new TaskItem(currentTitle, timeType, finalDueDate, repetitionType, repetitionDayOfWeek, _originalTask.Order)
             {
                 Id = _originalTask.Id,
-                Index = _originalTask.Index // Preserve index if updating
+                Index = _originalTask.Index
             };
-            return updatedTask;
         }
         else
         {
-            var newTask = new TaskItem(title, /* REMOVED: priority, */ timeType, dueDate, repetitionType, repetitionDayOfWeek);
-            // Index and Order will be assigned by MainViewModel
-            return newTask;
+            return new TaskItem(currentTitle, timeType, finalDueDate, repetitionType, repetitionDayOfWeek);
         }
     }
 
     private DayOfWeek? GetDayOfWeekFromDisplayName(string displayName)
     {
-        var culture = System.Globalization.CultureInfo.InvariantCulture;
+        var culture = CultureInfo.InvariantCulture;
         for (int i = 0; i < culture.DateTimeFormat.DayNames.Length; i++)
         {
-            if (culture.DateTimeFormat.DayNames[i].Equals(displayName, StringComparison.OrdinalIgnoreCase))
-            {
-                return (DayOfWeek)i;
-            }
+            if (culture.DateTimeFormat.DayNames[i].Equals(displayName, StringComparison.OrdinalIgnoreCase)) return (DayOfWeek)i;
         }
         return null;
     }
@@ -12037,14 +11858,12 @@ public partial class AddTaskPopupPageViewModel : ObservableObject
     public void Reset()
     {
         Title = string.Empty;
-        // REMOVED: Reset priority
-        // PriorityOptions.FirstOrDefault(o => o.Value == TaskPriority.Medium)!.IsSelected = true;
         IsTimeTypeNone = true;
         IsTimeTypeSpecificDate = false;
         IsTimeTypeRepeating = false;
         DueDate = DateTime.Today;
         RepetitionTypeOptions.FirstOrDefault(o => o.Value == TaskRepetitionType.Daily)!.IsSelected = true;
-        var culture = System.Globalization.CultureInfo.InvariantCulture;
+        var culture = CultureInfo.InvariantCulture;
         SelectedDisplayDayOfWeek = culture.DateTimeFormat.GetDayName(DateTime.Today.DayOfWeek);
         IsWeeklySelected = false;
 
@@ -12053,7 +11872,6 @@ public partial class AddTaskPopupPageViewModel : ObservableObject
         PageTitle = "Add New Task";
         ConfirmButtonText = "Add Task";
 
-        // Notify UI about all property changes after reset
         OnPropertyChanged(nameof(Title));
         OnPropertyChanged(nameof(IsTimeTypeNone));
         OnPropertyChanged(nameof(IsTimeTypeSpecificDate));
@@ -12071,7 +11889,7 @@ public partial class AddTaskPopupPageViewModel : ObservableObject
 [QueryProperty(nameof(TaskToEdit), "TaskToEdit")]
 public partial class AddTaskPopupPage : ContentPage
 {
-    private AddTaskPopupPageViewModel _viewModel;
+    private readonly AddTaskPopupPageViewModel _viewModel;
 
     public TaskItem TaskToEdit
     {
@@ -12079,12 +11897,10 @@ public partial class AddTaskPopupPage : ContentPage
         {
             if (value != null)
             {
-                Debug.WriteLine($"AddTaskPopupPage: Received TaskToEdit with ID: {value.Id}");
                 _viewModel.LoadFromTask(value);
             }
             else
             {
-                Debug.WriteLine("AddTaskPopupPage: Navigated without TaskToEdit (Add Mode).");
                 _viewModel.Reset();
             }
         }
@@ -12092,42 +11908,147 @@ public partial class AddTaskPopupPage : ContentPage
 
     public AddTaskPopupPage()
     {
-        InitializeComponent();
         _viewModel = new AddTaskPopupPageViewModel();
         BindingContext = _viewModel;
-        Debug.WriteLine("AddTaskPopupPage: Constructor completed.");
+
+        this.Bind(TitleProperty, nameof(AddTaskPopupPageViewModel.PageTitle));
+        this.SetDynamicResource(BackgroundColorProperty, "AppBackgroundColor");
+
+        // --- UI Elements ---
+
+        var titleLabel = new Label { Text = "Task Title", Margin = new Thickness(0, 0, 0, 2) };
+        titleLabel.SetDynamicResource(Label.TextColorProperty, "AppForegroundColor"); // BaseLabelStyle
+        titleLabel.FontSize = 14;
+
+        var titleEntry = new Entry { Placeholder = "Enter task title", Margin = new Thickness(0, 0, 0, 5) };
+        titleEntry.SetDynamicResource(Entry.TextColorProperty, "AppForegroundColor");
+        titleEntry.SetDynamicResource(Entry.PlaceholderColorProperty, "AppSecondaryTextColor");
+        titleEntry.BackgroundColor = Colors.Transparent;
+        titleEntry.Bind(Entry.TextProperty, nameof(AddTaskPopupPageViewModel.Title));
+
+        var timeRepetitionLabel = new Label { Text = "Time / Repetition", Margin = new Thickness(0, 0, 0, 2) };
+        timeRepetitionLabel.SetDynamicResource(Label.TextColorProperty, "AppForegroundColor");
+        timeRepetitionLabel.FontSize = 14;
+
+        var timeTypeNoneRb = new RadioButton { GroupName = "TimeTypeGroup", Content = "None (Any time)" };
+        timeTypeNoneRb.SetDynamicResource(RadioButton.TextColorProperty, "AppForegroundColor");
+        timeTypeNoneRb.BackgroundColor = Colors.Transparent;
+        timeTypeNoneRb.Bind(RadioButton.IsCheckedProperty, nameof(AddTaskPopupPageViewModel.IsTimeTypeNone));
+
+        var timeTypeSpecificDateRb = new RadioButton { GroupName = "TimeTypeGroup", Content = "Specific Date" };
+        timeTypeSpecificDateRb.SetDynamicResource(RadioButton.TextColorProperty, "AppForegroundColor");
+        timeTypeSpecificDateRb.BackgroundColor = Colors.Transparent;
+        timeTypeSpecificDateRb.Bind(RadioButton.IsCheckedProperty, nameof(AddTaskPopupPageViewModel.IsTimeTypeSpecificDate));
+
+        var timeTypeRepeatingRb = new RadioButton { GroupName = "TimeTypeGroup", Content = "Repeating" };
+        timeTypeRepeatingRb.SetDynamicResource(RadioButton.TextColorProperty, "AppForegroundColor");
+        timeTypeRepeatingRb.BackgroundColor = Colors.Transparent;
+        timeTypeRepeatingRb.Bind(RadioButton.IsCheckedProperty, nameof(AddTaskPopupPageViewModel.IsTimeTypeRepeating));
+
+        var dueDatePicker = new DatePicker { Margin = new Thickness(20, 0, 0, 0) };
+        dueDatePicker.SetDynamicResource(DatePicker.TextColorProperty, "AppForegroundColor");
+        dueDatePicker.SetDynamicResource(DatePicker.BackgroundColorProperty, "AppSurfaceColor");
+        dueDatePicker.Bind(DatePicker.DateProperty, nameof(AddTaskPopupPageViewModel.DueDate));
+        dueDatePicker.Bind(DatePicker.IsVisibleProperty, nameof(AddTaskPopupPageViewModel.IsTimeTypeSpecificDate));
+
+        var repeatLabel = new Label { Text = "Repeat:", Margin = new Thickness(0, 0, 0, 2) };
+        repeatLabel.SetDynamicResource(Label.TextColorProperty, "AppSecondaryTextColor"); // Specific color
+        repeatLabel.FontSize = 14;
+
+        var repetitionRadioButtonsLayout = new HorizontalStackLayout { Spacing = 10 };
+        foreach (var option in _viewModel.RepetitionTypeOptions)
+        {
+            var rb = new RadioButton { GroupName = "RepetitionTypeGroup" };
+            rb.SetDynamicResource(RadioButton.TextColorProperty, "AppForegroundColor");
+            rb.BackgroundColor = Colors.Transparent;
+            rb.Bind(RadioButton.IsCheckedProperty, nameof(SelectableOption<TaskRepetitionType>.IsSelected), source: option);
+            rb.Bind(RadioButton.ContentProperty, nameof(SelectableOption<TaskRepetitionType>.Name), source: option);
+            repetitionRadioButtonsLayout.Children.Add(rb);
+        }
+
+        var onLabel = new Label { Text = "On:", VerticalOptions = LayoutOptions.Center, Margin = new Thickness(0, 0, 0, 2) };
+        onLabel.SetDynamicResource(Label.TextColorProperty, "AppSecondaryTextColor");
+        onLabel.FontSize = 14;
+
+        var dayOfWeekPicker = new Picker { Title = "Select Day", WidthRequest = 150 };
+        dayOfWeekPicker.SetDynamicResource(Picker.TextColorProperty, "AppForegroundColor");
+        dayOfWeekPicker.SetDynamicResource(Picker.TitleColorProperty, "AppSecondaryTextColor");
+        dayOfWeekPicker.SetDynamicResource(Picker.BackgroundColorProperty, "AppSurfaceColor");
+        dayOfWeekPicker.Bind(Picker.ItemsSourceProperty, nameof(AddTaskPopupPageViewModel.DisplayDaysOfWeek));
+        dayOfWeekPicker.Bind(Picker.SelectedItemProperty, nameof(AddTaskPopupPageViewModel.SelectedDisplayDayOfWeek));
+
+        var dayOfWeekLayout = new StackLayout
+        {
+            Orientation = StackOrientation.Horizontal,
+            Spacing = 5,
+            Margin = new Thickness(0, 5, 0, 0),
+            Children = { onLabel, dayOfWeekPicker }
+        };
+        dayOfWeekLayout.Bind(StackLayout.IsVisibleProperty, nameof(AddTaskPopupPageViewModel.IsWeeklySelected));
+
+        var repetitionOptionsLayout = new VerticalStackLayout
+        {
+            Spacing = 10,
+            Margin = new Thickness(20, 5, 0, 0),
+            Children = { repeatLabel, repetitionRadioButtonsLayout, dayOfWeekLayout }
+        };
+        repetitionOptionsLayout.Bind(VerticalStackLayout.IsVisibleProperty, nameof(AddTaskPopupPageViewModel.IsTimeTypeRepeating));
+
+        var deleteButton = new Button { Text = "Delete", HorizontalOptions = LayoutOptions.Start };
+        deleteButton.SetDynamicResource(Button.BackgroundColorProperty, "NordAurora0"); // Assuming NordAurora0 is globally available
+        deleteButton.SetDynamicResource(Button.TextColorProperty, "NordPolarNight0");   // Assuming NordPolarNight0 is globally available
+        deleteButton.Clicked += OnDeleteClicked;
+        deleteButton.Bind(Button.IsVisibleProperty, nameof(AddTaskPopupPageViewModel.IsEditMode));
+
+        var cancelButton = new Button { Text = "Cancel", HorizontalOptions = LayoutOptions.End };
+        cancelButton.SetDynamicResource(Button.BackgroundColorProperty, "AppSurfaceColor");
+        cancelButton.SetDynamicResource(Button.TextColorProperty, "AppForegroundColor");
+        cancelButton.Clicked += OnCancelClicked;
+
+        var confirmButton = new Button { HorizontalOptions = LayoutOptions.End };
+        confirmButton.SetDynamicResource(Button.BackgroundColorProperty, "AppPrimaryActionBackgroundColor");
+        confirmButton.SetDynamicResource(Button.TextColorProperty, "AppPrimaryActionForegroundColor");
+        confirmButton.Bind(Button.TextProperty, nameof(AddTaskPopupPageViewModel.ConfirmButtonText));
+        confirmButton.Clicked += OnConfirmClicked;
+
+        Content = new ScrollView
+        {
+            Content = new VerticalStackLayout
+            {
+                Padding = 20,
+                Spacing = 15,
+                Children =
+                {
+                    titleLabel,
+                    titleEntry,
+                    timeRepetitionLabel,
+                    new VerticalStackLayout
+                    {
+                        Spacing = 5,
+                        Children = { timeTypeNoneRb, timeTypeSpecificDateRb, timeTypeRepeatingRb }
+                    },
+                    dueDatePicker,
+                    repetitionOptionsLayout,
+                    new Grid
+                    {
+                        Margin = new Thickness(0,20,0,0), ColumnSpacing = 10,
+                        ColumnDefinitions = Columns.Define(GridRowsColumns.Auto, GridRowsColumns.Star, GridRowsColumns.Auto, GridRowsColumns.Auto),
+                        Children =
+                        {
+                            deleteButton.Column(0),
+                            cancelButton.Column(2),
+                            confirmButton.Column(3)
+                        }
+                    }
+                }
+            }
+        };
     }
 
-    private async Task ShowAndroidDebugAlert(string title, string message)
+    private async void OnConfirmClicked(object? sender, EventArgs e)
     {
-#if ANDROID
-        try
-        {
-            // Ensure we are on the main thread for UI operations
-            if (!MainThread.IsMainThread)
-            {
-                await MainThread.InvokeOnMainThreadAsync(async () => await DisplayAlert(title, message, "OK"));
-            }
-            else
-            {
-                await DisplayAlert(title, message, "OK");
-            }
-        }
-        catch (Exception ex)
-        {
-            Debug.WriteLine($"[ANDROID_DEBUG_ALERT_FAIL] {title}: {ex.Message}");
-        }
-#else
-        await Task.CompletedTask;
-#endif
-    }
-
-
-    private async void OnConfirmClicked(object sender, EventArgs e)
-    {
-        // await ShowAndroidDebugAlert("Debug Confirm", "OnConfirmClicked entered."); // No longer needed for this specific issue
-        var taskItem = _viewModel.GetTaskItem();
-
+        TaskItem? taskItem = _viewModel.GetTaskItem();
+        
         if (taskItem == null)
         {
             await DisplayAlert("Validation Error", "Task title cannot be empty.", "OK");
@@ -12136,45 +12057,38 @@ public partial class AddTaskPopupPage : ContentPage
 
         if (_viewModel.IsEditMode)
         {
-            Debug.WriteLine($"Sending UpdateTaskMessage for Task ID: {taskItem.Id}");
             WeakReferenceMessenger.Default.Send(new UpdateTaskMessage(taskItem));
         }
         else
         {
-            Debug.WriteLine($"Sending AddTaskMessage for new task: {taskItem.Title}");
             WeakReferenceMessenger.Default.Send(new AddTaskMessage(taskItem));
         }
 
         await Shell.Current.Navigation.PopModalAsync();
     }
 
-    private async void OnCancelClicked(object sender, EventArgs e)
+    private async void OnCancelClicked(object? sender, EventArgs e)
     {
-        // await ShowAndroidDebugAlert("Debug Cancel", "OnCancelClicked entered."); // No longer needed for this specific issue
         await Shell.Current.Navigation.PopModalAsync();
     }
 
-    private async void OnDeleteClicked(object sender, EventArgs e)
+    private async void OnDeleteClicked(object? sender, EventArgs e)
     {
-        // await ShowAndroidDebugAlert("Debug Delete", "OnDeleteClicked entered."); // No longer needed for this specific issue
         var taskToDelete = _viewModel.GetTaskItem();
-
         if (_viewModel.IsEditMode && taskToDelete != null)
         {
             bool confirmed = await DisplayAlert("Confirm Delete", $"Are you sure you want to delete the task '{taskToDelete.Title}'?", "Yes", "No");
+            
             if (!confirmed)
             {
                 return;
             }
 
-            Debug.WriteLine($"Sending DeleteTaskMessage for Task ID: {taskToDelete.Id}");
             WeakReferenceMessenger.Default.Send(new DeleteTaskMessage(taskToDelete.Id));
-
             await Shell.Current.Navigation.PopModalAsync();
         }
         else
         {
-            Debug.WriteLine("OnDeleteClicked triggered but not in Edit Mode or Task ID missing. Cannot delete.");
             await DisplayAlert("Error", "Cannot delete task. No task loaded for editing.", "OK");
         }
     }
@@ -12182,13 +12096,11 @@ public partial class AddTaskPopupPage : ContentPage
     protected override void OnNavigatedFrom(NavigatedFromEventArgs args)
     {
         base.OnNavigatedFrom(args);
-        Debug.WriteLine("AddTaskPopupPage: Navigated From.");
     }
 
     protected override void OnNavigatedTo(NavigatedToEventArgs args)
     {
         base.OnNavigatedTo(args);
-        Debug.WriteLine($"AddTaskPopupPage: Navigated To. Edit Mode: {_viewModel.IsEditMode}");
     }
 }
 </file>
@@ -12293,59 +12205,85 @@ public sealed class StatsPage : ContentPage
     {
         BindingContext = viewModel;
         Title = "Stats";
-        this.SetDynamicResource(BackgroundColorProperty, "AppBackgroundColor"); // Ensure background follows theme
+        this.SetDynamicResource(BackgroundColorProperty, "AppBackgroundColor");
 
         Color initialChartTextColor = Application.Current?.RequestedTheme == AppTheme.Dark ? Colors.WhiteSmoke : Colors.Black;
-        viewModel.ChartDrawable.TextColor = initialChartTextColor;
+        if (viewModel.ChartDrawable != null)
+        {
+            viewModel.ChartDrawable.TextColor = initialChartTextColor;
+        }
 
         _barChartView = new GraphicsView { HeightRequest = 200, Margin = new Thickness(0, 10, 0, 10) }
             .Bind(GraphicsView.DrawableProperty, nameof(StatsViewModel.ChartDrawable));
 
-        Content = new ScrollView
+        var resetProgressButton = new Button
         {
-            Content = new VerticalStackLayout
+            Text = "Reset All Progress",
+            BackgroundColor = Color.FromHex("#BF616A"),
+            TextColor = Colors.WhiteSmoke,
+            Margin = new Thickness(0, 20, 0, 0)
+        }.BindCommand(nameof(StatsViewModel.ResetProgressCommand));
+
+        var mainLayout = new VerticalStackLayout
+        {
+            Padding = 20,
+            Spacing = 15,
+            Children =
             {
-                Padding = 20,
-                Spacing = 15,
-                Children =
+                new Label { Text = "Daily Progress Activity", FontSize = LargeFontSize, FontAttributes = FontAttributes.Bold, Margin = new Thickness(0, 0, 0, 5) },
+                new Label { Text = "Time Range:", Style = GetStyle("BaseLabelStyle"), FontSize = SmallFontSize, Margin = new Thickness(0,0,0,0) },
+                new Picker
                 {
-                    new Label { Text = "Daily Progress Activity", FontSize = LargeFontSize, FontAttributes = FontAttributes.Bold, Margin = new(0, 0, 0, 5) },
-                    new Label { Text = "Time Range:", Style = GetStyle("BaseLabelStyle"), FontSize = SmallFontSize, Margin = new(0,0,0,0) },
-                    new Picker
-                    {
-                        Title = "Select Time Range",
-                        TitleColor = (Color)(Application.Current?.Resources["AppSecondaryTextColor"] ?? Colors.Gray)
-                    }
-                    .Bind(Picker.ItemsSourceProperty, nameof(StatsViewModel.PlotTimeRanges))
-                    .Bind(Picker.SelectedItemProperty, nameof(StatsViewModel.SelectedPlotTimeRange)),
-                    _barChartView,
-                    new BoxView { HeightRequest = 1, BackgroundColor = Color.FromArgb("#333333"), Margin = new(0, 15, 0, 15) },
-                    new Label { Text = "Export Daily Progress", FontSize = LargeFontSize, FontAttributes = FontAttributes.Bold, Margin = new(0, 0, 0, 10) },
-                    new Label { Text = "Export your daily task completion percentages to a .txt file.", Style = GetStyle("LightGrayLabel"), FontSize = SmallFontSize, LineBreakMode = LineBreakMode.WordWrap, Margin = new(0,0,0,10) },
-                    new Label { Text = "Sort Order:", Style = GetStyle("BaseLabelStyle"), FontSize = SmallFontSize, Margin = new(0,5,0,0) },
-                    new Picker
-                    {
-                        Title = "Select Sort Order",
-                        TitleColor = (Color)(Application.Current?.Resources["AppSecondaryTextColor"] ?? Colors.Gray)
-                    }
-                    .Bind(Picker.ItemsSourceProperty, nameof(StatsViewModel.ExportSortOrders))
-                    .Bind(Picker.SelectedItemProperty, nameof(StatsViewModel.SelectedExportSortOrder)),
-                    new Label { Text = "Calendar For Dates:", Style = GetStyle("BaseLabelStyle"), FontSize = SmallFontSize, Margin = new(0,10,0,0) },
-                    new Picker
-                    {
-                        Title = "Select Calendar Type",
-                        TitleColor = (Color)(Application.Current?.Resources["AppSecondaryTextColor"] ?? Colors.Gray)
-                    }
-                    .Bind(Picker.ItemsSourceProperty, nameof(StatsViewModel.ExportCalendarTypes))
-                    .Bind(Picker.SelectedItemProperty, nameof(StatsViewModel.SelectedExportCalendarType)),
-                    new Button
-                    {
-                        Text = "Export Daily Progress", BackgroundColor = Color.FromArgb("#3B71CA"), TextColor = Colors.WhiteSmoke, Margin = new(0, 15, 0, 0)
-                    }
-                    .BindCommand(nameof(StatsViewModel.ExportProgressCommand))
+                    Title = "Select Time Range"
                 }
+                .DynamicResource(Picker.TitleColorProperty, "AppSecondaryTextColor")
+                .Bind(Picker.ItemsSourceProperty, nameof(StatsViewModel.PlotTimeRanges))
+                .Bind(Picker.SelectedItemProperty, nameof(StatsViewModel.SelectedPlotTimeRange)),
+
+                _barChartView,
+
+                new BoxView { HeightRequest = 1, Margin = new Thickness(0, 15, 0, 15) }
+                    .DynamicResource(BoxView.ColorProperty, "AppSecondaryTextColor"),
+
+                new Label { Text = "Export Daily Progress", FontSize = LargeFontSize, FontAttributes = FontAttributes.Bold, Margin = new Thickness(0, 0, 0, 10) },
+                new Label { Text = "Export your daily task completion percentages to a .txt file.", Style = GetStyle("LightGrayLabel"), FontSize = SmallFontSize, LineBreakMode = LineBreakMode.WordWrap, Margin = new Thickness(0,0,0,10) },
+                new Label { Text = "Sort Order:", Style = GetStyle("BaseLabelStyle"), FontSize = SmallFontSize, Margin = new Thickness(0,5,0,0) },
+                new Picker
+                {
+                    Title = "Select Sort Order"
+                }
+                .DynamicResource(Picker.TitleColorProperty, "AppSecondaryTextColor")
+                .Bind(Picker.ItemsSourceProperty, nameof(StatsViewModel.ExportSortOrders))
+                .Bind(Picker.SelectedItemProperty, nameof(StatsViewModel.SelectedExportSortOrder)),
+
+                new Label { Text = "Calendar For Dates:", Style = GetStyle("BaseLabelStyle"), FontSize = SmallFontSize, Margin = new Thickness(0,10,0,0) },
+                new Picker
+                {
+                    Title = "Select Calendar Type"
+                }
+                .DynamicResource(Picker.TitleColorProperty, "AppSecondaryTextColor")
+                .Bind(Picker.ItemsSourceProperty, nameof(StatsViewModel.ExportCalendarTypes))
+                .Bind(Picker.SelectedItemProperty, nameof(StatsViewModel.SelectedExportCalendarType)),
+
+                new Button
+                {
+                    Text = "Export Daily Progress", Margin = new Thickness(0, 15, 0, 0)
+                }
+                .DynamicResource(Button.BackgroundColorProperty, "AppPrimaryActionBackgroundColor")
+                .DynamicResource(Button.TextColorProperty, "AppPrimaryActionForegroundColor")
+                .BindCommand(nameof(StatsViewModel.ExportProgressCommand)),
+
+                new BoxView { HeightRequest = 1, Margin = new Thickness(0, 20, 0, 15) }
+                    .DynamicResource(BoxView.ColorProperty, "AppSecondaryTextColor"),
+
+                new Label { Text = "Danger Zone", FontSize = LargeFontSize, FontAttributes = FontAttributes.Bold, Margin = new Thickness(0, 0, 0, 10) }
+                    .DynamicResource(Label.TextColorProperty, "NordAurora0"),
+
+                resetProgressButton
             }
         };
+
+        Content = new ScrollView { Content = mainLayout };
     }
 
     protected override async void OnAppearing()
@@ -12360,8 +12298,22 @@ public sealed class StatsPage : ContentPage
 
     private static Style GetStyle(string key)
     {
-        if (Application.Current?.Resources.TryGetValue(key, out var resource) == true && resource is Style style) return style;
-        return new Style(typeof(Label));
+        if (Application.Current?.Resources.TryGetValue(key, out var resource) == true && resource is Style style)
+        {
+            return style;
+        }
+
+        var fallbackStyle = new Style(typeof(Label));
+        fallbackStyle.Setters.Add(new Setter { Property = Label.FontSizeProperty, Value = 14 });
+        if (Application.Current?.Resources.TryGetValue("AppForegroundColor", out var fgColor) == true && fgColor is Color color)
+        {
+            fallbackStyle.Setters.Add(new Setter { Property = Label.TextColorProperty, Value = color });
+        }
+        else
+        {
+            fallbackStyle.Setters.Add(new Setter { Property = Label.TextColorProperty, Value = Colors.Black });
+        }
+        return fallbackStyle;
     }
 }
 </file>
