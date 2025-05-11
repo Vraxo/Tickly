@@ -3,7 +3,7 @@ using Tickly.Models;
 
 namespace Tickly.Messages;
 
-public class AddTaskMessage : ValueChangedMessage<TaskItem>
+public class AddTaskMessage(TaskItem value) : ValueChangedMessage<TaskItem>(value)
 {
-    public AddTaskMessage(TaskItem value) : base(value) { }
+
 }
