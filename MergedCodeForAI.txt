@@ -12107,6 +12107,8 @@ public partial class AddTaskPopupPage : ContentPage
 
 <file path="Source\Views\SettingsPage.cs">
 using CommunityToolkit.Maui.Markup;
+using Microsoft.Maui.Controls;
+using Microsoft.Maui.Graphics;
 using Tickly.ViewModels;
 
 namespace Tickly.Views;
@@ -12131,31 +12133,32 @@ public sealed class SettingsPage : ContentPage
                 new Label { Text = "Theme Settings", FontSize = LargeFontSize, FontAttributes = FontAttributes.Bold, Margin = new(0, 0, 0, 10) },
                 new Label { Text = "Choose the application theme:", Style = GetStyle("LightGrayLabel"), Margin = new(0,0,0,5) },
 
+                // Theme RadioButtons... (Keep existing buttons)
                 new Label { Text = "Dark Themes", FontAttributes = FontAttributes.Bold, Margin = new(0, 10, 0, 5) },
-                new RadioButton { GroupName = "ThemeGroup", Content = "Pitch Black", BackgroundColor = Colors.Transparent }.Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsPitchBlackSelected)),
-                new RadioButton { GroupName = "ThemeGroup", Content = "Dark Gray", BackgroundColor = Colors.Transparent }.Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsDarkGraySelected)),
-                new RadioButton { GroupName = "ThemeGroup", Content = "Nord", BackgroundColor = Colors.Transparent }.Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsNordSelected)),
-                new RadioButton { GroupName = "ThemeGroup", Content = "Catppuccin Mocha", BackgroundColor = Colors.Transparent }.Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsCatppuccinMochaSelected)),
-                new RadioButton { GroupName = "ThemeGroup", Content = "Solarized Dark", BackgroundColor = Colors.Transparent }.Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsSolarizedDarkSelected)),
-                new RadioButton { GroupName = "ThemeGroup", Content = "Gruvbox Dark", BackgroundColor = Colors.Transparent }.Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsGruvboxDarkSelected)),
-                new RadioButton { GroupName = "ThemeGroup", Content = "Monokai", BackgroundColor = Colors.Transparent }.Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsMonokaiSelected)),
+                new RadioButton { GroupName = "ThemeGroup", Content = "Pitch Black" }.Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsPitchBlackSelected)),
+                new RadioButton { GroupName = "ThemeGroup", Content = "Dark Gray" }.Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsDarkGraySelected)),
+                new RadioButton { GroupName = "ThemeGroup", Content = "Nord" }.Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsNordSelected)),
+                new RadioButton { GroupName = "ThemeGroup", Content = "Catppuccin Mocha" }.Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsCatppuccinMochaSelected)),
+                new RadioButton { GroupName = "ThemeGroup", Content = "Solarized Dark" }.Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsSolarizedDarkSelected)),
+                new RadioButton { GroupName = "ThemeGroup", Content = "Gruvbox Dark" }.Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsGruvboxDarkSelected)),
+                new RadioButton { GroupName = "ThemeGroup", Content = "Monokai" }.Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsMonokaiSelected)),
 
                 new Label { Text = "Light Themes", FontAttributes = FontAttributes.Bold, Margin = new(0, 15, 0, 5) },
-                new RadioButton { GroupName = "ThemeGroup", Content = "Default Light", BackgroundColor = Colors.Transparent }.Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsLightSelected)),
-                new RadioButton { GroupName = "ThemeGroup", Content = "Solarized Light", BackgroundColor = Colors.Transparent }.Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsSolarizedLightSelected)),
-                new RadioButton { GroupName = "ThemeGroup", Content = "Sepia", BackgroundColor = Colors.Transparent }.Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsSepiaSelected)),
+                new RadioButton { GroupName = "ThemeGroup", Content = "Default Light" }.Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsLightSelected)),
+                new RadioButton { GroupName = "ThemeGroup", Content = "Solarized Light" }.Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsSolarizedLightSelected)),
+                new RadioButton { GroupName = "ThemeGroup", Content = "Sepia" }.Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsSepiaSelected)),
 
                 new Label { Text = "Accessibility Themes", FontAttributes = FontAttributes.Bold, Margin = new(0, 15, 0, 5) },
-                new RadioButton { GroupName = "ThemeGroup", Content = "High Contrast Dark", BackgroundColor = Colors.Transparent }.Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsHighContrastDarkSelected)),
-                new RadioButton { GroupName = "ThemeGroup", Content = "High Contrast Light", BackgroundColor = Colors.Transparent }.Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsHighContrastLightSelected)),
+                new RadioButton { GroupName = "ThemeGroup", Content = "High Contrast Dark" }.Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsHighContrastDarkSelected)),
+                new RadioButton { GroupName = "ThemeGroup", Content = "High Contrast Light" }.Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsHighContrastLightSelected)),
             }
         };
 
         mainLayout.Children.Add(new BoxView { HeightRequest = 1, BackgroundColor = Color.FromArgb("#333333"), Margin = new(0, 15, 0, 15) });
         mainLayout.Children.Add(new Label { Text = "Calendar Settings", FontSize = LargeFontSize, FontAttributes = FontAttributes.Bold, Margin = new(0, 0, 0, 10) });
         mainLayout.Children.Add(new Label { Text = "Choose the calendar system for displaying dates:", Style = GetStyle("LightGrayLabel"), Margin = new(0, 0, 0, 5) });
-        mainLayout.Children.Add(new RadioButton { GroupName = "CalendarGroup", Content = "Gregorian Calendar", BackgroundColor = Colors.Transparent }.Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsGregorianSelected)));
-        mainLayout.Children.Add(new RadioButton { GroupName = "CalendarGroup", Content = "Persian (Shamsi) Calendar", BackgroundColor = Colors.Transparent }.Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsPersianSelected)));
+        mainLayout.Children.Add(new RadioButton { GroupName = "CalendarGroup", Content = "Gregorian Calendar" }.Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsGregorianSelected)));
+        mainLayout.Children.Add(new RadioButton { GroupName = "CalendarGroup", Content = "Persian (Shamsi) Calendar" }.Bind(RadioButton.IsCheckedProperty, nameof(SettingsViewModel.IsPersianSelected)));
 
         mainLayout.Children.Add(new BoxView { HeightRequest = 1, BackgroundColor = Color.FromArgb("#333333"), Margin = new(0, 15, 0, 15) });
         mainLayout.Children.Add(new Label { Text = "Data Management", FontSize = LargeFontSize, FontAttributes = FontAttributes.Bold, Margin = new(0, 0, 0, 10) });
