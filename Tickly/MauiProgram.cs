@@ -29,7 +29,7 @@ public static class MauiProgram
         builder.Services.AddSingleton<DataImportService>();
         builder.Services.AddSingleton<RepeatingTaskService>();
         builder.Services.AddSingleton<TaskVisualStateService>();
-        builder.Services.AddSingleton<ThemeService>(); // Added ThemeService registration
+        builder.Services.AddSingleton<ThemeService>();
 
         builder.Services.AddSingleton<MainViewModel>();
         builder.Services.AddSingleton<SettingsViewModel>();
@@ -40,9 +40,7 @@ public static class MauiProgram
         builder.Services.AddSingleton<SettingsPage>();
         builder.Services.AddSingleton<StatsPage>();
 
-        // Register App class itself if needed for DI resolution, especially if constructor injection is used
         builder.Services.AddSingleton<App>();
-
 
         return builder.Build();
     }
