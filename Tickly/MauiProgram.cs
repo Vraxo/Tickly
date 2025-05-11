@@ -1,6 +1,7 @@
-﻿using Tickly.Services;
+﻿using Microsoft.Extensions.Logging;
 using Tickly.ViewModels;
 using Tickly.Views;
+using Tickly.Services;
 
 namespace Tickly;
 
@@ -16,7 +17,6 @@ public static class MauiProgram
                 fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
                 fonts.AddFont("OpenSans-Semibold.ttf", "OpenSansSemibold");
                 fonts.AddFont("FluentSystemIcons-Regular.ttf", "FluentUI");
-                fonts.AddFont("RobotoMono-Regular.ttf", "AppMonospace");
             });
 
 #if DEBUG

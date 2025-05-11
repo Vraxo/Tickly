@@ -3,7 +3,7 @@ using Tickly.Models;
 
 namespace Tickly.Messages;
 
-public class ThemeChangedMessage(ThemeType value) : ValueChangedMessage<ThemeType>(value)
+public class ThemeChangedMessage : ValueChangedMessage<ThemeType>
 {
-
+    public ThemeChangedMessage(ThemeType value) : base(value) { }
 }

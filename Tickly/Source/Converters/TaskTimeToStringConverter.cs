@@ -103,10 +103,12 @@ public class TaskTimeToStringConverter : IValueConverter
     private static string FormatDate(DateTime date, CalendarSystemType system, CultureInfo formatCulture, string gregorianFormat)
     {
         string? specialDay = GetSpecialDayString(date.Date);
-        
-        if (specialDay is not null && (gregorianFormat == DefaultGregorianDateFormat || gregorianFormat == DayAndShortGregorianDateFormat || gregorianFormat == ShortGregorianDateFormat))
+        if (specialDay != null)
         {
-            return specialDay;
+            if (gregorianFormat == DefaultGregorianDateFormat || gregorianFormat == DayAndShortGregorianDateFormat || gregorianFormat == ShortGregorianDateFormat)
+            {
+                return specialDay;
+            }
         }
 
         return system == CalendarSystemType.Persian
@@ -119,14 +121,9 @@ public class TaskTimeToStringConverter : IValueConverter
         DateTime today = DateTime.Today;
         DateTime tomorrow = today.AddDays(1);
 
-        if (date == today)
-        {
-            return TodayString;
-        }
-
-        return date == tomorrow 
-            ? TomorrowString 
-            : null;
+        if (date == today) return TodayString;
+        if (date == tomorrow) return TomorrowString;
+        return null;
     }
 
     private static string FormatPersianDate(DateTime date, CultureInfo formatCulture, string gregorianFormat)
@@ -189,7 +186,7 @@ public class TaskTimeToStringConverter : IValueConverter
 
     private static string GetDayName(DayOfWeek? dayOfWeek, CultureInfo formatCulture)
     {
-        if (dayOfWeek is null)
+        if (dayOfWeek == null)
         {
             return string.Empty;
         }

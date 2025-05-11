@@ -1,25 +1,25 @@
 ﻿<?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
-             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-             xmlns:vm="clr-namespace:Tickly.ViewModels"
-             xmlns:models="clr-namespace:Tickly.Models"
-             xmlns:converters="clr-namespace:Tickly.Converters"
-             xmlns:fonts="clr-namespace:Fonts"
-             x:Class="Tickly.MainPage"
-             x:Name="MainTasksPage"
-             BackgroundColor="{DynamicResource AppBackgroundColor}"
-             Title="Tickly Tasks">
+         xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+         xmlns:vm="clr-namespace:Tickly.ViewModels"
+         xmlns:models="clr-namespace:Tickly.Models"
+         xmlns:converters="clr-namespace:Tickly.Converters"
+         xmlns:fonts="clr-namespace:Fonts"
+         x:Class="Tickly.MainPage"
+         x:Name="MainTasksPage"
+         BackgroundColor="{DynamicResource AppBackgroundColor}"
+         Title="Tickly Tasks">
 
     <Shell.TitleView>
         <Grid ColumnDefinitions="*" VerticalOptions="FillAndExpand" Margin="0,0,10,0">
             <Label Grid.Column="0"
-                   Text="Tickly Tasks"
-                   TextColor="{DynamicResource AppForegroundColor}"
-                   FontSize="18"
-                   FontAttributes="Bold"
-                   VerticalOptions="Center"
-                   HorizontalOptions="Start"
-                   Margin="10,0,0,0"/>
+               Text="Tickly Tasks"
+               TextColor="{DynamicResource AppForegroundColor}"
+               FontSize="18"
+               FontAttributes="Bold"
+               VerticalOptions="Center"
+               HorizontalOptions="Start"
+               Margin="10,0,0,0"/>
         </Grid>
     </Shell.TitleView>
 
@@ -46,28 +46,22 @@
                 <Setter Property="FontSize" Value="16"/>
                 <Setter Property="FontAttributes" Value="Bold"/>
                 <Setter Property="VerticalOptions" Value="Center"/>
-                <Setter Property="FontFamily" Value="AppMonospace"/>
             </Style>
-
             <Style TargetType="Label" x:Key="TaskTimeLabelStyle">
                 <Setter Property="TextColor" Value="{DynamicResource AppSecondaryTextColor}"/>
                 <Setter Property="FontSize" Value="12"/>
                 <Setter Property="VerticalOptions" Value="Center"/>
-                <Setter Property="FontFamily" Value="AppMonospace"/>
             </Style>
-
             <Style TargetType="StackLayout" x:Key="EmptyViewLayoutStyle">
                 <Setter Property="VerticalOptions" Value="Center"/>
                 <Setter Property="HorizontalOptions" Value="Center"/>
                 <Setter Property="Padding" Value="20"/>
                 <Setter Property="Spacing" Value="5"/>
             </Style>
-
             <Style TargetType="Label" x:Key="EmptyViewLabelStyle">
                 <Setter Property="TextColor" Value="{DynamicResource AppSecondaryTextColor}"/>
                 <Setter Property="HorizontalTextAlignment" Value="Center"/>
             </Style>
-
             <Style TargetType="Button" x:Key="AddButtonStyle">
                 <Setter Property="Text" Value="+"/>
                 <Setter Property="FontSize" Value="24"/>
@@ -115,10 +109,12 @@
                     </VisualStateGroupList>
                 </Setter>
             </Style>
+
         </ResourceDictionary>
     </ContentPage.Resources>
 
     <Grid RowDefinitions="Auto,*" ColumnDefinitions="*">
+
         <ProgressBar Grid.Row="0" Grid.Column="0"
                      Progress="{Binding TaskProgress}"
                      ProgressColor="{Binding TaskProgressColor}"
@@ -127,11 +123,12 @@
                      Margin="0,0,0,5"/>
 
         <CollectionView x:Name="TasksCollectionView"
-                        Grid.Row="1" Grid.Column="0"
-                        ItemsSource="{Binding Tasks}"
-                        CanReorderItems="True"
-                        Margin="15,0,15,0"
-                        SelectionMode="None">
+                    Grid.Row="1" Grid.Column="0"
+                    ItemsSource="{Binding Tasks}"
+                    CanReorderItems="True"
+                    Margin="15,0,15,0"
+                    SelectionMode="None">
+
             <CollectionView.ItemTemplate>
                 <DataTemplate x:DataType="models:TaskItem">
                     <Grid Padding="10, 8">
@@ -170,8 +167,8 @@
                             <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
                                 <VerticalStackLayout.GestureRecognizers>
                                     <TapGestureRecognizer
-                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:MainViewModel}}, Path=NavigateToEditPageCommand}"
-                                        CommandParameter="{Binding .}" />
+                                    Command="{Binding Source={RelativeSource AncestorType={x:Type vm:MainViewModel}}, Path=NavigateToEditPageCommand}"
+                                    CommandParameter="{Binding .}" />
                                 </VerticalStackLayout.GestureRecognizers>
                                 <Label Text="{Binding Title}" Style="{StaticResource TaskTitleLabelStyle}" />
                                 <Label Text="{Binding ., Converter={StaticResource TaskTimeConverter}}" Style="{StaticResource TaskTimeLabelStyle}" />
@@ -223,6 +220,7 @@
                                     </MultiBinding>
                                 </Button.IsEnabled>
                             </Button>
+
                         </Grid>
                     </Grid>
                 </DataTemplate>
@@ -238,10 +236,13 @@
             <CollectionView.Footer>
                 <ContentView HeightRequest="90" BackgroundColor="Transparent"/>
             </CollectionView.Footer>
+
         </CollectionView>
 
         <Button Grid.Row="1" Grid.Column="0"
-                Style="{StaticResource AddButtonStyle}"
-                Command="{Binding NavigateToAddPageCommand}"/>
+            Style="{StaticResource AddButtonStyle}"
+            Command="{Binding NavigateToAddPageCommand}"/>
+
     </Grid>
+
 </ContentPage>

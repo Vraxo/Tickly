@@ -100,12 +100,10 @@ public sealed class StatsPage : ContentPage
     protected override async void OnAppearing()
     {
         base.OnAppearing();
-
         if (BindingContext is StatsViewModel vm && vm.LoadProgressCommand.CanExecute(null))
         {
             await vm.LoadProgressCommand.ExecuteAsync(null);
         }
-
         _barChartView?.Invalidate();
     }
 
@@ -116,10 +114,8 @@ public sealed class StatsPage : ContentPage
             return style;
         }
 
-        Style fallbackStyle = new(typeof(Label));
-        
+        var fallbackStyle = new Style(typeof(Label));
         fallbackStyle.Setters.Add(new Setter { Property = Label.FontSizeProperty, Value = 14 });
-        
         if (Application.Current?.Resources.TryGetValue("AppForegroundColor", out var fgColor) == true && fgColor is Color color)
         {
             fallbackStyle.Setters.Add(new Setter { Property = Label.TextColorProperty, Value = color });
@@ -128,7 +124,6 @@ public sealed class StatsPage : ContentPage
         {
             fallbackStyle.Setters.Add(new Setter { Property = Label.TextColorProperty, Value = Colors.Black });
         }
-
         return fallbackStyle;
     }
 }
