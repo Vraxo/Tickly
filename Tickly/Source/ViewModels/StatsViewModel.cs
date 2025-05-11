@@ -13,7 +13,7 @@ namespace Tickly.ViewModels;
 
 public sealed partial class StatsViewModel : ObservableObject
 {
-    private readonly ProgressStorageService _progressStorageService; // Changed
+    private readonly ProgressStorageService _progressStorageService;
     private const string ProgressExportFilePrefix = "Tickly-Progress-Export-";
 
     [ObservableProperty]
@@ -41,9 +41,9 @@ public sealed partial class StatsViewModel : ObservableObject
     [ObservableProperty]
     private BarChartDrawable _chartDrawable;
 
-    public StatsViewModel(ProgressStorageService progressStorageService) // Changed
+    public StatsViewModel(ProgressStorageService progressStorageService)
     {
-        _progressStorageService = progressStorageService; // Changed
+        _progressStorageService = progressStorageService;
         _allProgressData = [];
         _plotData = [];
 
@@ -80,29 +80,23 @@ public sealed partial class StatsViewModel : ObservableObject
 
     partial void OnSelectedPlotTimeRangeChanged(string value)
     {
-        Debug.WriteLine($"StatsViewModel: Time range changed to '{value}'. Updating plot data.");
         UpdatePlotData();
     }
 
     [RelayCommand]
     private async Task LoadProgressAsync()
     {
-        Debug.WriteLine("StatsViewModel: LoadProgressAsync started.");
-        var progress = await _progressStorageService.LoadDailyProgressAsync(); // Use ProgressStorageService
-        Debug.WriteLine($"StatsViewModel: Loaded {progress.Count} progress entries.");
+        var progress = await _progressStorageService.LoadDailyProgressAsync();
         AllProgressData = new ObservableCollection<DailyProgress>(progress.OrderBy(p => p.Date));
-        Debug.WriteLine("StatsViewModel: AllProgressData populated and sorted.");
         UpdatePlotData();
     }
 
     private void UpdatePlotData()
     {
-        Debug.WriteLine($"StatsViewModel: UpdatePlotData started for range '{SelectedPlotTimeRange}'.");
         Color currentTextColor = GetCurrentThemeTextColor();
 
         if (AllProgressData == null || !AllProgressData.Any())
         {
-            Debug.WriteLine("StatsViewModel: No progress data available. Clearing plot.");
             PlotData = [];
             ChartDrawable = new BarChartDrawable { DataPoints = PlotData, TextColor = currentTextColor };
             return;
@@ -118,22 +112,13 @@ public sealed partial class StatsViewModel : ObservableObject
             "Last 3 Months" => today.AddMonths(-3).AddDays(1),
             "Last 6 Months" => today.AddMonths(-6).AddDays(1),
             "Last Year" => today.AddYears(-1).AddDays(1),
-            _ => AllProgressData.Any() ? AllProgressData.Min(p => p.Date) : DateTime.Today,// Handle empty case
+            _ => AllProgressData.Any() ? AllProgressData.Min(p => p.Date) : DateTime.Today,
         };
-        Debug.WriteLine($"StatsViewModel: Date range calculated: {startDate:yyyy-MM-dd} to {today:yyyy-MM-dd}");
 
         var filteredProgress = AllProgressData
             .Where(p => p.Date.Date >= startDate.Date && p.Date.Date <= today.Date)
             .OrderBy(p => p.Date)
             .ToList();
-
-        Debug.WriteLine($"StatsViewModel: Filtered data count: {filteredProgress.Count}");
-
-        if (SelectedPlotTimeRange == "All Time" && filteredProgress.Count > 90)
-        {
-            Debug.WriteLine($"StatsViewModel: Plot has {filteredProgress.Count} points for All Time. Consider aggregation for performance/readability.");
-            // Future: Implement aggregation logic here if needed
-        }
 
         CalendarSystemType calendarSystem = AppSettings.SelectedCalendarSystem;
         CultureInfo formatCulture = calendarSystem == CalendarSystemType.Persian ? new("fa-IR") : CultureInfo.InvariantCulture;
@@ -163,7 +148,6 @@ public sealed partial class StatsViewModel : ObservableObject
             newPlotData.Add(new PlotDataPoint(label, progress.PercentageCompleted, DetermineBarColor(progress.PercentageCompleted)));
         }
         PlotData = newPlotData;
-        Debug.WriteLine($"StatsViewModel: Created new PlotData list with {PlotData.Count} points.");
 
         var newDrawable = new BarChartDrawable
         {
@@ -171,7 +155,6 @@ public sealed partial class StatsViewModel : ObservableObject
             TextColor = currentTextColor
         };
         ChartDrawable = newDrawable;
-        Debug.WriteLine("StatsViewModel: Assigned new BarChartDrawable instance to ChartDrawable property. UI should update.");
     }
 
     private string GetPersianAbbreviatedMonthName(int month)
@@ -179,7 +162,6 @@ public sealed partial class StatsViewModel : ObservableObject
         string[] names = ["", "فر", "ار", "خر", "تی", "مر", "شه", "مه", "آب", "آذ", "دی", "به", "اس"];
         return (month >= 1 && month <= 12) ? names[month] : "?";
     }
-
 
     private Color DetermineBarColor(double percentage)
     {
@@ -194,7 +176,7 @@ public sealed partial class StatsViewModel : ObservableObject
         string temporaryExportPath = string.Empty;
         try
         {
-            List<DailyProgress> dailyProgressList = await _progressStorageService.LoadDailyProgressAsync(); // Use ProgressStorageService
+            List<DailyProgress> dailyProgressList = await _progressStorageService.LoadDailyProgressAsync();
 
             if (dailyProgressList == null || !dailyProgressList.Any())
             {
@@ -207,7 +189,7 @@ public sealed partial class StatsViewModel : ObservableObject
                 : dailyProgressList.OrderByDescending(p => p.Date);
 
             StringBuilder sb = new();
-            sb.AppendLine("Date - Progress"); // Add header
+            sb.AppendLine("Date - Progress");
             foreach (var progress in sortedProgress)
             {
                 string dateString = SelectedExportCalendarType == "Persian"
@@ -230,10 +212,7 @@ public sealed partial class StatsViewModel : ObservableObject
             temporaryExportPath = Path.Combine(FileSystem.CacheDirectory, exportFilename);
 
             EnsureDirectoryExists(temporaryExportPath);
-
             await File.WriteAllTextAsync(temporaryExportPath, fileContent);
-
-            LogFileInfo(temporaryExportPath, "Temporary Progress");
 
             ShareFileRequest request = new()
             {
@@ -244,9 +223,23 @@ public sealed partial class StatsViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"ExportProgressAsync: Exception: {ex.Message}");
             await ShowAlertAsync("Export Error", $"An unexpected error occurred: {ex.Message}", "OK");
         }
+    }
+
+    [RelayCommand]
+    private async Task ResetProgressAsync()
+    {
+        bool confirmed = await ShowConfirmationAsync("Reset Progress", "Are you sure you want to delete ALL progress data? This action cannot be undone.", "Delete All", "Cancel");
+        if (!confirmed)
+        {
+            return;
+        }
+
+        await _progressStorageService.ClearAllProgressAsync();
+        AllProgressData.Clear(); // Clear the local collection
+        UpdatePlotData(); // This will now show "No data" or an empty chart
+        await ShowAlertAsync("Progress Reset", "All progress data has been cleared.", "OK");
     }
 
     private void CleanUpOldExportFiles(string prefix, string extension)
@@ -254,35 +247,28 @@ public sealed partial class StatsViewModel : ObservableObject
         try
         {
             string cacheDir = FileSystem.CacheDirectory;
-            string searchPattern = $"{prefix}*{extension}";
-            Debug.WriteLine($"CleanUpOldExportFiles: Searching for old files in '{cacheDir}' with pattern '{searchPattern}'");
-
             if (!Directory.Exists(cacheDir))
             {
-                Debug.WriteLine($"CleanUpOldExportFiles: Cache directory not found: {cacheDir}");
                 return;
             }
 
+            string searchPattern = $"{prefix}*{extension}";
             IEnumerable<string> oldFiles = Directory.EnumerateFiles(cacheDir, searchPattern);
-            int count = 0;
             foreach (string file in oldFiles)
             {
                 try
                 {
                     File.Delete(file);
-                    Debug.WriteLine($"CleanUpOldExportFiles: Deleted old file: {file}");
-                    count++;
                 }
-                catch (Exception ex)
+                catch (Exception)
                 {
-                    Debug.WriteLine($"CleanUpOldExportFiles: Error deleting old file '{file}': {ex.Message}");
+                    // Log or ignore
                 }
             }
-            Debug.WriteLine($"CleanUpOldExportFiles: Deleted {count} old export files matching pattern '{searchPattern}'.");
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            Debug.WriteLine($"CleanUpOldExportFiles: Error during cleanup for pattern '{prefix}*{extension}': {ex.Message}");
+            // Log or ignore
         }
     }
 
@@ -295,23 +281,6 @@ public sealed partial class StatsViewModel : ObservableObject
         }
     }
 
-    private void LogFileInfo(string filePath, string fileDescription)
-    {
-        try
-        {
-            FileInfo fileInfo = new(filePath);
-            Debug.WriteLine($"LogFileInfo: {fileDescription} file size: {fileInfo.Length} bytes. Path: {filePath}");
-            if (fileInfo.Length == 0)
-            {
-                Debug.WriteLine($"LogFileInfo: WARNING - {fileDescription} file is 0 bytes!");
-            }
-        }
-        catch (Exception ex)
-        {
-            Debug.WriteLine($"LogFileInfo: Could not get {fileDescription} file info: {ex.Message}. Path: {filePath}");
-        }
-    }
-
     private static async Task ShowAlertAsync(string title, string message, string cancelAction)
     {
         if (!MainThread.IsMainThread)
@@ -321,21 +290,31 @@ public sealed partial class StatsViewModel : ObservableObject
         }
 
         Page? currentPage = GetCurrentPage();
-
         if (currentPage is not null)
         {
             await currentPage.DisplayAlert(title, message, cancelAction);
         }
-        else
-        {
-            Debug.WriteLine($"ShowAlert: Could not find current page to display alert: {title}");
-        }
     }
+
+    private static async Task<bool> ShowConfirmationAsync(string title, string message, string accept, string cancel)
+    {
+        if (!MainThread.IsMainThread)
+        {
+            return await MainThread.InvokeOnMainThreadAsync(() => ShowConfirmationAsync(title, message, accept, cancel));
+        }
+
+        Page? currentPage = GetCurrentPage();
+        if (currentPage is not null)
+        {
+            return await currentPage.DisplayAlert(title, message, accept, cancel);
+        }
+        return false;
+    }
+
 
     private static Page? GetCurrentPage()
     {
         Page? currentPage = Application.Current?.MainPage;
-
         if (currentPage is Shell shell)
         {
             currentPage = shell.CurrentPage;
@@ -356,11 +335,6 @@ public sealed partial class StatsViewModel : ObservableObject
             {
                 currentPage = navPageModal.CurrentPage;
             }
-        }
-
-        if (currentPage == null)
-        {
-            Debug.WriteLine("GetCurrentPage: Could not determine the current page reliably.");
         }
         return currentPage;
     }

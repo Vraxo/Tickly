@@ -116,12 +116,6 @@
 	</ItemGroup>
 
 	<ItemGroup>
-	  <MauiXaml Update="Source\Views\AddTaskPopupPage.xaml">
-	    <Generator>MSBuild:Compile</Generator>
-	  </MauiXaml>
-	</ItemGroup>
-
-	<ItemGroup>
 	  <None Update="Resources\AppIcon\appicon.png">
 	    <Pack>True</Pack>
 	    <PackagePath>\</PackagePath>
