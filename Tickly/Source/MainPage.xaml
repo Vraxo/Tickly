@@ -243,5 +243,5 @@
         <Button Grid.Row="1" Grid.Column="0"
                 Style="{StaticResource AddButtonStyle}"
                 Command="{Binding NavigateToAddPageCommand}"/>
-    </Grid>
+    </Grid>.
 </ContentPage>
