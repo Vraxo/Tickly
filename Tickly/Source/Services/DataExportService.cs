@@ -4,16 +4,10 @@ using Tickly.Models;
 
 namespace Tickly.Services;
 
-public sealed class DataExportService
+public sealed class DataExportService(TaskStorageService taskStorageService, ProgressStorageService progressStorageService)
 {
-    private readonly TaskStorageService _taskStorageService;
-    private readonly ProgressStorageService _progressStorageService;
-
-    public DataExportService(TaskStorageService taskStorageService, ProgressStorageService progressStorageService)
-    {
-        _taskStorageService = taskStorageService;
-        _progressStorageService = progressStorageService;
-    }
+    private readonly TaskStorageService _taskStorageService = taskStorageService;
+    private readonly ProgressStorageService _progressStorageService = progressStorageService;
 
     public async Task<bool> ExportDataAsync()
     {
@@ -34,10 +28,10 @@ public sealed class DataExportService
             JsonSerializerOptions options = new() { WriteIndented = true };
             string json = JsonSerializer.Serialize(dataBundle, options);
 
-            string fileName = $"Tickly_{DateTime.Now:yyyyMMddHHmmss}.json";
+            string fileName = $"Tickly-DataBundle-Export-{DateTime.Now:yyyy-MM-dd_HH-mm-ss}.json";
             string tempPath = Path.Combine(FileSystem.CacheDirectory, fileName);
 
-            EnsureDirectoryExists(tempPath);
+            DataExportService.EnsureDirectoryExists(tempPath);
             await File.WriteAllTextAsync(tempPath, json);
             Debug.WriteLine($"DataExportService.ExportDataAsync: Data saved to cache: {tempPath}.");
 
@@ -58,13 +52,15 @@ public sealed class DataExportService
         }
     }
 
-    private void EnsureDirectoryExists(string filePath)
+    private static void EnsureDirectoryExists(string filePath)
     {
         string? directory = Path.GetDirectoryName(filePath);
-        if (directory != null && !Directory.Exists(directory))
+
+        if (directory is null || Directory.Exists(directory))
         {
-            Directory.CreateDirectory(directory);
-            Debug.WriteLine($"DataExportService: Created directory: {directory}");
+            return;
         }
+
+        Directory.CreateDirectory(directory);
     }
 }
